@@ -1,0 +1,167 @@
+// Homely Treats — Prisma schema (PostgreSQL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  fullName          String
+  email             String   @unique
+  phone             String
+  passwordHash      String
+  role              String   @default("CUSTOMER") // CUSTOMER | ADMIN
+  emailVerified     Boolean  @default(false)
+  verificationToken String?
+  loyaltyPoints     Int      @default(0)
+  createdAt         DateTime @default(now())
+  orders            Order[]
+  reviews           Review[]
+}
+
+model Product {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  category    String        // CAKE | CUPCAKE | PASTRY | CONFECTIONERY
+  basePrice   Float         // default price in GHS (used when no size tier selected)
+  emoji       String        @default("🎂")
+  icon        String        @default("Cake") // Lucide icon name for the product
+  badge       String?
+  flavors     String[]      @default([])
+  sizes       String[]      @default([])
+  stock       Int           @default(0)
+  inStock     Boolean       @default(true)
+  featured    Boolean       @default(false)
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  orderItems  OrderItem[]
+  sizeOptions ProductSize[]
+}
+
+model ProductSize {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  label     String  // e.g. "8 inch (serves 14)"
+  serves    Int     @default(1)
+  price     Float   // absolute price (GHS) for this size
+}
+
+model DeliveryZone {
+  id     String  @id @default(cuid())
+  name   String  @unique // e.g. "East Legon"
+  fee    Float   @default(0)
+  active Boolean @default(true)
+}
+
+model Order {
+  id              String          @id // e.g. HT-20260830-0001
+  userId          String?
+  user            User?           @relation(fields: [userId], references: [id])
+  guestName       String?
+  guestEmail      String?
+  guestPhone      String?
+  status          String          @default("PENDING") // PENDING | CONFIRMED | IN_PROGRESS | READY | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
+  paymentStatus   String          @default("PENDING") // PENDING | PAID | FAILED | COD | SIMULATED
+  paymentMethod   String          @default("MOMO") // MOMO | ATL | CARD | COD
+  paymentRef      String?
+  subtotal        Float
+  discount        Float           @default(0)
+  loyaltyDiscount Float           @default(0)
+  pointsRedeemed  Int             @default(0)
+  pointsEarned    Int             @default(0)
+  deliveryFee     Float           @default(0)
+  deliveryZone    String?
+  total           Float
+  deliveryMethod  String          @default("PICKUP") // DELIVERY | PICKUP
+  deliveryAddress String?
+  riderName       String?
+  riderPhone      String?
+  readyDate       DateTime?
+  notes           String?
+  promoCode       String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  items           OrderItem[]
+  events          OrderEvent[]
+  notifications   Notification[]
+  photos          OrderPhoto[]
+  review          Review?
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String?
+  product     Product? @relation(fields: [productId], references: [id])
+  name        String
+  emoji       String   @default("🎂")
+  price       Float
+  quantity    Int      @default(1)
+  flavor      String?
+  size        String?
+  icing       String?
+  inscription String?
+}
+
+model OrderPhoto {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  url     String
+}
+
+model OrderEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    String
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  channel   String   // SMS | EMAIL | WHATSAPP
+  type      String   // ORDER_CONFIRMED | PAYMENT_VERIFIED | STATUS_UPDATE | READY | DELIVERED | CANCELLED
+  status    String   @default("SENT") // SENT | FAILED | SIMULATED
+  detail    String?
+  createdAt DateTime @default(now())
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  orderId   String   @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  rating    Int      // 1-5
+  comment   String?
+  createdAt DateTime @default(now())
+}
+
+model Promo {
+  id         String    @id @default(cuid())
+  code       String    @unique
+  type       String    @default("PERCENT") // PERCENT | FIXED
+  value      Float
+  active     Boolean   @default(true)
+  expiresAt  DateTime?
+  usageLimit Int?
+  usageCount Int       @default(0)
+  createdAt  DateTime  @default(now())
+}
+
+model Setting {
+  key   String @id
+  value String // JSON-encoded value
+}

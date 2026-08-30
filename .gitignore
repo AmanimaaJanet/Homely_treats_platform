@@ -1,0 +1,19 @@
+# Dependencies & build output
+node_modules/
+dist/
+build/
+
+# Environment (never commit secrets)
+.env
+.env.local
+
+# Runtime uploads (created on server start)
+server/uploads/
+
+WINDOWS_SETUP.md
+RENDER_DEPLOY.md
+
+# Logs & OS files
+*.log
+.DS_Store
+Thumbs.db
