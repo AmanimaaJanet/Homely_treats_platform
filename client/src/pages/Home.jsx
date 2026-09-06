@@ -19,10 +19,12 @@ export default function Home() {
   const navigate = useNavigate();
   const [featured, setFeatured] = useState([]);
   const [reviews, setReviews] = useState(null);
+  const [minLead, setMinLead] = useState(2);
 
   useEffect(() => {
     api.get('/products?featured=true').then((d) => setFeatured(d.products.slice(0, 4))).catch(() => {});
     api.get('/reviews/recent').then((d) => setReviews(d.reviews)).catch(() => setReviews([]));
+    api.get('/settings/public').then((d) => setMinLead(d.settings.minLeadDays || 2)).catch(() => {});
   }, []);
 
   return (
@@ -91,7 +93,7 @@ export default function Home() {
 
         <div className="section cta-band">
           <h2>Ready to place your custom order?</h2>
-          <p style={{ margin: '1rem 0' }}>Minimum 2 days advance notice required. Delivery across Accra by zone.</p>
+          <p style={{ margin: '1rem 0' }}>Minimum {minLead} days advance notice required. Delivery across Accra by zone.</p>
           <button className="btn btn-secondary" onClick={() => navigate('/custom-order')}>Order Now →</button>
         </div>
       </div>

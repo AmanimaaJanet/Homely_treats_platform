@@ -86,6 +86,7 @@ export default function CustomOrder() {
       size: size || null,
       icing: icing || null,
       inscription: inscription || null,
+      notes: notes || null,
       readyDate: date,
       photos,
     });

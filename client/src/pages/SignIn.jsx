@@ -59,12 +59,6 @@ export default function SignIn() {
           <p className="centered" style={{ marginTop: '1.5rem' }}>
             Don't have an account? <Link to="/register" className="link">Create one →</Link>
           </p>
-
-          <div className="demo-cred">
-            <p className="muted small">Demo accounts:</p>
-            <p className="small"><strong>Customer:</strong> janet@homelytreats.gh / password123</p>
-            <p className="small"><strong>Admin:</strong> admin@homelytreats.gh / admin123</p>
-          </div>
         </div>
       </div>
     </div>

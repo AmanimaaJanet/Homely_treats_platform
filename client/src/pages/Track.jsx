@@ -15,9 +15,14 @@ export default function Track() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [live, setLive] = useState(false);
+  const [pickupAddress, setPickupAddress] = useState('Airport Residential, Accra');
   const wsRef = useRef(null);
   const refRef = useRef(ref);
   refRef.current = ref;
+
+  useEffect(() => {
+    api.get('/settings/public').then((d) => setPickupAddress(d.settings.businessAddress || pickupAddress)).catch(() => {});
+  }, []);
 
   const load = (r) => {
     setError('');
@@ -153,7 +158,7 @@ export default function Track() {
                   <h3 className="form-heading">Order Details</h3>
                   <div className="info-card">
                     <p><strong>Order ID:</strong> {order.id}</p>
-                    <p><strong>Delivery:</strong> {order.deliveryMethod === 'DELIVERY' ? `Home Delivery — ${order.deliveryZone || ''}${order.deliveryAddress ? ', ' + order.deliveryAddress : ''}` : 'Pickup (Airport Residential)'}</p>
+                    <p><strong>Delivery:</strong> {order.deliveryMethod === 'DELIVERY' ? `Home Delivery — ${order.deliveryZone || ''}${order.deliveryAddress ? ', ' + order.deliveryAddress : ''}` : `Pickup (${pickupAddress})`}</p>
                     <p><strong>Ready Date:</strong> {fmtDate(order.readyDate)}</p>
                     <p><strong>Subtotal:</strong> {ghs(order.subtotal)}</p>
                     {order.discount > 0 && <p><strong>Discount:</strong> −{ghs(order.discount)}</p>}

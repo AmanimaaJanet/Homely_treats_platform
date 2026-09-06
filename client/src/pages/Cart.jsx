@@ -24,6 +24,7 @@ export default function Cart() {
   const [paymentMethod, setPaymentMethod] = useState('MOMO');
   const [payOptions, setPayOptions] = useState(PAYMENT_METHODS);
   const [allowPickup, setAllowPickup] = useState(true);
+  const [pickupAddress, setPickupAddress] = useState('Airport Residential, Accra');
   const [promoCode, setPromoCode] = useState('');
   const [promo, setPromo] = useState(null);
   const [promoError, setPromoError] = useState('');
@@ -51,6 +52,7 @@ export default function Cart() {
       });
       setPayOptions(opts.length ? opts : PAYMENT_METHODS);
       setAllowPickup(s.allowPickup !== false);
+      setPickupAddress(s.businessAddress || pickupAddress);
       if (s.allowPickup === false && deliveryMethod === 'PICKUP') setDeliveryMethod('DELIVERY');
       setPaymentMethod((pm) => (opts.some((o) => o.id === pm) ? pm : opts[0]?.id || 'COD'));
     }).catch(() => {});
@@ -109,6 +111,7 @@ export default function Cart() {
         deliveryAddress: deliveryMethod === 'DELIVERY' ? address : undefined,
         deliveryZone: deliveryMethod === 'DELIVERY' ? deliveryZone : undefined,
         readyDate: cart[0]?.readyDate || undefined,
+        notes: cart.map((i) => i.notes).filter(Boolean).join(' | ') || undefined,
         paymentMethod,
         promoCode: promo?.code,
         pointsToRedeem: usePoints ? pointsToUse : 0,
@@ -192,6 +195,7 @@ export default function Cart() {
                         {[item.size, item.flavor, item.icing].filter(Boolean).join(' · ') || 'Standard'}
                         {item.inscription && <> · "{item.inscription}"</>}
                       </p>
+                      {item.notes && <p className="muted small">Notes: {item.notes}</p>}
                       {item.readyDate && <p className="muted small">Needed by: {item.readyDate}</p>}
                       {item.photos?.length > 0 && (
                         <div className="thumb-row">
@@ -227,7 +231,7 @@ export default function Cart() {
                     onClick={() => setDeliveryMethod('PICKUP')}
                   >
                     <strong><Store size={18} /> Pickup</strong>
-                    <p>Free · Airport Residential, Accra</p>
+                    <p>Free · {pickupAddress}</p>
                   </div>
                 )}
               </div>
