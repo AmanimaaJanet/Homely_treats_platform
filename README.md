@@ -4,7 +4,7 @@ A full-stack bakery ordering platform built from your HTML mockup: **React** fro
 
 > Accra's favourite artisan bakery — order custom cakes, cupcakes & pastries online, pay with MoMo, and track every step live.
 
-> 📖 **New here?** Start with **[GETTING_STARTED.md](GETTING_STARTED.md)** — the full step-by-step from downloading the zip to deploying on Render.
+> 📖 **New here?** Start with **[GETTING_STARTED.md](GETTING_STARTED.md)** (quick start) or the complete, every-command-shown **[FULL_SETUP_GUIDE.md](FULL_SETUP_GUIDE.md)** — from your computer to a live Render deployment with PostgreSQL. Want every click spelled out? See **[RENDER_WALKTHROUGH.md](RENDER_WALKTHROUGH.md)** (Render screens + Paystack test keys). Only care about the database? See **[DATABASE_SETUP.md](DATABASE_SETUP.md)** — PostgreSQL on Render + the full schema.
 
 **Professional icon set:** the UI uses **[Lucide](https://lucide.dev) icons** (`lucide-react`) throughout instead of emojis — product cards, navigation, admin dashboard, payment methods, tracking timeline, notifications, and more. Products store a Lucide icon name (e.g. `Cake`, `CakeSlice`, `Heart`, `Citrus`, `Cookie`, `Leaf`, `Cherry`, `Croissant`) and can be changed per-product from the admin panel.
 

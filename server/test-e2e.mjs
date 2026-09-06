@@ -24,6 +24,18 @@ const PROD_CHOC = `E2E Chocolate Fudge ${rnd}`;
 const ZONE_NAME = `E2E East Legon ${rnd}`;
 const PROMO_CODE = `E2E${rnd}`;
 
+// Date helpers — keep the suite valid no matter what the real clock says.
+// (Bakery orders need `minLeadDays` advance notice, so compute future dates dynamically.)
+const daysFromNow = (n) => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const READY_DATE = daysFromNow(3);
+const READY_DATE2 = daysFromNow(4);
+const RANGE_FROM = daysFromNow(-1);
+const RANGE_TO = daysFromNow(1);
+
 const results = [];
 let passed = 0;
 let failed = 0;
@@ -213,7 +225,7 @@ async function main() {
         deliveryMethod: 'DELIVERY',
         deliveryZone: zoneId,
         deliveryAddress: 'House 5, East Legon',
-        readyDate: '2026-09-05',
+        readyDate: READY_DATE,
         paymentMethod: 'MOMO',
         promoCode: PROMO_CODE,
         photos: [photoUrl],
@@ -243,7 +255,7 @@ async function main() {
       token: janetToken,
       body: {
         items: [{ productId: vanillaId, quantity: 1, size: '6 inch (serves 8)' }],
-        deliveryMethod: 'PICKUP', readyDate: '2026-09-05', paymentMethod: 'MOMO', pointsToRedeem: 100,
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE, paymentMethod: 'MOMO', pointsToRedeem: 100,
       },
     });
     loyaltyOrderId = data?.order?.id;
@@ -281,7 +293,7 @@ async function main() {
 
     const notDelivered = await req('/api/orders', {
       method: 'POST', token: janetToken,
-      body: { items: [{ productId: chocId, quantity: 1, size: '6 inch (serves 8)' }], deliveryMethod: 'PICKUP', readyDate: '2026-09-05', paymentMethod: 'MOMO' },
+      body: { items: [{ productId: chocId, quantity: 1, size: '6 inch (serves 8)' }], deliveryMethod: 'PICKUP', readyDate: READY_DATE, paymentMethod: 'MOMO' },
     });
     if (notDelivered.data?.order?.id) created.orderIds.push(notDelivered.data.order.id);
     const earlyReview = await req('/api/reviews', { method: 'POST', token: janetToken, body: { orderId: notDelivered.data.order.id, rating: 5 } });
@@ -299,7 +311,7 @@ async function main() {
       method: 'POST',
       body: {
         items: [{ productId: chocId, quantity: 1, size: '6 inch (serves 8)' }],
-        deliveryMethod: 'PICKUP', readyDate: '2026-09-05', paymentMethod: 'MOMO',
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE, paymentMethod: 'MOMO',
         guest: { name: 'WS Test', email: `ws-${rnd.toLowerCase()}@test.com`, phone: '0550002222' },
       },
     });
@@ -336,7 +348,7 @@ async function main() {
       body: {
         items: [{ productId: chocId, quantity: 1, size: '6 inch (serves 8)' }],
         deliveryMethod: 'DELIVERY', deliveryZone: zoneId, deliveryAddress: 'House 7, E2E',
-        readyDate: '2026-09-06', paymentMethod: 'MOMO',
+        readyDate: READY_DATE2, paymentMethod: 'MOMO',
         guest: { name: 'Rider Test', email: `rider-${rnd.toLowerCase()}@test.com`, phone: '0550003333' },
       },
     });
@@ -362,11 +374,11 @@ async function main() {
 
   // ---------------------------------------------------------------- 13. Sales reports + CSV
   {
-    const { status, data } = await req('/api/admin/reports?from=2026-08-01&to=2026-08-31', { token: adminToken });
+    const { status, data } = await req(`/api/admin/reports?from=${RANGE_FROM}&to=${RANGE_TO}`, { token: adminToken });
     check('Reports generate', status === 200 && data?.orderCount >= 1, `${data?.orderCount} orders, revenue ${data?.revenue}`);
     check('Top products computed', Array.isArray(data?.topProducts) && data.topProducts.length >= 1);
 
-    const csv = await req('/api/admin/reports/export?from=2026-08-01&to=2026-08-31', { token: adminToken, raw: true });
+    const csv = await req(`/api/admin/reports/export?from=${RANGE_FROM}&to=${RANGE_TO}`, { token: adminToken, raw: true });
     const text = await csv.text();
     check('CSV export', csv.status === 200 && csv.headers.get('content-type')?.includes('text/csv'), `${text.split('\n').length} lines`);
     check('CSV has header row', text.includes('Order ID'));
@@ -379,7 +391,7 @@ async function main() {
       method: 'POST', token: janetToken,
       body: {
         items: [{ productId: vanillaId, quantity: 1, size: '6 inch (serves 8)' }],
-        deliveryMethod: 'PICKUP', readyDate: '2026-09-06', paymentMethod: 'COD', pointsToRedeem: 40,
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE2, paymentMethod: 'COD', pointsToRedeem: 40,
       },
     });
     const orderId = data.order.id;
@@ -412,6 +424,8 @@ async function main() {
 
 main().catch(async (err) => {
   console.error('Test crashed:', err);
+  console.log('\n── partial results ──');
+  results.forEach((r) => console.log(r));
   await teardown();
   await prisma.$disconnect();
   process.exit(1);

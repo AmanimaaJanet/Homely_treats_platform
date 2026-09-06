@@ -10,9 +10,6 @@ build/
 # Runtime uploads (created on server start)
 server/uploads/
 
-WINDOWS_SETUP.md
-RENDER_DEPLOY.md
-
 # Logs & OS files
 *.log
 .DS_Store

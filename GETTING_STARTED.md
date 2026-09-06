@@ -1,6 +1,6 @@
 # 🚀 Homely Treats — From Download to Deploy (Step by Step)
 
-This is the single guide that takes you from **unzipping the project** all the way to a **live deployment on Render**. Follow it in order.
+This guide takes you from **unzipping the project** to a **live deployment on Render**. For the exhaustive version (every command and file shown, including the full Render PostgreSQL connection walkthrough), see **[FULL_SETUP_GUIDE.md](FULL_SETUP_GUIDE.md)**.
 
 ---
 
@@ -63,11 +63,13 @@ CREATE DATABASE homely OWNER homely;
 
 ## PART 4 — Configure `.env`
 
-1. In VS Code, open `server/.env` (it already ships with **safe local defaults** — no secrets).
-2. The only line you *may* need to change locally is `DATABASE_URL` (already `postgresql://homely:homely@localhost:5432/homely?schema=public` — matches the database you just created).
+1. In VS Code's terminal, create your env file from the template:
+   - **Mac/Linux/WSL:** `cp .env.example server/.env`
+   - **Windows PowerShell:** `Copy-Item .env.example server\.env`
+2. Open `server/.env`. The `DATABASE_URL` is already `postgresql://homely:homely@localhost:5432/homely?schema=public` — it matches the database you just created (change it only if you used a different password/port).
 3. Leave every key **blank** for now — the app runs in full **demo mode** (simulated payments, console-logged emails/SMS/WhatsApp). You'll add real keys later in Part 8.
 
-> ⚠️ `.env` is listed in `.gitignore` — it will **not** be uploaded to GitHub. That's correct and secure. Render gets these values from its own dashboard (Part 7).
+> ⚠️ `.env` is listed in `.gitignore` — it will **not** be uploaded to GitHub. That's correct and secure. Render gets these values from its own dashboard (Part 7). The full guide is in **FULL_SETUP_GUIDE.md**.
 
 ---
 
