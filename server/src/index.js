@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import http from 'http';
 import path from 'path';
 import fs from 'fs';
@@ -7,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { config } from './config.js';
 import { attachWebSocket } from './services/realtime.js';
 import { ensureUploadDir } from './services/storage.js';
+import { apiLimiter } from './middleware/security.js';
 
 import authRoutes from './routes/auth.routes.js';
 import productRoutes from './routes/products.routes.js';
@@ -27,12 +29,59 @@ const server = http.createServer(app);
 // WebSockets for real-time order tracking
 attachWebSocket(server);
 
-app.use(cors());
+// Express sits behind Render's reverse proxy in production — trust the proxy
+// so rate limiting sees the real client IP.
+app.set('trust proxy', 1);
+
+// ---------------------------------------------------------------------------
+// Security hardening
+// ---------------------------------------------------------------------------
+// Secure HTTP headers (Content-Security-Policy, X-Frame-Options, nosniff, …).
+// The CSP is tuned for this stack: self-hosted Vite bundle + Google Fonts +
+// Cloudinary-hosted photos + same-origin API + WebSockets.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https://res.cloudinary.com'],
+        connectSrc: ["'self'", 'ws:', 'wss:'],
+        workerSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'self'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// CORS — only allow the configured frontend origin (or same-origin requests).
+const allowedOrigins = new Set([config.clientUrl, 'http://localhost:5173', 'http://localhost:5000']);
+app.use(
+  cors({
+    origin(origin, cb) {
+      // Requests without an Origin header (curl, same-origin, server-to-server) are allowed.
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.has(origin)) return cb(null, true);
+      return cb(null, false);
+    },
+  })
+);
+
 // IMPORTANT: the Paystack webhook must receive the raw request body so it can
 // verify Paystack's HMAC-SHA512 signature. This raw parser must run BEFORE the
 // global JSON parser for that route.
 app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
-app.use(express.json());
+// Cap JSON body size to blunt payload-based abuse.
+app.use(express.json({ limit: '100kb' }));
+
+// General API rate limiting.
+app.use('/api', apiLimiter);
 
 // Serve uploaded design photos
 ensureUploadDir();
@@ -74,15 +123,17 @@ app.get(/^(?!\/api).*/, (req, res) => {
   });
 });
 
-// Error handler
+// Error handler — never leak stack traces or internal details to clients.
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(500).json({ error: err.message || 'Something went wrong' });
+  const message =
+    process.env.NODE_ENV === 'production' ? 'Something went wrong' : err.message || 'Something went wrong';
+  res.status(500).json({ error: message });
 });
 
 server.listen(config.port, '0.0.0.0', () => {
-  console.log(`\n🎂 Homely Treats API running on http://localhost:${config.port}`);
-  console.log(`   Paystack: ${config.paystack.enabled ? 'ENABLED (live keys)' : 'SIMULATION MODE (no keys set)'}`);
+  console.log(`\nHomely Treats API running on http://localhost:${config.port}`);
+  console.log(`   Paystack: ${config.paystack.enabled ? 'ENABLED (keys set)' : 'SIMULATION MODE (no keys set)'}`);
   console.log(`   Email (Resend): ${config.resend.enabled ? 'ENABLED' : 'SIMULATED (printed to console)'}`);
   console.log(`   WhatsApp: ${config.whatsapp.enabled ? 'ENABLED' : 'SIMULATED (printed to console)'}`);
   console.log(`   SMS: ${config.sms.provider} (${config.sms.provider === 'textbelt' ? (config.sms.apiKey === 'textbelt' ? 'free tier, 1/day' : 'paid key') : config.sms.arkeselKey ? 'key set' : 'no key'})`);

@@ -4,10 +4,22 @@ dotenv.config();
 const PORT = process.env.PORT || 5000;
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
+const DEV_JWT_SECRET = 'dev-secret-change-me';
+const jwtSecret = process.env.JWT_SECRET || DEV_JWT_SECRET;
+
+// Fail-safe security guard: never accept the default JWT secret in production.
+if (process.env.NODE_ENV === 'production' && jwtSecret === DEV_JWT_SECRET) {
+  console.error(
+    '[SECURITY] Refusing to start: JWT_SECRET is not set in production.\n' +
+      '           Generate a strong random secret and set it as the JWT_SECRET env var.'
+  );
+  process.exit(1);
+}
+
 export const config = {
   port: PORT,
   clientUrl: CLIENT_URL,
-  jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
+  jwtSecret,
   databaseUrl:
     process.env.DATABASE_URL ||
     'postgresql://homely:homely@localhost:5432/homely?schema=public',

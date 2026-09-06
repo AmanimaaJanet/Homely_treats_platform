@@ -15,7 +15,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding Homely Treats database (admin account only)...');
 
-  const adminHash = await bcrypt.hash('admin123', 10);
+  const adminHash = await bcrypt.hash('admin123', 12);
   await prisma.user.upsert({
     where: { email: 'admin@homelytreats.gh' },
     update: { role: 'ADMIN' },

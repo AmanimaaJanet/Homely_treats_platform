@@ -2,13 +2,21 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
 import { prisma } from '../prisma.js';
 
+// JWT verification options — algorithm is pinned (never allow alg:none or RS256),
+// and issuer/audience must match what signToken() sets.
+const VERIFY_OPTS = {
+  algorithms: ['HS256'],
+  issuer: 'homely-treats',
+  audience: 'homely-treats-client',
+};
+
 export async function requireAuth(req, res, next) {
   try {
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
     if (!token) return res.status(401).json({ error: 'Authentication required' });
 
-    const payload = jwt.verify(token, config.jwtSecret);
+    const payload = jwt.verify(token, config.jwtSecret, VERIFY_OPTS);
     const user = await prisma.user.findUnique({ where: { id: payload.id } });
     if (!user) return res.status(401).json({ error: 'Account not found' });
 
@@ -32,7 +40,7 @@ export async function optionalAuth(req, _res, next) {
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
     if (token) {
-      const payload = jwt.verify(token, config.jwtSecret);
+      const payload = jwt.verify(token, config.jwtSecret, VERIFY_OPTS);
       const user = await prisma.user.findUnique({ where: { id: payload.id } });
       if (user) req.user = user;
     }

@@ -4,33 +4,50 @@ import crypto from 'crypto';
 import { prisma } from '../prisma.js';
 import { signToken, publicUser } from '../utils.js';
 import { requireAuth } from '../middleware/auth.js';
+import { loginLimiter, registerLimiter, verifyLimiter } from '../middleware/security.js';
 import { sendEmail } from '../services/email.js';
 import { config } from '../config.js';
 
 const router = Router();
 
+const BCRYPT_COST = 12;
+
+/** Enforce a strong password: ≥8 chars, at least one letter and one digit. */
+function passwordError(password) {
+  const p = String(password || '');
+  if (p.length < 8) return 'Password must be at least 8 characters';
+  if (!/[A-Za-z]/.test(p)) return 'Password must contain at least one letter';
+  if (!/[0-9]/.test(p)) return 'Password must contain at least one number';
+  return null;
+}
+
+/** Basic validation/normalisation helpers to keep stored data tidy & bounded. */
+const clean = (v, max) => String(v ?? '').trim().slice(0, max);
+const validEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v || ''));
+
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { fullName, email, phone, password } = req.body || {};
     if (!fullName || !email || !phone || !password) {
       return res.status(400).json({ error: 'Full name, email, phone and password are required' });
     }
-    if (String(password).length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
-    }
+    if (!validEmail(email)) return res.status(400).json({ error: 'Please enter a valid email address' });
+    const pwErr = passwordError(password);
+    if (pwErr) return res.status(400).json({ error: pwErr });
+
     const normalized = String(email).toLowerCase().trim();
     const existing = await prisma.user.findUnique({ where: { email: normalized } });
     if (existing) return res.status(409).json({ error: 'An account with this email already exists' });
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
     const verificationToken = crypto.randomBytes(24).toString('hex');
 
     const user = await prisma.user.create({
       data: {
-        fullName: String(fullName).trim(),
+        fullName: clean(fullName, 80),
         email: normalized,
-        phone: String(phone).trim(),
+        phone: clean(phone, 30),
         passwordHash,
         verificationToken,
       },
@@ -41,8 +58,8 @@ router.post('/register', async (req, res) => {
     await sendEmail({
       to: normalized,
       subject: 'Homely Treats — verify your email',
-      html: `<h2>Welcome to Homely Treats</h2><p>Hi ${fullName}, please confirm your email address:</p>
-             <p><a href="${verifyUrl}" style="background:#e91e63;color:#fff;padding:12px 24px;border-radius:24px;text-decoration:none;">Verify my email</a></p>
+      html: `<h2>Welcome to Homely Treats</h2><p>Hi ${clean(fullName, 80)}, please confirm your email address:</p>
+             <p><a href="${verifyUrl}" style="background:#C4763B;color:#fff;padding:12px 24px;border-radius:24px;text-decoration:none;">Verify my email</a></p>
              <p>Or open this link: ${verifyUrl}</p>`,
       type: 'ORDER_CONFIRMED', // reused channel, logged generically
     });
@@ -56,7 +73,7 @@ router.post('/register', async (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
@@ -64,7 +81,7 @@ router.post('/login', async (req, res) => {
     const user = await prisma.user.findUnique({ where: { email: String(email).toLowerCase().trim() } });
     if (!user) return res.status(401).json({ error: 'Invalid email or password' });
 
-    const ok = await bcrypt.compare(password, user.passwordHash);
+    const ok = await bcrypt.compare(String(password), user.passwordHash);
     if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
 
     const token = signToken(user);
@@ -98,7 +115,7 @@ router.get('/verify', async (req, res) => {
 });
 
 // POST /api/auth/resend-verification
-router.post('/resend-verification', requireAuth, async (req, res) => {
+router.post('/resend-verification', verifyLimiter, requireAuth, async (req, res) => {
   try {
     const user = req.user;
     if (user.emailVerified) return res.json({ ok: true, alreadyVerified: true });
@@ -125,8 +142,8 @@ router.put('/profile', requireAuth, async (req, res) => {
     const user = await prisma.user.update({
       where: { id: req.user.id },
       data: {
-        fullName: fullName ? String(fullName).trim() : req.user.fullName,
-        phone: phone ? String(phone).trim() : req.user.phone,
+        fullName: fullName ? clean(fullName, 80) : req.user.fullName,
+        phone: phone ? clean(phone, 30) : req.user.phone,
       },
     });
     res.json({ user: publicUser(user) });
@@ -140,12 +157,14 @@ router.put('/profile', requireAuth, async (req, res) => {
 router.put('/password', requireAuth, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body || {};
-    if (!currentPassword || !newPassword || String(newPassword).length < 6) {
-      return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current and new password are required' });
     }
-    const ok = await bcrypt.compare(currentPassword, req.user.passwordHash);
+    const pwErr = passwordError(newPassword);
+    if (pwErr) return res.status(400).json({ error: pwErr });
+    const ok = await bcrypt.compare(String(currentPassword), req.user.passwordHash);
     if (!ok) return res.status(400).json({ error: 'Current password is incorrect' });
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_COST);
     await prisma.user.update({ where: { id: req.user.id }, data: { passwordHash } });
     res.json({ ok: true });
   } catch (err) {

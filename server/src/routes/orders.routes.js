@@ -92,6 +92,25 @@ router.post('/', optionalAuth, async (req, res) => {
     if (!['MOMO', 'ATL', 'CARD', 'COD'].includes(paymentMethod)) {
       return res.status(400).json({ error: 'Invalid payment method' });
     }
+    // Length limits — prevent oversized/abusive payload fields.
+    if (String(notes || '').length > 1000) {
+      return res.status(400).json({ error: 'Order notes are too long (max 1000 characters)' });
+    }
+    if (String(deliveryAddress || '').length > 500) {
+      return res.status(400).json({ error: 'Delivery address is too long (max 500 characters)' });
+    }
+    if (items.length > 50) {
+      return res.status(400).json({ error: 'Too many line items in one order' });
+    }
+    for (const it of items) {
+      if (String(it.inscription || '').length > 200) {
+        return res.status(400).json({ error: 'Cake inscription is too long (max 200 characters)' });
+      }
+      const qty = parseInt(it.quantity, 10);
+      if (!Number.isFinite(qty) || qty < 1 || qty > 20) {
+        return res.status(400).json({ error: 'Quantity must be between 1 and 20' });
+      }
+    }
 
     const user = req.user || null;
     const guestName = guest.name || null;

@@ -36,7 +36,7 @@ export async function sendEmail({ to, subject, html, orderId, type }) {
 
   // Simulation mode
   console.log(
-    `\n📧 [SIMULATED EMAIL] to: ${to}\n   subject: ${subject}\n` +
+    `\n[SIMULATED EMAIL] to: ${to}\n   subject: ${subject}\n` +
       `   body: ${html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)}…\n`
   );
   await logNotification(orderId, 'EMAIL', type, 'SIMULATED', to);

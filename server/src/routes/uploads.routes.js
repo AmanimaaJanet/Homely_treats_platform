@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { saveImage } from '../services/storage.js';
+import { uploadLimiter } from '../middleware/security.js';
 
 const router = Router();
 
@@ -14,7 +15,7 @@ const upload = multer({
 });
 
 // POST /api/uploads  (multipart form-data, field name "file")
-router.post('/', upload.single('file'), async (req, res) => {
+router.post('/', uploadLimiter, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const url = await saveImage(req.file.buffer, req.file.originalname);

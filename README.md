@@ -1,10 +1,10 @@
-# 🎂 Homely Treats — Custom Bakery Ordering Platform
+# Homely Treats — Custom Bakery Ordering Platform
 
 A full-stack bakery ordering platform built from your HTML mockup: **React** frontend + **Node.js/Express** backend + **PostgreSQL** (Prisma), with **Paystack** payments (Ghana mobile money & cards), **Resend** email, **WhatsApp Cloud API**, **Textbelt/Arkesel** SMS, and a **PWA** install experience.
 
-> Accra's favourite artisan bakery — order custom cakes, cupcakes & pastries online, pay with MoMo, and track every step live.
+> Freshly baked, handcrafted in Accra — order custom cakes, cupcakes & pastries online, pay with MoMo, and track every step live.
 
-> 📖 **New here?** Start with **[GETTING_STARTED.md](GETTING_STARTED.md)** (quick start) or the complete, every-command-shown **[FULL_SETUP_GUIDE.md](FULL_SETUP_GUIDE.md)** — from your computer to a live Render deployment with PostgreSQL. Want every click spelled out? See **[RENDER_WALKTHROUGH.md](RENDER_WALKTHROUGH.md)** (Render screens + Paystack test keys). Only care about the database? See **[DATABASE_SETUP.md](DATABASE_SETUP.md)** — PostgreSQL on Render + the full schema.
+> 📖 **New here?** Start with **[GETTING_STARTED.md](GETTING_STARTED.md)** (quick start) or the complete, every-command-shown **[FULL_SETUP_GUIDE.md](FULL_SETUP_GUIDE.md)** — from your computer to a live Render deployment with PostgreSQL. Want every click spelled out? See **[RENDER_WALKTHROUGH.md](RENDER_WALKTHROUGH.md)** (Render screens + Paystack test keys). Testing payments, the admin login, and the customer/admin flows? See **[PAYSTACK_TESTING.md](PAYSTACK_TESTING.md)**. Only care about the database? See **[DATABASE_SETUP.md](DATABASE_SETUP.md)** — PostgreSQL on Render + the full schema.
 
 **Professional icon set:** the UI uses **[Lucide](https://lucide.dev) icons** (`lucide-react`) throughout instead of emojis — product cards, navigation, admin dashboard, payment methods, tracking timeline, notifications, and more. Products store a Lucide icon name (e.g. `Cake`, `CakeSlice`, `Heart`, `Citrus`, `Cookie`, `Leaf`, `Cherry`, `Croissant`) and can be changed per-product from the admin panel.
 
@@ -211,6 +211,14 @@ Key points:
 5. Order → `CONFIRMED`, payment → `PAID`, loyalty points awarded, customer notified (email + SMS + WhatsApp), and the tracking page updates **live via WebSocket**.
 
 Status pipeline: `PENDING → CONFIRMED → IN_PROGRESS → READY → OUT_FOR_DELIVERY (deliveries) → DELIVERED` or `CANCELLED`.
+
+---
+
+## 🔒 Security
+
+The backend is hardened for production: Helmet security headers (tuned CSP), CORS pinned to the frontend origin, rate limiting on auth & API routes, bcrypt cost 12, strong password rules, JWT pinned to HS256 with issuer/audience and 24-hour expiry, Paystack webhook HMAC verification, 100 KB JSON limits, and a production guard that refuses to start without a real `JWT_SECRET`.
+
+**Full details, the admin login, and the exact Paystack test steps:** see **[PAYSTACK_TESTING.md](PAYSTACK_TESTING.md)**.
 
 ---
 

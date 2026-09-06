@@ -5,7 +5,12 @@ export function signToken(user) {
   return jwt.sign(
     { id: user.id, email: user.email, role: user.role },
     config.jwtSecret,
-    { expiresIn: '7d' }
+    {
+      algorithm: 'HS256',
+      issuer: 'homely-treats',
+      audience: 'homely-treats-client',
+      expiresIn: '24h',
+    }
   );
 }
 

@@ -24,7 +24,7 @@ export default function Footer() {
           <h3 className="footer-brand">
             <Cake size={18} /> {info.businessName}
           </h3>
-          <p>Accra's premier custom bakery. Every order made fresh, just for you.</p>
+          <p>Ghana's handcrafted bakery. Every order made fresh, just for you.</p>
         </div>
         <div className="footer-section">
           <h3>Shop</h3>

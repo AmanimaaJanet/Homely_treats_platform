@@ -14,7 +14,7 @@ export async function sendWhatsApp({ phone, message, orderId, type }) {
     return { ok: false, error: 'invalid phone number' };
   }
   if (!config.whatsapp.enabled) {
-    console.log(`\n💬 [SIMULATED WHATSAPP] to: ${to}\n   ${message}\n`);
+    console.log(`\n[SIMULATED WHATSAPP] to: ${to}\n   ${message}\n`);
     await logNotification(orderId, 'WHATSAPP', type, 'SIMULATED', to);
     return { ok: true, simulated: true };
   }

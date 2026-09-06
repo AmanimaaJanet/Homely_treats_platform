@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Cake } from 'lucide-react';
+import { Cake, Check } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
+
+const PERKS = [
+  'Track all your orders in real time',
+  'Save custom order templates',
+  'Get exclusive deals & notifications',
+];
 
 export default function Register() {
   const navigate = useNavigate();
@@ -14,6 +20,10 @@ export default function Register() {
 
   const submit = async (e) => {
     e.preventDefault();
+    if (form.password.length < 8) {
+      toast('Password must be at least 8 characters', 'error');
+      return;
+    }
     if (form.password !== form.confirm) {
       toast('Passwords do not match', 'error');
       return;
@@ -37,16 +47,22 @@ export default function Register() {
   };
 
   return (
-    <div className="page">
-      <div className="container">
-        <div className="auth-card section">
-          <div className="centered">
-            <div className="auth-logo"><Cake size={44} strokeWidth={1.6} /></div>
-            <h2>Homely Treats</h2>
-            <p className="muted">Join thousands of satisfied Homely Treats customers.</p>
-          </div>
+    <div className="auth-wrap">
+      <div className="auth-side">
+        <Link to="/" className="logo">Homely Treats</Link>
+        <div className="auth-logo"><Cake size={44} strokeWidth={1.6} /></div>
+        <p>Create an account to manage your orders, track deliveries, and save your favourite customisations.</p>
+        <ul className="auth-perks">
+          {PERKS.map((p) => (
+            <li key={p}><Check size={15} /> {p}</li>
+          ))}
+        </ul>
+      </div>
+      <div className="auth-main">
+        <div className="auth-card">
+          <h2>Create Account</h2>
+          <p className="muted" style={{ marginBottom: '2rem' }}>Join Homely Treats — it takes less than a minute</p>
 
-          <h3 className="form-heading">Your Details</h3>
           <form onSubmit={submit}>
             <div className="form-group">
               <label className="form-label">Full Name</label>
@@ -62,19 +78,19 @@ export default function Register() {
             </div>
             <div className="form-group">
               <label className="form-label">Password</label>
-              <input type="password" className="form-input" required minLength={6} value={form.password} onChange={set('password')} />
+              <input type="password" className="form-input" required minLength={8} value={form.password} onChange={set('password')} placeholder="At least 8 characters" />
             </div>
             <div className="form-group">
               <label className="form-label">Confirm Password</label>
-              <input type="password" className="form-input" required minLength={6} value={form.confirm} onChange={set('confirm')} />
+              <input type="password" className="form-input" required minLength={8} value={form.confirm} onChange={set('confirm')} />
             </div>
             <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
-              {busy ? 'Creating…' : 'Create Account →'}
+              {busy ? 'Creating…' : 'Create Account'}
             </button>
           </form>
 
           <p className="centered" style={{ marginTop: '1.5rem' }}>
-            Already have an account? <Link to="/signin" className="link">Sign in →</Link>
+            Already have an account? <Link to="/signin" className="link">Sign in</Link>
           </p>
         </div>
       </div>

@@ -1,19 +1,27 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { ShoppingCart, LogOut } from 'lucide-react';
+import { ShoppingCart, LogOut, Menu, X } from 'lucide-react';
 import { useApp } from '../store.jsx';
 
 export default function Navbar() {
   const { cartCount, user, logout } = useApp();
   const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+
+  const close = () => setOpen(false);
+  const go = (path) => {
+    close();
+    navigate(path);
+  };
 
   return (
     <nav className="navbar">
       <div className="nav-container">
-        <Link to="/" className="logo">
+        <Link to="/" className="logo" onClick={close}>
           <img src="/brand.png" alt="Homely Treats" className="logo-img" />
           <span>Homely Treats</span>
         </Link>
+
         <ul className="nav-links">
           <li><NavLink to="/" end>Home</NavLink></li>
           <li><NavLink to="/menu">Menu</NavLink></li>
@@ -26,6 +34,7 @@ export default function Navbar() {
           )}
           {user?.role === 'ADMIN' && <li><NavLink to="/admin">Admin</NavLink></li>}
         </ul>
+
         <div className="nav-right">
           {user && (
             <button
@@ -39,12 +48,34 @@ export default function Navbar() {
               <LogOut size={18} />
             </button>
           )}
-          <div className="cart-icon" onClick={() => navigate('/cart')} role="button" aria-label="Cart">
+          <div className="cart-icon" onClick={() => go('/cart')} role="button" aria-label="Cart">
             <ShoppingCart size={24} strokeWidth={2} />
             {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
           </div>
+          <button
+            className="nav-burger"
+            onClick={() => setOpen((v) => !v)}
+            aria-label="Toggle menu"
+          >
+            {open ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </div>
       </div>
+
+      {open && (
+        <div className="mobile-menu">
+          <Link to="/" onClick={close}>Home</Link>
+          <Link to="/menu" onClick={close}>Menu</Link>
+          <Link to="/custom-order" onClick={close}>Custom Orders</Link>
+          <Link to="/track" onClick={close}>Track Order</Link>
+          {user ? (
+            <Link to="/account" onClick={close}>My Account</Link>
+          ) : (
+            <Link to="/signin" onClick={close}>Sign In</Link>
+          )}
+          {user?.role === 'ADMIN' && <Link to="/admin" onClick={close}>Admin Dashboard</Link>}
+        </div>
+      )}
     </nav>
   );
 }
