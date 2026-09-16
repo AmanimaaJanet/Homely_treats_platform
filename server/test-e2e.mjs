@@ -1234,7 +1234,188 @@ async function main() {
     check('Password change requires a session (401)', anon.status === 401);
   }
 
-  // ---------------------------------------------------------------- 28. Unauthorised guard
+  // ---------------------------------------------------------------- 28. Delivery rules & time slots
+  {
+    const DELIVERY_ZONE = `E2E Delivery Zone ${rnd}`;
+    const SLOT_OK = `E2E Slot A ${rnd}`;
+    const SLOT_FULL = `E2E Slot B ${rnd}`;
+    const COUNTER = `E2E Counter ${rnd}`;
+    const NEAR_DATE = daysFromNow(9);
+    const FULL_DATE = daysFromNow(10);
+    const CLOSED_DATE = daysFromNow(11);
+
+    // --- what checkout is told -------------------------------------------------
+    const before = await req('/api/delivery/options');
+    check('Checkout can read the delivery options', before.status === 200, `status ${before.status}`);
+    check('Options report the shop-wide lead time', typeof before.data?.minLeadDays === 'number',
+      `${before.data?.minLeadDays} days`);
+    check('Options list closed days for the date picker', Array.isArray(before.data?.blackoutDates));
+    check('Options always offer somewhere to collect from',
+      (before.data?.pickupLocations || []).length >= 1,
+      before.data?.pickupLocations?.[0]?.name);
+    check('Delivery options are public (no sign-in needed)', before.status !== 401);
+
+    // --- zone rules ------------------------------------------------------------
+    const zone = await req('/api/admin/zones', {
+      method: 'POST', token: adminToken,
+      body: { name: DELIVERY_ZONE, fee: 45, minOrder: 300, freeOver: 900, etaNote: 'Same-day before 4pm' },
+    });
+    created.zoneIds.push(zone.data?.zone?.id);
+    check('A zone can carry trading rules', zone.status === 201 && zone.data?.zone?.minOrder === 300,
+      `min ${zone.data?.zone?.minOrder}, free over ${zone.data?.zone?.freeOver}`);
+    const zoneId = zone.data?.zone?.id;
+
+    const listed = await req('/api/delivery/options');
+    const listedZone = listed.data?.zones?.find((z) => z.id === zoneId);
+    check('Zone rules reach checkout', listedZone?.minOrder === 300 && listedZone?.freeOver === 900);
+    check('Zone extends the note to customers', listedZone?.etaNote === 'Same-day before 4pm');
+
+    const mk = (body) =>
+      req('/api/orders', {
+        method: 'POST', token: janetToken,
+        body: { items: [{ productId: created.productIds[0], quantity: 1 }], paymentMethod: 'COD', ...body },
+      });
+
+    const belowMin = await mk({ deliveryMethod: 'DELIVERY', deliveryZone: zoneId, readyDate: NEAR_DATE });
+    check('A basket under the zone minimum is refused', belowMin.status === 400, belowMin.data?.error);
+    check('The refusal names the zone and the threshold',
+      (belowMin.data?.error || '').includes(DELIVERY_ZONE) && (belowMin.data?.error || '').includes('300'),
+      belowMin.data?.error);
+
+    // A basket big enough, but under the free-delivery threshold, still pays the fee.
+    const product0 = (await req('/api/products')).data?.products?.find((p) => p.id === created.productIds[0]);
+    const perUnit = product0?.basePrice || 200;
+    const qtyForMin = Math.ceil(300 / perUnit) + 1;
+    const paidDelivery = await mk({
+      deliveryMethod: 'DELIVERY', deliveryZone: zoneId, readyDate: NEAR_DATE,
+      items: [{ productId: created.productIds[0], quantity: qtyForMin }],
+    });
+    check('A delivery at or above the minimum is accepted', paidDelivery.status === 201, paidDelivery.data?.error);
+    if (paidDelivery.data?.order?.id) created.orderIds.push(paidDelivery.data.order.id);
+    check('The zone fee is charged', paidDelivery.data?.order?.deliveryFee === 45,
+      `fee ${paidDelivery.data?.order?.deliveryFee}`);
+
+    const qtyFree = Math.ceil(900 / perUnit) + 1;
+    const freeDelivery = await mk({
+      deliveryMethod: 'DELIVERY', deliveryZone: zoneId, readyDate: NEAR_DATE,
+      items: [{ productId: created.productIds[0], quantity: qtyFree }],
+    });
+    if (freeDelivery.data?.order?.id) created.orderIds.push(freeDelivery.data.order.id);
+    check('Delivery is free above the free-over threshold', freeDelivery.data?.order?.deliveryFee === 0,
+      `subtotal ${freeDelivery.data?.order?.subtotal}, fee ${freeDelivery.data?.order?.deliveryFee}`);
+
+    // --- pickup counters ------------------------------------------------------
+    const counter = await req('/api/admin/pickup-locations', {
+      method: 'POST', token: adminToken,
+      body: { name: COUNTER, address: '2 Test Lane, Osu', phone: '0551234999', hours: 'Mon–Sat 8–7', isDefault: true },
+    });
+    check('A second pickup counter can be added', counter.status === 201, counter.data?.error);
+    check('It can be marked the default', counter.data?.location?.isDefault === true);
+    const counterId = counter.data?.location?.id;
+
+    const opts2 = await req('/api/delivery/options');
+    check('Counters reach checkout', (opts2.data?.pickupLocations || []).some((l) => l.id === counterId));
+    const pastOrders = await req('/api/admin/orders?search=__never__', { token: adminToken });
+    check('Admin can still read orders alongside counters', pastOrders.status === 200);
+
+    // A counter chosen by id is stored on the order by name (what the ticket prints).
+    const pickupOrder = await mk({ deliveryMethod: 'PICKUP', readyDate: NEAR_DATE, pickupLocation: counterId });
+    if (pickupOrder.data?.order?.id) created.orderIds.push(pickupOrder.data.order.id);
+    check('The chosen counter is recorded on the order',
+      pickupOrder.data?.order?.pickupLocation === COUNTER,
+      pickupOrder.data?.order?.pickupLocation);
+
+    // --- time slots with capacity --------------------------------------------
+    const slotA = await req('/api/admin/time-slots', {
+      method: 'POST', token: adminToken, body: { label: SLOT_OK, capacity: 1, sortOrder: 1 },
+    });
+    const slotB = await req('/api/admin/time-slots', {
+      method: 'POST', token: adminToken, body: { label: SLOT_FULL, capacity: 5, sortOrder: 2 },
+    });
+    check('Collection windows can be created with a daily capacity',
+      slotA.status === 201 && slotA.data?.slot?.capacity === 1, `${slotA.data?.slot?.label}`);
+
+    const badSlot = await mk({ deliveryMethod: 'PICKUP', readyDate: FULL_DATE, timeSlot: 'Not a real window' });
+    check('An unknown window is refused', badSlot.status === 400, badSlot.data?.error);
+
+    const booked = await mk({ deliveryMethod: 'PICKUP', readyDate: FULL_DATE, timeSlot: SLOT_OK });
+    if (booked.data?.order?.id) created.orderIds.push(booked.data.order.id);
+    check('A window can be booked', booked.status === 201 && booked.data?.order?.timeSlot === SLOT_OK,
+      booked.data?.order?.timeSlot);
+
+    const overBooked = await mk({ deliveryMethod: 'PICKUP', readyDate: FULL_DATE, timeSlot: SLOT_OK });
+    check('A full window cannot be overbooked', overBooked.status === 400, overBooked.data?.error);
+    check('The refusal explains the window is full', (overBooked.data?.error || '').toLowerCase().includes('fully booked'));
+
+    const withSlots = await req(`/api/delivery/options?date=${FULL_DATE}`);
+    const slotState = withSlots.data?.slots?.find((s) => s.label === SLOT_OK);
+    check('Checkout sees live remaining capacity', slotState?.remaining === 0 && slotState?.booked === 1,
+      `${slotState?.booked}/${slotState?.capacity} booked`);
+    check('An untouched window still has room',
+      withSlots.data?.slots?.find((s) => s.label === SLOT_FULL)?.remaining === 5);
+
+    // Cancelling gives the place back, so a full day is never permanently lost.
+    await req(`/api/admin/orders/${booked.data.order.id}/status`, {
+      method: 'PATCH', token: adminToken, body: { status: 'CANCELLED' },
+    });
+    const afterCancel = await req(`/api/delivery/options?date=${FULL_DATE}`);
+    check('Cancelling frees the window again',
+      afterCancel.data?.slots?.find((s) => s.label === SLOT_OK)?.remaining === 1,
+      afterCancel.data?.slots?.find((s) => s.label === SLOT_OK)?.remaining);
+
+    // --- closed days ----------------------------------------------------------
+    const blackout = await req('/api/admin/blackouts', {
+      method: 'POST', token: adminToken, body: { date: CLOSED_DATE, reason: `E2E holiday ${rnd}` },
+    });
+    check('A day can be closed to orders', blackout.status === 201, blackout.data?.error);
+
+    const closedOrder = await mk({ deliveryMethod: 'PICKUP', readyDate: CLOSED_DATE });
+    check('Orders on a closed day are refused', closedOrder.status === 400, closedOrder.data?.error);
+    check('The refusal names the day and the reason',
+      (closedOrder.data?.error || '').includes('closed') && (closedOrder.data?.error || '').includes(`E2E holiday ${rnd}`));
+
+    const optsClosed = await req(`/api/delivery/options?date=${CLOSED_DATE}`);
+    check('Checkout is told the day is closed', !!optsClosed.data?.blackout, optsClosed.data?.blackout?.reason);
+    const pickerList = await req('/api/delivery/options');
+    check('Closed days are listed for the date picker',
+      (pickerList.data?.blackoutDates || []).some((b) => b.date === CLOSED_DATE));
+
+    // Reopening the day must put it back on sale.
+    await req(`/api/admin/blackouts/${blackout.data.blackout.id}`, { method: 'DELETE', token: adminToken });
+    const reopened = await mk({ deliveryMethod: 'PICKUP', readyDate: CLOSED_DATE });
+    if (reopened.data?.order?.id) created.orderIds.push(reopened.data.order.id);
+    check('Reopening the day allows orders again', reopened.status === 201, reopened.data?.error);
+
+    // --- per-product notice ---------------------------------------------------
+    await req(`/api/admin/products/${created.productIds[0]}`, {
+      method: 'PUT', token: adminToken, body: { leadDays: 8 },
+    });
+    const tooSoon = await mk({ deliveryMethod: 'PICKUP', readyDate: daysFromNow(3) });
+    check('A product with its own notice refuses a too-soon date', tooSoon.status === 400, tooSoon.data?.error);
+    check('The refusal states the notice and the earliest date',
+      (tooSoon.data?.error || '').includes('8 days') && (tooSoon.data?.error || '').includes(daysFromNow(8)));
+    await req(`/api/admin/products/${created.productIds[0]}`, {
+      method: 'PUT', token: adminToken, body: { leadDays: null },
+    });
+
+    // --- kitchen view ---------------------------------------------------------
+    const calendar = await req('/api/admin/delivery-calendar?days=14', { token: adminToken });
+    check('The delivery calendar builds', calendar.status === 200 && calendar.data?.calendar?.length === 14,
+      `${calendar.data?.calendar?.length} days`);
+    const busyDay = calendar.data?.calendar?.find((d) => d.date === NEAR_DATE);
+    check('Calendar shows the day\'s orders and value', busyDay?.orders >= 1, `${busyDay?.orders} order(s)`);
+    check('Calendar shows each window with its remaining capacity',
+      Array.isArray(busyDay?.slots) && busyDay.slots.every((s) => typeof s.remaining === 'number'));
+    const calendarAnon = await req('/api/admin/delivery-calendar');
+    check('The delivery calendar is admin-only (401)', calendarAnon.status === 401);
+
+    // --- tidy up --------------------------------------------------------------
+    await prisma.timeSlot.deleteMany({ where: { id: { in: [slotA.data.slot.id, slotB.data.slot.id] } } });
+    await prisma.pickupLocation.deleteMany({ where: { id: counterId } });
+    await prisma.blackoutDate.deleteMany({ where: { reason: `E2E holiday ${rnd}` } });
+  }
+
+  // ---------------------------------------------------------------- 29. Unauthorised guard
   {
     const r = await req('/api/admin/stats');
     check('Admin endpoints protected (401)', r.status === 401);

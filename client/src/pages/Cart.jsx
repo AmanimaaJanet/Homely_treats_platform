@@ -25,6 +25,14 @@ export default function Cart() {
   const [payOptions, setPayOptions] = useState(PAYMENT_METHODS);
   const [allowPickup, setAllowPickup] = useState(true);
   const [pickupAddress, setPickupAddress] = useState('Airport Residential, Accra');
+  // Delivery rules: counters to collect from, collection/delivery windows with live
+  // capacity for the chosen day, and closed days the bakery has declared.
+  const [pickupLocations, setPickupLocations] = useState([]);
+  const [pickupLocationId, setPickupLocationId] = useState('');
+  const [slots, setSlots] = useState([]);
+  const [timeSlot, setTimeSlot] = useState('');
+  const [blackout, setBlackout] = useState(null);
+  const [zoneRuleError, setZoneRuleError] = useState('');
   const [promoCode, setPromoCode] = useState('');
   const [promo, setPromo] = useState(null);
   const [promoError, setPromoError] = useState('');
@@ -35,11 +43,32 @@ export default function Cart() {
   // Guest info
   const [guest, setGuest] = useState({ name: '', email: '', phone: '' });
 
+  const readyDate = cart[0]?.readyDate || '';
+
+  // Rules are re-read per date: a window that filled up a minute ago, or a day the
+  // bakery has since closed, can no longer be chosen.
   useEffect(() => {
-    api.get('/zones').then((d) => {
-      setZones(d.zones);
-      if (d.zones.length && !deliveryZone) setDeliveryZone(d.zones[0].id);
-    }).catch(() => {});
+    const q = readyDate ? `?date=${encodeURIComponent(readyDate)}` : '';
+    api
+      .get(`/delivery/options${q}`)
+      .then((d) => {
+        setZones(d.zones || []);
+        setDeliveryZone((z) => z || d.zones?.[0]?.id || '');
+        setPickupLocations(d.pickupLocations || []);
+        setPickupLocationId((p) => p || d.pickupLocations?.find((l) => l.isDefault)?.id || d.pickupLocations?.[0]?.id || '');
+        // A slot that is full (or a day that closed) must not stay selected.
+        setSlots(d.slots || []);
+        setTimeSlot((t) => {
+          const still = (d.slots || []).find((sl) => sl.label === t && sl.remaining > 0);
+          return still ? t : '';
+        });
+        setBlackout(d.blackout || null);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyDate]);
+
+  useEffect(() => {
     // Respect admin-configured payment methods / pickup availability
     api.get('/settings/public').then((d) => {
       const s = d.settings;
@@ -59,8 +88,15 @@ export default function Cart() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const zone = zones.find((z) => z.id === deliveryZone);
-  const deliveryFee = deliveryMethod === 'DELIVERY' ? Number(zone?.fee || 0) : 0;
+  const zone = zones.find((z) => z.id === deliveryZone) || zones.find((z) => z.name === deliveryZone);
+  // A zone can refuse small baskets and waive the fee for large ones.
+  const ruleIssue =
+    deliveryMethod === 'DELIVERY' && zone?.minOrder && subtotal < zone.minOrder
+      ? `We deliver to ${zone.name} from ${ghs(zone.minOrder)} — your basket is ${ghs(subtotal)}. Add something else or choose pickup.`
+      : '';
+  const feeWaived =
+    deliveryMethod === 'DELIVERY' && zone?.freeOver && subtotal >= zone.freeOver && !ruleIssue;
+  const deliveryFee = deliveryMethod === 'DELIVERY' && !ruleIssue ? (feeWaived ? 0 : Number(zone?.fee || 0)) : 0;
   const discount = promo ? promo.discount : 0;
   const baseAfterPromo = Math.max(0, subtotal - discount);
   const loyaltyDiscount = usePoints ? pointsValue(pointsToUse) : 0;
@@ -92,6 +128,8 @@ export default function Cart() {
       toast('Please fill in your name, email and phone (or sign in).', 'error');
       return;
     }
+    if (ruleIssue) return toast(ruleIssue, 'error');
+    if (blackout) return toast(`We're closed on that date${blackout.reason ? ` (${blackout.reason})` : ''}. Please pick another day.`, 'error');
     if (deliveryMethod === 'DELIVERY' && !deliveryZone) {
       toast('Please select your delivery zone.', 'error');
       return;
@@ -111,6 +149,8 @@ export default function Cart() {
         deliveryAddress: deliveryMethod === 'DELIVERY' ? address : undefined,
         deliveryZone: deliveryMethod === 'DELIVERY' ? deliveryZone : undefined,
         readyDate: cart[0]?.readyDate || undefined,
+        timeSlot: timeSlot || undefined,
+        pickupLocation: deliveryMethod === 'PICKUP' ? pickupLocationId || undefined : undefined,
         notes: cart.map((i) => i.notes).filter(Boolean).join(' | ') || undefined,
         paymentMethod,
         promoCode: promo?.code,
@@ -231,10 +271,17 @@ export default function Cart() {
                     onClick={() => setDeliveryMethod('PICKUP')}
                   >
                     <strong><Store size={18} /> Pickup</strong>
-                    <p>Free · {pickupAddress}</p>
+                    <p>Free · {pickupLocations.find((l) => l.id === pickupLocationId)?.address || pickupAddress}</p>
                   </div>
                 )}
               </div>
+
+              {blackout && (
+                <p className="checkout-warning">
+                  We're closed on {readyDate}
+                  {blackout.reason ? ` (${blackout.reason})` : ''} — please pick another date on the product page.
+                </p>
+              )}
 
               {deliveryMethod === 'DELIVERY' && (
                 <>
@@ -247,11 +294,77 @@ export default function Cart() {
                       ))}
                     </select>
                   </div>
+                  {zone?.etaNote && <p className="muted small">{zone.etaNote}</p>}
+                  {zone?.minOrder ? (
+                    <p className={`muted small ${ruleIssue ? 'checkout-warning' : ''}`}>
+                      Minimum basket for {zone.name}: {ghs(zone.minOrder)}
+                      {zone.freeOver ? ` · free delivery over ${ghs(zone.freeOver)}` : ''}
+                    </p>
+                  ) : null}
                   <div className="form-group">
                     <label className="form-label">Street Address / Landmark</label>
                     <textarea className="form-textarea" placeholder="House no, street, landmark…" value={address} onChange={(e) => setAddress(e.target.value)} />
                   </div>
                 </>
+              )}
+
+              {deliveryMethod === 'PICKUP' && pickupLocations.length > 1 && (
+                <div className="form-group">
+                  <label className="form-label">Collect from *</label>
+                  <select
+                    className="form-select"
+                    value={pickupLocationId}
+                    onChange={(e) => setPickupLocationId(e.target.value)}
+                  >
+                    {pickupLocations.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name} — {l.address}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {deliveryMethod === 'PICKUP' && pickupLocations.length === 1 && (
+                <p className="muted small">
+                  Collect from <strong>{pickupLocations[0].name}</strong> — {pickupLocations[0].address}
+                  {pickupLocations[0].hours ? ` · ${pickupLocations[0].hours}` : ''}
+                </p>
+              )}
+
+              {readyDate && slots.length > 0 && !blackout && (
+                <div className="form-group">
+                  <label className="form-label">
+                    {deliveryMethod === 'DELIVERY' ? 'Delivery window' : 'Collection window'} for {readyDate}
+                  </label>
+                  <div className="slot-grid">
+                    <button
+                      type="button"
+                      className={`slot-chip ${!timeSlot ? 'selected' : ''}`}
+                      onClick={() => setTimeSlot('')}
+                    >
+                      <strong>Anytime</strong>
+                      <span className="muted small">We'll confirm when ready</span>
+                    </button>
+                    {slots.map((sl) => {
+                      const full = sl.remaining <= 0;
+                      return (
+                        <button
+                          key={sl.id}
+                          type="button"
+                          className={`slot-chip ${timeSlot === sl.label ? 'selected' : ''} ${full ? 'full' : ''}`}
+                          disabled={full}
+                          onClick={() => setTimeSlot(sl.label)}
+                        >
+                          <strong>{sl.label}</strong>
+                          <span className="muted small">
+                            {full ? 'Fully booked' : `${sl.remaining} of ${sl.capacity} left`}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </div>
 
@@ -259,7 +372,18 @@ export default function Cart() {
               <div className="cart-summary">
                 <h3>Order Summary</h3>
                 <div className="summary-row"><span>Subtotal</span><span>{ghs(subtotal)}</span></div>
-                <div className="summary-row"><span>Delivery fee</span><span>{ghs(deliveryFee)}</span></div>
+                <div className="summary-row">
+                  <span>Delivery fee</span>
+                  <span>
+                    {feeWaived ? (
+                      <>
+                        <s className="muted">{ghs(zone?.fee || 0)}</s> Free
+                      </>
+                    ) : (
+                      ghs(deliveryFee)
+                    )}
+                  </span>
+                </div>
                 <div className="summary-row"><span>Discount</span><span>{ghs(discount)}</span></div>
                 {usePoints && loyaltyDiscount > 0 && (
                   <div className="summary-row"><span>Loyalty points</span><span>−{ghs(loyaltyDiscount)}</span></div>

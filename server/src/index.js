@@ -24,6 +24,7 @@ import zoneRoutes from './routes/zones.routes.js';
 import reviewRoutes from './routes/reviews.routes.js';
 import riderRoutes from './routes/rider.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
+import deliveryRoutes from './routes/delivery.routes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -127,6 +128,7 @@ app.use('/api/zones', zoneRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/rider', riderRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/delivery', deliveryRoutes);
 
 // Serve the built React app in production
 const clientDist = path.resolve(__dirname, '../../client/dist');

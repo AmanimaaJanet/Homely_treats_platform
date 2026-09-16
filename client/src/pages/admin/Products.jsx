@@ -15,7 +15,7 @@ const CATEGORIES = [
 
 const EMPTY = {
   name: '', description: '', category: 'CAKE', basePrice: '', icon: 'Cake',
-  badge: '', flavors: '', stock: 0, inStock: true, featured: false, sizeOptions: [],
+  badge: '', flavors: '', stock: 0, leadDays: '', inStock: true, featured: false, sizeOptions: [],
   images: [], imageAlt: '',
 };
 
@@ -118,6 +118,7 @@ export default function Products() {
       badge: editing.badge || null,
       flavors: (editing.flavors || '').split(',').map((s) => s.trim()).filter(Boolean),
       stock: parseInt(editing.stock || 0, 10),
+      leadDays: editing.leadDays === '' || editing.leadDays === undefined ? null : Number(editing.leadDays),
       inStock: editing.inStock,
       featured: editing.featured,
       sizeOptions: (editing.sizeOptions || []).filter((s) => s.label),
@@ -323,6 +324,22 @@ export default function Products() {
                 <div className="form-group">
                   <label className="form-label">Stock Count</label>
                   <input type="number" className="form-input" value={editing.stock} onChange={(e) => setEditing({ ...editing, stock: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Notice needed (days)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="60"
+                    className="form-input"
+                    placeholder="Use the shop default"
+                    value={editing.leadDays ?? ''}
+                    onChange={(e) => setEditing({ ...editing, leadDays: e.target.value })}
+                  />
+                  <p className="muted small">
+                    Leave blank to use your shop-wide lead time. Raise it for cakes that
+                    need longer (a tiered cake vs a tray of cookies).
+                  </p>
                 </div>
               </div>
 

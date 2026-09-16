@@ -46,6 +46,9 @@ model Product {
   imageAlt    String?       // optional alt text; falls back to the product name
   flavors     String[]      @default([])
   sizes       String[]      @default([])
+  // Minimum notice for this product, in days. NULL falls back to the shop-wide
+  // setting — a celebration cake may need 4 days where a tray of cookies needs 1.
+  leadDays    Int?
   stock       Int           @default(0)
   inStock     Boolean       @default(true)
   featured    Boolean       @default(false)
@@ -69,6 +72,42 @@ model DeliveryZone {
   name   String  @unique // e.g. "East Legon"
   fee    Float   @default(0)
   active Boolean @default(true)
+  // Trading rules per neighbourhood: the smallest basket you'll drive out for, and
+  // the basket size at which delivery becomes free. NULL means "no rule".
+  minOrder Float? // refuse delivery to this zone below this subtotal
+  freeOver Float? // waive the fee at or above this subtotal
+  etaNote  String? // e.g. "Same-day before 4pm"
+}
+
+/// Where customers can collect from. A bakery that opens a second counter adds a row
+/// here rather than re-deploying.
+model PickupLocation {
+  id        String   @id @default(cuid())
+  name      String   @unique // e.g. "Airport Residential (main shop)"
+  address   String
+  phone     String?
+  hours     String? // free text, e.g. "Mon–Sat, 8am–7pm"
+  active    Boolean  @default(true)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+/// Collection / delivery windows. Capacity is per slot per day: once the day's orders
+/// fill a window, checkout stops offering it, so the kitchen is never promised more
+/// cakes than it can finish.
+model TimeSlot {
+  id        String   @id @default(cuid())
+  label     String   @unique // e.g. "9:00 – 11:00"
+  sortOrder Int      @default(0)
+  capacity  Int      @default(6)
+  active    Boolean  @default(true)
+}
+
+/// Days the bakery is closed (public holidays, maintenance). Checkout refuses them.
+model BlackoutDate {
+  id     String   @id @default(cuid())
+  date   DateTime @unique @db.Date
+  reason String?
 }
 
 model Order {
@@ -105,6 +144,8 @@ model Order {
   rider           User?           @relation("OrderRider", fields: [riderId], references: [id])
   riderAcceptedAt DateTime?
   readyDate       DateTime?
+  timeSlot        String? // collection/delivery window label, e.g. "9:00 – 11:00"
+  pickupLocation  String? // which counter, when the bakery has more than one
   notes           String?
   promoCode       String?
   createdAt       DateTime        @default(now())

@@ -27,6 +27,7 @@ export default function CustomOrder() {
   const [photos, setPhotos] = useState([]); // uploaded design reference urls
   const [uploading, setUploading] = useState(false);
   const [minLead, setMinLead] = useState(2);
+  const [blackoutDates, setBlackoutDates] = useState([]);
 
   useEffect(() => {
     api.get('/products').then((d) => {
@@ -35,7 +36,22 @@ export default function CustomOrder() {
       if (preselect && d.products.find((p) => p.id === preselect)) setProductId(preselect);
     });
     api.get('/settings/public').then((d) => setMinLead(d.settings.minLeadDays || 2)).catch(() => {});
+    api.get('/delivery/options').then((d) => setBlackoutDates(d.blackoutDates || [])).catch(() => {});
   }, [params]);
+
+  // A product can need longer than the shop-wide notice (a tiered cake vs a tray of
+  // cookies), so the picker follows whichever is stricter.
+  useEffect(() => {
+    if (!productId) return;
+    api
+      .get('/delivery/options')
+      .then((d) => {
+        const p = products.find((x) => x.id === productId);
+        setMinLead(Math.max(Number(d.minLeadDays ?? 2), Number(p?.leadDays ?? 0)));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId]);
 
   const product = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
   const flavors = product?.flavors?.length ? product.flavors : DEFAULT_FLAVORS;
@@ -197,7 +213,19 @@ export default function CustomOrder() {
                 onChange={(e) => setDate(e.target.value)}
                 required
               />
-              <p className="muted small">Minimum {minLead} days advance notice required.</p>
+              <p className="muted small">
+                Minimum {minLead} days advance notice required
+                {product?.leadDays ? ` for ${product.name}` : ''}.
+              </p>
+              {date && blackoutDates.some((b) => b.date === date) && (
+                <p className="checkout-warning">
+                  We're closed on {date}
+                  {blackoutDates.find((b) => b.date === date)?.reason
+                    ? ` (${blackoutDates.find((b) => b.date === date).reason})`
+                    : ''}
+                  . Please choose another day.
+                </p>
+              )}
             </div>
 
             <div className="form-group">

@@ -26,6 +26,18 @@ function clean(value, maxLen = 200) {
  * duplicates, and cap the count. Order is preserved because images[0] is the cover.
  */
 const MAX_PRODUCT_IMAGES = 8;
+
+/**
+ * Per-product notice, in days. Empty means "use the shop-wide lead time" (stored as
+ * SQL NULL, not 0 — a cake needing *same-day* pickup and a cake with no opinion are
+ * different things).
+ */
+function normalizeLeadDays(v) {
+  if (v === '' || v === null || v === undefined) return null;
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.min(60, n);
+}
 function normalizeImages(input) {
   if (!Array.isArray(input)) return [];
   const seen = new Set();
@@ -564,7 +576,7 @@ router.get('/products', async (req, res) => {
 
 router.post('/products', async (req, res) => {
   try {
-    const { name, description, category, basePrice, emoji, icon, badge, flavors, sizes, stock, inStock, featured, sizeOptions, images, imageAlt } =
+    const { name, description, category, basePrice, emoji, icon, badge, flavors, sizes, stock, inStock, featured, sizeOptions, images, imageAlt, leadDays } =
       req.body || {};
     if (!name || !category || basePrice === undefined) {
       return res.status(400).json({ error: 'Name, category and base price are required' });
@@ -583,6 +595,7 @@ router.post('/products', async (req, res) => {
         flavors: Array.isArray(flavors) ? flavors : [],
         sizes: Array.isArray(sizes) ? sizes : [],
         stock: parseInt(stock || 0, 10),
+        leadDays: normalizeLeadDays(leadDays),
         inStock: Boolean(inStock),
         featured: Boolean(featured),
         sizeOptions: {
@@ -606,7 +619,7 @@ router.post('/products', async (req, res) => {
 
 router.put('/products/:id', async (req, res) => {
   try {
-    const { name, description, category, basePrice, emoji, icon, badge, flavors, sizes, stock, inStock, featured, isActive, sizeOptions, images, imageAlt } =
+    const { name, description, category, basePrice, emoji, icon, badge, flavors, sizes, stock, inStock, featured, isActive, sizeOptions, images, imageAlt, leadDays } =
       req.body || {};
     const product = await prisma.product.update({
       where: { id: req.params.id },
@@ -622,6 +635,7 @@ router.put('/products/:id', async (req, res) => {
         ...(flavors !== undefined && { flavors }),
         ...(sizes !== undefined && { sizes }),
         ...(stock !== undefined && { stock: parseInt(stock, 10) }),
+        ...(leadDays !== undefined && { leadDays: normalizeLeadDays(leadDays) }),
         ...(inStock !== undefined && { inStock: Boolean(inStock) }),
         ...(featured !== undefined && { featured: Boolean(featured) }),
         ...(isActive !== undefined && { isActive: Boolean(isActive) }),
@@ -758,50 +772,328 @@ router.delete('/promos/:id', async (req, res) => {
 // Delivery zones CRUD
 // ---------------------------------------------------------------------------
 router.get('/zones', async (req, res) => {
-  const zones = await prisma.deliveryZone.findMany({ orderBy: { name: 'asc' } });
-  res.json({ zones });
+  try {
+    const zones = await prisma.deliveryZone.findMany({ orderBy: { name: 'asc' } });
+    res.json({ zones });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load zones' });
+  }
 });
+
+/** Numeric or null — an empty threshold field means "no rule", not zero. */
+const optionalNumber = (v) => {
+  if (v === '' || v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+};
 
 router.post('/zones', async (req, res) => {
   try {
-    const { name, fee, active = true } = req.body || {};
-    if (!name) return res.status(400).json({ error: 'Zone name is required' });
+    const { name, fee, minOrder, freeOver, etaNote } = req.body || {};
+    if (!name || !String(name).trim()) return res.status(400).json({ error: 'Zone name is required' });
     const zone = await prisma.deliveryZone.create({
-      data: { name: String(name).trim(), fee: Number(fee || 0), active: Boolean(active) },
+      data: {
+        name: String(name).trim().slice(0, 60),
+        fee: Number(fee) || 0,
+        minOrder: optionalNumber(minOrder),
+        freeOver: optionalNumber(freeOver),
+        etaNote: etaNote ? String(etaNote).slice(0, 80) : null,
+      },
     });
+    await audit(req, { action: 'ZONE_CREATE', entity: 'DeliveryZone', entityId: zone.id, detail: zone.name });
     res.status(201).json({ zone });
   } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'A zone with that name already exists' });
     console.error(err);
-    if (err.code === 'P2002') return res.status(409).json({ error: 'Zone already exists' });
     res.status(500).json({ error: 'Failed to create zone' });
   }
 });
 
 router.put('/zones/:id', async (req, res) => {
   try {
-    const { name, fee, active } = req.body || {};
+    const { name, fee, active, minOrder, freeOver, etaNote } = req.body || {};
     const zone = await prisma.deliveryZone.update({
       where: { id: req.params.id },
       data: {
-        ...(name !== undefined && { name: String(name).trim() }),
-        ...(fee !== undefined && { fee: Number(fee) }),
-        ...(active !== undefined && { active: Boolean(active) }),
+        ...(name !== undefined && { name: String(name).trim().slice(0, 60) }),
+        ...(fee !== undefined && { fee: Number(fee) || 0 }),
+        ...(active !== undefined && { active: !!active }),
+        ...(minOrder !== undefined && { minOrder: optionalNumber(minOrder) }),
+        ...(freeOver !== undefined && { freeOver: optionalNumber(freeOver) }),
+        ...(etaNote !== undefined && { etaNote: etaNote ? String(etaNote).slice(0, 80) : null }),
       },
+    });
+    await audit(req, {
+      action: 'ZONE_UPDATE',
+      entity: 'DeliveryZone',
+      entityId: zone.id,
+      detail: `${zone.name} — fee ${zone.fee}${zone.minOrder != null ? `, min ${zone.minOrder}` : ''}${zone.freeOver != null ? `, free over ${zone.freeOver}` : ''}`,
     });
     res.json({ zone });
   } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'A zone with that name already exists' });
     console.error(err);
     res.status(500).json({ error: 'Failed to update zone' });
   }
 });
 
 router.delete('/zones/:id', async (req, res) => {
-  await prisma.deliveryZone.delete({ where: { id: req.params.id } });
-  res.json({ ok: true });
+  try {
+    const used = await prisma.order.count({ where: { deliveryZone: (await prisma.deliveryZone.findUnique({ where: { id: req.params.id } }))?.name || '__none__' } });
+    // Deleting a zone that has delivered orders would orphan the history, so de-list it.
+    if (used > 0) {
+      const zone = await prisma.deliveryZone.update({ where: { id: req.params.id }, data: { active: false } });
+      await audit(req, { action: 'ZONE_DEACTIVATE', entity: 'DeliveryZone', entityId: zone.id, detail: `${zone.name} (${used} past orders)` });
+      return res.json({ ok: true, deactivated: true, zone, pastOrders: used });
+    }
+    await prisma.deliveryZone.delete({ where: { id: req.params.id } });
+    await audit(req, { action: 'ZONE_DELETE', entity: 'DeliveryZone', entityId: req.params.id });
+    res.json({ ok: true, deactivated: false });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to remove zone' });
+  }
 });
 
 // ---------------------------------------------------------------------------
-// Sales reports + CSV export
+// Pickup counters
+// ---------------------------------------------------------------------------
+router.get('/pickup-locations', async (req, res) => {
+  try {
+    const locations = await prisma.pickupLocation.findMany({
+      orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+    });
+    res.json({ locations });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load pickup locations' });
+  }
+});
+
+router.post('/pickup-locations', async (req, res) => {
+  try {
+    const { name, address, phone, hours, isDefault } = req.body || {};
+    if (!name || !address) return res.status(400).json({ error: 'Name and address are required' });
+    // Only one counter can be the default; the checkout preselects it.
+    if (isDefault) await prisma.pickupLocation.updateMany({ data: { isDefault: false } });
+    const location = await prisma.pickupLocation.create({
+      data: {
+        name: String(name).trim().slice(0, 80),
+        address: String(address).trim().slice(0, 200),
+        phone: phone ? String(phone).slice(0, 30) : null,
+        hours: hours ? String(hours).slice(0, 80) : null,
+        isDefault: !!isDefault,
+      },
+    });
+    await audit(req, { action: 'PICKUP_CREATE', entity: 'PickupLocation', entityId: location.id, detail: location.name });
+    res.status(201).json({ location });
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'A counter with that name already exists' });
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create the pickup location' });
+  }
+});
+
+router.put('/pickup-locations/:id', async (req, res) => {
+  try {
+    const { name, address, phone, hours, active, isDefault } = req.body || {};
+    if (isDefault) await prisma.pickupLocation.updateMany({ data: { isDefault: false } });
+    const location = await prisma.pickupLocation.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name !== undefined && { name: String(name).trim().slice(0, 80) }),
+        ...(address !== undefined && { address: String(address).trim().slice(0, 200) }),
+        ...(phone !== undefined && { phone: phone ? String(phone).slice(0, 30) : null }),
+        ...(hours !== undefined && { hours: hours ? String(hours).slice(0, 80) : null }),
+        ...(active !== undefined && { active: !!active }),
+        ...(isDefault !== undefined && { isDefault: !!isDefault }),
+      },
+    });
+    await audit(req, { action: 'PICKUP_UPDATE', entity: 'PickupLocation', entityId: location.id, detail: location.name });
+    res.json({ location });
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'A counter with that name already exists' });
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update the pickup location' });
+  }
+});
+
+router.delete('/pickup-locations/:id', async (req, res) => {
+  try {
+    await prisma.pickupLocation.delete({ where: { id: req.params.id } });
+    await audit(req, { action: 'PICKUP_DELETE', entity: 'PickupLocation', entityId: req.params.id });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to remove the pickup location' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Collection / delivery windows
+// ---------------------------------------------------------------------------
+router.get('/time-slots', async (req, res) => {
+  try {
+    const slots = await prisma.timeSlot.findMany({ orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }] });
+    res.json({ slots });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load time slots' });
+  }
+});
+
+router.post('/time-slots', async (req, res) => {
+  try {
+    const { label, capacity = 6, sortOrder = 0 } = req.body || {};
+    if (!label || !String(label).trim()) return res.status(400).json({ error: 'A slot label is required' });
+    const slot = await prisma.timeSlot.create({
+      data: {
+        label: String(label).trim().slice(0, 40),
+        capacity: Math.max(1, Math.min(200, parseInt(capacity, 10) || 6)),
+        sortOrder: parseInt(sortOrder, 10) || 0,
+      },
+    });
+    await audit(req, { action: 'SLOT_CREATE', entity: 'TimeSlot', entityId: slot.id, detail: `${slot.label} (${slot.capacity}/day)` });
+    res.status(201).json({ slot });
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'A slot with that label already exists' });
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create the time slot' });
+  }
+});
+
+router.put('/time-slots/:id', async (req, res) => {
+  try {
+    const { label, capacity, active, sortOrder } = req.body || {};
+    const slot = await prisma.timeSlot.update({
+      where: { id: req.params.id },
+      data: {
+        ...(label !== undefined && { label: String(label).trim().slice(0, 40) }),
+        ...(capacity !== undefined && { capacity: Math.max(1, Math.min(200, parseInt(capacity, 10) || 1)) }),
+        ...(active !== undefined && { active: !!active }),
+        ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder, 10) || 0 }),
+      },
+    });
+    await audit(req, { action: 'SLOT_UPDATE', entity: 'TimeSlot', entityId: slot.id, detail: `${slot.label} (${slot.capacity}/day, ${slot.active ? 'active' : 'off'})` });
+    res.json({ slot });
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'A slot with that label already exists' });
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update the time slot' });
+  }
+});
+
+router.delete('/time-slots/:id', async (req, res) => {
+  try {
+    await prisma.timeSlot.delete({ where: { id: req.params.id } });
+    await audit(req, { action: 'SLOT_DELETE', entity: 'TimeSlot', entityId: req.params.id });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to remove the time slot' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Closed days
+// ---------------------------------------------------------------------------
+router.get('/blackouts', async (req, res) => {
+  try {
+    const blackouts = await prisma.blackoutDate.findMany({ orderBy: { date: 'asc' } });
+    res.json({ blackouts });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load closed days' });
+  }
+});
+
+router.post('/blackouts', async (req, res) => {
+  try {
+    const { date, reason } = req.body || {};
+    if (!date) return res.status(400).json({ error: 'A date is required' });
+    const d = new Date(date);
+    if (Number.isNaN(d.getTime())) return res.status(400).json({ error: 'That date could not be understood' });
+    const key = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+    const blackout = await prisma.blackoutDate.create({
+      data: { date: key, reason: reason ? String(reason).slice(0, 120) : null },
+    });
+    await audit(req, { action: 'BLACKOUT_CREATE', entity: 'BlackoutDate', entityId: blackout.id, detail: `${BlackoutLabel(blackout)}` });
+    res.status(201).json({ blackout });
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'That day is already closed' });
+    console.error(err);
+    res.status(500).json({ error: 'Failed to close that day' });
+  }
+});
+
+router.delete('/blackouts/:id', async (req, res) => {
+  try {
+    await prisma.blackoutDate.delete({ where: { id: req.params.id } });
+    await audit(req, { action: 'BLACKOUT_DELETE', entity: 'BlackoutDate', entityId: req.params.id });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to reopen that day' });
+  }
+});
+
+function BlackoutLabel(b) {
+  return `${new Date(b.date).toISOString().slice(0, 10)}${b.reason ? ` — ${b.reason}` : ''}`;
+}
+
+// ---------------------------------------------------------------------------
+// Delivery calendar — what the kitchen has already promised
+// ---------------------------------------------------------------------------
+router.get('/delivery-calendar', async (req, res) => {
+  try {
+    const days = Math.max(1, Math.min(60, parseInt(req.query.days, 10) || 14));
+    const from = new Date();
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(from.getTime() + days * 86400000);
+    const [slots, orders, blackouts] = await Promise.all([
+      prisma.timeSlot.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } }),
+      prisma.order.findMany({
+        where: { readyDate: { gte: from, lt: to }, status: { not: 'CANCELLED' } },
+        select: { readyDate: true, timeSlot: true, total: true, status: true },
+      }),
+      prisma.blackoutDate.findMany({ where: { date: { gte: from, lt: to } } }),
+    ]);
+
+    const calendar = [];
+    for (let i = 0; i < days; i++) {
+      const day = new Date(from.getTime() + i * 86400000);
+      const key = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()));
+      const dayOrders = orders.filter((o) => {
+        if (!o.readyDate) return false;
+        const d = new Date(o.readyDate);
+        return (
+          Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) === key.getTime()
+        );
+      });
+      const closed = blackouts.find((b) => {
+        const d = new Date(b.date);
+        return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) === key.getTime();
+      });
+      calendar.push({
+        date: key.toISOString().slice(0, 10),
+        closed: !!closed,
+        closedReason: closed?.reason || null,
+        orders: dayOrders.length,
+        value: Math.round(dayOrders.reduce((s, o) => s + o.total, 0) * 100) / 100,
+        slots: slots.map((s) => {
+          const booked = dayOrders.filter((o) => o.timeSlot === s.label).length;
+          return { label: s.label, booked, capacity: s.capacity, remaining: Math.max(0, s.capacity - booked) };
+        }),
+      });
+    }
+    res.json({ calendar, days });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to build the delivery calendar' });
+  }
+});
+
 // ---------------------------------------------------------------------------
 function parseRange(query) {
   const from = query.from ? new Date(query.from) : null;

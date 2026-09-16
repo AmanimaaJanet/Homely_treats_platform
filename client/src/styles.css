@@ -922,3 +922,47 @@ a:hover { color: var(--pd); }
 /* Admin account panel (change password, default-password warning) */
 .admin-account-form { max-width: 440px; }
 .admin-account-form .form-group { margin-bottom: 12px; }
+
+/* Checkout: collection windows, closed-day warnings, zone rules */
+.slot-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.slot-chip {
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  background: #fff; border: 1.5px solid #E8D5C0; border-radius: 10px;
+  padding: 9px 13px; cursor: pointer; font: inherit; color: #2C1A0E; min-width: 118px;
+}
+.slot-chip:hover:not(:disabled) { border-color: var(--primary, #C4763B); }
+.slot-chip.selected { border-color: var(--primary, #C4763B); background: var(--pl, #FDF1E4); box-shadow: 0 0 0 2px rgba(196, 118, 59, .16); }
+.slot-chip.full { opacity: .55; cursor: not-allowed; background: #F6F1EC; }
+.slot-chip strong { font-size: 13px; }
+.checkout-warning { color: #991B1B; font-size: 13px; margin: 8px 0 0; }
+
+/* Delivery operations screen */
+.table-wrap { overflow-x: auto; }
+.input-compact { max-width: 130px; }
+.switch-inline { display: inline-flex; align-items: center; }
+.inline-form {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin-top: 14px; padding-top: 14px; border-top: 1px dashed #E8D5C0;
+}
+.inline-form .form-input { max-width: 220px; }
+.list-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  padding: 11px 0; border-bottom: 1px solid #F0E2D3;
+}
+.list-row:last-child { border-bottom: 0; }
+.list-row p { margin: 2px 0 0; }
+.slot-manage { margin-top: 10px; }
+.blackout-list { margin-top: 10px; }
+.calendar-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; margin-top: 10px; }
+.cal-day {
+  border: 1px solid #E8D5C0; border-radius: 10px; padding: 9px 10px; background: #fff;
+  display: flex; flex-direction: column; gap: 3px; min-height: 84px;
+}
+.cal-day.closed { background: #F7F1EC; color: #8A6E58; }
+.cal-day.full { border-color: #C4763B; background: #FFF7EF; }
+.cal-date { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #8A6E58; }
+.cal-day strong { font-size: 17px; font-variant-numeric: tabular-nums; }
+.cal-note { font-size: 12px; color: #8A6E58; }
+.cal-slots { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.cal-slot { font-size: 10px; background: #F3E7DA; color: #6B5544; border-radius: 5px; padding: 2px 5px; }
+.cal-slot.full { background: #F6D2D2; color: #991B1B; }

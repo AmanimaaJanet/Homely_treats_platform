@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Key, MessageCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Key, MessageCircle, Truck } from 'lucide-react';
 import { api } from '../../api.js';
 import { useApp } from '../../store.jsx';
 import WhatsAppTemplates from '../../components/WhatsAppTemplates.jsx';
@@ -16,16 +17,13 @@ function Toggle({ label, checked, onChange }) {
 
 export default function Settings() {
   const { toast } = useApp();
+  const navigate = useNavigate();
   const [s, setS] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [zones, setZones] = useState([]);
-  const [newZone, setNewZone] = useState({ name: '', fee: '' });
 
-  const loadZones = () => api.get('/admin/zones', { auth: true }).then((d) => setZones(d.zones)).catch(() => {});
 
   useEffect(() => {
     api.get('/admin/settings', { auth: true }).then((d) => setS(d.settings)).catch(() => {});
-    loadZones();
   }, []);
 
   if (!s) return <div className="empty-state"><p>Loading settings…</p></div>;
@@ -45,34 +43,11 @@ export default function Settings() {
     }
   };
 
-  const addZone = async (e) => {
-    e.preventDefault();
-    if (!newZone.name.trim()) return;
-    try {
-      await api.post('/admin/zones', { name: newZone.name.trim(), fee: Number(newZone.fee || 0) }, { auth: true });
-      setNewZone({ name: '', fee: '' });
-      toast('Zone added', 'success');
-      loadZones();
-    } catch (err) {
-      toast(err.message, 'error');
-    }
-  };
 
-  const updateZone = async (id, patch) => {
-    try {
-      await api.put(`/admin/zones/${id}`, patch, { auth: true });
-      loadZones();
-    } catch (err) {
-      toast(err.message, 'error');
-    }
-  };
 
-  const deleteZone = async (id) => {
-    if (!window.confirm('Delete this zone?')) return;
-    await api.del(`/admin/zones/${id}`, { auth: true });
-    toast('Zone deleted', 'success');
-    loadZones();
-  };
+
+
+
 
   return (
     <form onSubmit={save}>
@@ -119,42 +94,15 @@ export default function Settings() {
       </div>
 
       <div className="section">
-        <div className="section-head-row">
-          <h3 className="form-heading" style={{ margin: 0 }}>Delivery Zones (Accra)</h3>
-        </div>
-        <div className="form-row" style={{ marginBottom: '1rem' }}>
-          <div className="form-group">
-            <input className="form-input" placeholder="Zone name (e.g. Labadi)" value={newZone.name} onChange={(e) => setNewZone({ ...newZone, name: e.target.value })} />
-          </div>
-          <div className="form-group">
-            <div className="promo-row">
-              <input type="number" className="form-input" placeholder="Fee GH₵" value={newZone.fee} onChange={(e) => setNewZone({ ...newZone, fee: e.target.value })} />
-              <button type="button" className="btn btn-secondary" onClick={addZone}>Add</button>
-            </div>
-          </div>
-        </div>
-        <table className="table">
-          <thead><tr><th>Zone</th><th>Fee</th><th>Active</th><th></th></tr></thead>
-          <tbody>
-            {zones.map((z) => (
-              <tr key={z.id}>
-                <td>{z.name}</td>
-                <td>
-                  <input
-                    type="number"
-                    className="form-input zone-fee-input"
-                    value={z.fee}
-                    onChange={(e) => updateZone(z.id, { fee: Number(e.target.value) })}
-                  />
-                </td>
-                <td>
-                  <input type="checkbox" checked={z.active} onChange={(e) => updateZone(z.id, { active: e.target.checked })} />
-                </td>
-                <td><button type="button" className="btn-link danger" onClick={() => deleteZone(z.id)}>Delete</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <h3 className="form-heading">Delivery &amp; collection</h3>
+        <p className="muted small">
+          Zone fees and rules (minimum basket, free delivery over), pickup counters,
+          collection windows with daily capacity, and closed days all live on the{' '}
+          <strong>Deliveries</strong> screen.
+        </p>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/admin/deliveries')}>
+          <Truck size={14} /> Open Deliveries
+        </button>
       </div>
 
       <div className="section">

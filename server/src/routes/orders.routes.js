@@ -3,6 +3,7 @@ import { prisma } from '../prisma.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import { nextOrderId, round2 } from '../utils.js';
 import { getSettings } from '../services/settings.js';
+import { applyZoneRules, blackoutFor, validateSlot, earliestReadyDate, requiredLeadDays } from '../services/delivery.js';
 import { initializeTransaction } from '../services/paystack.js';
 import { recordEvent, notifyCustomer, applyStatus } from '../services/orderEvents.js';
 import { earnPoints, maxRedeemablePoints, discountForPoints } from '../services/loyalty.js';
@@ -76,6 +77,8 @@ router.post('/', optionalAuth, async (req, res) => {
       deliveryAddress,
       deliveryZone,
       readyDate,
+      timeSlot,
+      pickupLocation,
       notes,
       paymentMethod = 'MOMO',
       promoCode,
@@ -143,6 +146,7 @@ router.post('/', optionalAuth, async (req, res) => {
     // ---- Delivery zone & fee ----
     let deliveryFee = 0;
     let zoneName = null;
+    let deliveryZoneRules = null;
     if (deliveryMethod === 'DELIVERY') {
       if (!deliveryZone) {
         return res.status(400).json({ error: 'Please select your delivery zone' });
@@ -154,21 +158,26 @@ router.post('/', optionalAuth, async (req, res) => {
         },
       });
       if (!zone) return res.status(400).json({ error: 'Delivery zone not found or unavailable' });
-      deliveryFee = Number(zone.fee || 0);
       zoneName = zone.name;
+      // Zone trading rules (minimum basket, free delivery over X) are applied after
+      // the subtotal is known — see below — so keep the zone object here.
+      deliveryZoneRules = zone;
     }
 
-    // ---- Minimum lead time ----
-    const minLeadDays = settings.minLeadDays ?? 2;
+    // ---- Closed days, minimum lead time (per product), and the requested window ----
     if (readyDate) {
       const rd = new Date(readyDate);
-      const earliest = new Date();
-      earliest.setDate(earliest.getDate() + minLeadDays);
-      earliest.setHours(0, 0, 0, 0);
-      if (rd < earliest) {
-        return res.status(400).json({ error: `We need at least ${minLeadDays} days advance notice. Please pick a later date.` });
+      if (Number.isNaN(rd.getTime())) {
+        return res.status(400).json({ error: 'That date could not be understood. Please pick it again.' });
+      }
+      const closed = await blackoutFor(rd);
+      if (closed) {
+        return res.status(400).json({
+          error: `We're closed on ${rd.toDateString()}${closed.reason ? ` (${closed.reason})` : ''}. Please choose another day.`,
+        });
       }
     }
+    // The notice needed depends on what is in the basket (checked after products load).
 
     // ---- Resolve products & prices (size-based pricing) ----
     const ids = items.map((i) => i.productId).filter(Boolean);
@@ -204,6 +213,48 @@ router.post('/', optionalAuth, async (req, res) => {
       });
     }
     subtotal = round2(subtotal);
+
+    // ---- Lead time, now that we know what is being ordered ----
+    const leadDays = await requiredLeadDays(orderItems.map((i) => i.productId).filter(Boolean));
+    if (readyDate) {
+      const earliest = await earliestReadyDate(orderItems.map((i) => i.productId).filter(Boolean));
+      if (new Date(readyDate) < earliest) {
+        return res.status(400).json({
+          error: `This order needs at least ${leadDays} days notice. The earliest date is ${earliest
+            .toISOString()
+            .slice(0, 10)}.`,
+        });
+      }
+    }
+
+    // ---- Zone trading rules (minimum basket / free delivery) ----
+    if (deliveryZoneRules) {
+      const applied = applyZoneRules(deliveryZoneRules, subtotal);
+      if (applied.error) return res.status(400).json({ error: applied.error });
+      deliveryFee = applied.fee;
+    }
+
+    // ---- Collection / delivery window ----
+    const slotProblem = await validateSlot({ readyDate, timeSlot });
+    if (slotProblem) return res.status(400).json({ error: slotProblem.error });
+    // Which counter matters when the bakery has more than one. Named location ids are
+    // resolved to the counter's name (what the ticket and receipt print), and when the
+    // customer didn't choose, the default counter is assumed.
+    let resolvedPickup = pickupLocation ? String(pickupLocation) : null;
+    if (deliveryMethod === 'PICKUP') {
+      const locations = await prisma.pickupLocation.findMany({
+        where: { active: true },
+        orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+      });
+      if (resolvedPickup) {
+        const match = locations.find((l) => l.id === resolvedPickup || l.name === resolvedPickup);
+        resolvedPickup = match ? match.name : resolvedPickup.slice(0, 120);
+      } else {
+        resolvedPickup = locations[0]?.name || null;
+      }
+    } else {
+      resolvedPickup = null;
+    }
 
     // ---- Promo ---- (with abuse controls: min spend, per-customer cap, first order)
     let discount = 0;
@@ -276,6 +327,8 @@ router.post('/', optionalAuth, async (req, res) => {
 
     const isCod = paymentMethod === 'COD';
     const id = await nextOrderId(prisma);
+    const slotLabel = timeSlot ? String(timeSlot).slice(0, 40) : null;
+    const pickupName = resolvedPickup ? resolvedPickup.slice(0, 120) : null;
 
     // Stock is reserved and the order written in ONE transaction: if any line
     // can't be fulfilled, nothing is committed and no stock is lost. The
@@ -303,6 +356,8 @@ router.post('/', optionalAuth, async (req, res) => {
           deliveryMethod,
           deliveryAddress: deliveryMethod === 'DELIVERY' ? deliveryAddress || null : null,
           readyDate: readyDate ? new Date(readyDate) : null,
+          timeSlot: slotLabel,
+          pickupLocation: pickupName,
           notes: notes || null,
           promoCode: appliedPromo ? appliedPromo.code : null,
           items: { create: orderItems },
