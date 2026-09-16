@@ -54,28 +54,40 @@ async function logNotification(orderId, channel, type, status, detail) {
   }
 }
 
+/**
+ * Branded order email — matches the storefront theme
+ * (terracotta #C4763B · cream #FDF8F3 · dark chocolate #2C1A0E · gold #E8B86D).
+ * Icons are intentionally omitted: email clients can't render the Lucide SVG set.
+ */
 export function orderEmailTemplate({ subject, headline, bodyLines, order, ctaUrl }) {
   const items = (order.items || [])
-    .map((i) => `<li>${i.emoji} ${i.name} × ${i.quantity} — GH₵ ${fmt(i.price * i.quantity)}</li>`)
+    .map(
+      (i) =>
+        `<li style="margin:4px 0; color:#2C1A0E;">${i.name} × ${i.quantity} — GH₵ ${fmt(
+          i.price * i.quantity
+        )}</li>`
+    )
     .join('');
   return `
-  <div style="font-family: Arial, sans-serif; max-width: 560px; margin: auto; background:#fff; border:1px solid #eee; border-radius:12px; overflow:hidden;">
-    <div style="background:linear-gradient(135deg,#667eea,#764ba2); padding:24px; color:#fff;">
-      <h1 style="margin:0;">Homely Treats</h1>
-      <p style="margin:6px 0 0; opacity:.9;">${headline}</p>
+  <div style="font-family: 'DM Sans', Helvetica, Arial, sans-serif; max-width: 560px; margin: auto; background:#FDF8F3; border:1px solid #E8D5C0; border-radius:14px; overflow:hidden;">
+    <div style="background:#2C1A0E; padding:26px 24px; color:#fff;">
+      <p style="margin:0; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:#E8B86D;">Homely Treats</p>
+      <h1 style="margin:8px 0 0; font-family: Georgia, 'Times New Roman', serif; font-size:23px; font-weight:700;">${headline}</h1>
     </div>
     <div style="padding:24px;">
-      ${bodyLines.map((l) => `<p style="margin:8px 0; color:#333;">${l}</p>`).join('')}
-      <div style="background:#f8f9fa; border-radius:8px; padding:16px; margin:16px 0;">
+      ${bodyLines.map((l) => `<p style="margin:8px 0; color:#7A5C44; line-height:1.6;">${l}</p>`).join('')}
+      <div style="background:#F5E6D0; border-radius:10px; padding:16px; margin:18px 0;">
         <ul style="margin:0; padding-left:18px;">${items}</ul>
-        <p style="margin:8px 0 0;"><strong>Total: GH₵ ${fmt(order.total)}</strong></p>
+        <p style="margin:10px 0 0; color:#7B3F1A;"><strong>Total: GH₵ ${fmt(order.total)}</strong></p>
       </div>
       ${
         ctaUrl
-          ? `<a href="${ctaUrl}" style="display:inline-block; background:#e91e63; color:#fff; padding:12px 24px; border-radius:24px; text-decoration:none; font-weight:bold;">Track your order →</a>`
+          ? `<a href="${ctaUrl}" style="display:inline-block; background:#C4763B; color:#fff; padding:13px 26px; border-radius:100px; text-decoration:none; font-weight:bold;">Track your order</a>`
           : ''
       }
-      <p style="margin-top:20px; color:#888; font-size:12px;">Homely Treats · Airport Residential, Accra · ${order.id}</p>
+      <p style="margin-top:22px; color:#7A5C44; font-size:12px; border-top:1px solid #E8D5C0; padding-top:14px;">
+        Homely Treats · Airport Residential, Accra<br />Order ${order.id}
+      </p>
     </div>
   </div>`;
 }

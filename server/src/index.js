@@ -48,6 +48,8 @@ app.use(
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'https://fonts.gstatic.com'],
         imgSrc: ["'self'", 'data:', 'blob:', 'https://res.cloudinary.com'],
+        // Ambient bakery footage is self-hosted under /media
+        mediaSrc: ["'self'", 'blob:'],
         connectSrc: ["'self'", 'ws:', 'wss:'],
         workerSrc: ["'self'"],
         objectSrc: ["'none'"],

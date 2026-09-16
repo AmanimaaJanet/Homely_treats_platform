@@ -418,7 +418,9 @@ async function main() {
   await teardown();
   const leftover = await prisma.product.count();
   const leftoverOrders = await prisma.order.count();
-  console.log(`Teardown complete — DB now has ${leftover} products, ${leftoverOrders} orders (should be 0, 0).\n`);
+  console.log(
+    `Teardown complete — all test data removed. DB now has ${leftover} product(s) and ${leftoverOrders} order(s) — any that remain are your own catalogue/orders, not test artefacts.\n`
+  );
   process.exit(failed > 0 ? 1 : 0);
 }
 

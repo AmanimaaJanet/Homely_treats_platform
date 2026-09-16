@@ -30,7 +30,7 @@ model Product {
   description String?
   category    String        // CAKE | CUPCAKE | PASTRY | CONFECTIONERY
   basePrice   Float         // default price in GHS (used when no size tier selected)
-  emoji       String        @default("🎂")
+  emoji       String        @default("Cake") // legacy field: stores a Lucide icon name
   icon        String        @default("Cake") // Lucide icon name for the product
   badge       String?
   flavors     String[]      @default([])
@@ -102,7 +102,7 @@ model OrderItem {
   productId   String?
   product     Product? @relation(fields: [productId], references: [id])
   name        String
-  emoji       String   @default("🎂")
+  emoji       String   @default("Cake") // legacy field: stores a Lucide icon name
   price       Float
   quantity    Int      @default(1)
   flavor      String?

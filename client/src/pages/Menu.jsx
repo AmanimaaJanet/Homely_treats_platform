@@ -3,6 +3,7 @@ import { Search } from 'lucide-react';
 import { api } from '../api.js';
 import ProductCard from '../components/ProductCard.jsx';
 import { ProductIcon } from '../components/ProductIcon.jsx';
+import VideoBlock from '../components/VideoBlock.jsx';
 
 const CATEGORIES = [
   { id: 'ALL', label: 'All Items', icon: null },
@@ -34,9 +35,21 @@ export default function Menu() {
 
   return (
     <div className="page">
+      <div className="page-banner">
+        <VideoBlock
+          className="page-banner-media"
+          src="/media/craft-croissants.mp4"
+          poster="/media/craft-croissants-poster.jpg"
+        />
+        <div className="page-banner-inner">
+          <h1 className="page-banner-title">Our Menu</h1>
+          <p className="page-banner-sub">
+            Everything is baked to order — pick a favourite, or design your own.
+          </p>
+        </div>
+      </div>
       <div className="container">
         <div className="section">
-          <h2 className="section-title">Our Menu</h2>
 
           <div className="menu-controls">
             <div className="search-box">
