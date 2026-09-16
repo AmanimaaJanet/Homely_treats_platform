@@ -2,11 +2,12 @@
 
 _Audited 16 September 2026 against the running codebase._
 
-> **Status update — P0 complete.** All ten P0 items are now **built, tested and
-> committed**: rider auth, stock control, password reset, email-verification policy,
-> review limits, audit log, promo controls, legal pages, httpOnly cookie sessions
-> with CSRF protection, and opt-in Turnstile bot protection. See "P0 progress" at
-> the bottom for exactly what shipped.
+> **Status update — P0 complete, Phase 2 under way.** All ten P0 items are
+> **built, tested and committed**: rider auth, stock control, password reset,
+> email-verification policy, review limits, audit log, promo controls, legal pages,
+> httpOnly cookie sessions with CSRF protection, and opt-in Turnstile bot
+> protection. **Product photos (P1 #11) have also shipped.** See "Build progress"
+> at the bottom for exactly what landed.
 
 ## Where the app stands today
 
@@ -97,13 +98,16 @@ SMS credits.
 
 ## P1 — Commercial essentials (needed to actually run the bakery)
 
-### 11. Product photos and galleries
-Products currently show a **Lucide icon only** — no photos. For a bakery, photos are
-the single biggest conversion driver, and you already have great footage and imagery to
-draw on.
-**Build:** an `images[]` field per product, admin upload (multi-file, drag to reorder,
-set cover), Cloudinary storage, responsive `<img>` with `srcset` + lazy loading, alt
-text, and a swipeable gallery on the product/custom-order pages. _Effort: M._
+### 11. Product photos and galleries — ✅ **SHIPPED**
+Products now carry an `images[]` gallery (`images[0]` is the cover). Admins upload up
+to 8 photos per product (JPG/PNG, 5 MB each) with reorder, set-cover and delete
+controls; photos work on local disk or Cloudinary. Storefront cards show the cover,
+and the custom-order page has a swipeable gallery with thumbnails, arrow controls and
+a counter. Products without photos fall back to their Lucide icon, so nothing looks
+broken. Uploads are validated server-side: only same-origin storage paths or
+Cloudinary URLs are accepted, so an injected external URL or a path-traversal attempt
+is discarded. The bundled bakery stills from your footage now illustrate the sample
+croissant and fruit-tart products.
 
 ### 12. WhatsApp message templates
 Business-initiated WhatsApp messages outside a 24-hour customer window **must** use
@@ -244,3 +248,32 @@ low-stock alerts, review moderation, refunds).
 from one IP without tripping the limiters. It is **deliberately ignored when
 `NODE_ENV=production`**, so it can never weaken a deployed site. Rate limiting itself is
 verified separately: 5 forgot-password requests then 429.
+
+---
+
+## Build progress
+
+### Phase 1 — P0 launch blockers: ✅ complete
+
+| # | Item | What shipped |
+|---|---|---|
+| 1 | Rider authentication | Rider accounts created by an admin; unclaimed jobs hide the customer's address and phone; claim races resolved; suspension revokes access instantly |
+| 2 | Stock control | Atomic reserve-and-commit with the order; overselling rejected; cancel restores; sell-out auto-marks the product |
+| 3 | Password reset | Hashed single-use 30-minute tokens, no account enumeration |
+| 4 | Email verification | Enforced the moment Resend is configured; skipped (with a console notice) when it isn't, so nobody is locked out |
+| 5 | Review abuse | 10 submissions per hour per IP |
+| 6 | Audit log | Every privileged action recorded, with a searchable Admin screen |
+| 7 | Promo controls | Minimum spend, per-customer limit, first-order-only, expiry; cancelling releases the use |
+| 8 | Legal pages | `/privacy` and `/terms` written for a Ghanaian bakery |
+| 9 | Cookie sessions | httpOnly + SameSite=Lax with double-submit CSRF; Bearer tokens still supported |
+| 10 | Bot protection | Opt-in Cloudflare Turnstile on the account endpoints, failing closed |
+
+### Phase 2 — selling properly: in progress
+
+| # | Item | Status |
+|---|---|---|
+| 11 | **Product photos and galleries** | ✅ shipped |
+| 14 | Receipts and kitchen tickets | next |
+| 13 | Automatic low-stock alerts | next |
+| 5 | Review moderation in admin | partially done (limits shipped; moderation screen still to build) |
+| 17 | Refunds | not started |

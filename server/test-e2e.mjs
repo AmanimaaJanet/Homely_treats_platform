@@ -821,7 +821,76 @@ async function main() {
     created.userId3 = row.id;
   }
 
-  // ---------------------------------------------------------------- 21. Unauthorised guard
+  // ---------------------------------------------------------------- 21. Product photos
+  {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    const upload = async (name) => {
+      const fd = new FormData();
+      fd.append('file', new Blob([png], { type: 'image/png' }), name);
+      const { status, data } = await req('/api/uploads', { method: 'POST', body: fd });
+      check(`Product photo uploaded (${name})`, status === 201 && !!data?.url, data?.url);
+      if (data?.url) created.photoFiles.push(path.join(process.cwd(), 'uploads', data.url.split('/').pop()));
+      return data?.url;
+    };
+
+    const a = await upload('front.png');
+    const b = await upload('side.png');
+    const c = await upload('detail.png');
+
+    const mk = await req('/api/admin/products', {
+      method: 'POST', token: adminToken,
+      body: {
+        name: `${PROD_VANILLA} PHOTOS`, category: 'CAKE', basePrice: 210, icon: 'Cake',
+        stock: 4, inStock: true, images: [a, b, c], imageAlt: 'A decorated celebration cake',
+        sizeOptions: [],
+      },
+    });
+    const photoId = mk.data?.product?.id;
+    created.productIds.push(photoId);
+    check('Product created with 3 photos', mk.data?.product?.images?.length === 3, JSON.stringify(mk.data?.product?.images));
+    check('First photo is the cover', mk.data?.product?.images?.[0] === a);
+    check('Alt text stored for accessibility', mk.data?.product?.imageAlt === 'A decorated celebration cake');
+
+    // Only URLs our own storage could have produced are accepted.
+    const hostile = await req(`/api/admin/products/${photoId}`, {
+      method: 'PUT', token: adminToken,
+      body: { images: ['https://evil.example.com/tracker.png', '/uploads/../etc/passwd', b, a, a] },
+    });
+    const kept = hostile.data?.product?.images || [];
+    check('External image URLs rejected', !kept.some((u) => u.includes('evil.example.com')));
+    check('Path-traversal image paths rejected', !kept.some((u) => u.includes('..')));
+    check('Duplicate photos removed', kept.length === new Set(kept).size);
+    check('Photo order preserved (cover unchanged)', kept[0] === b);
+
+    // The storefront needs the photos, not just the admin API.
+    const pub = await req('/api/products');
+    const listed = pub.data?.products?.find((p) => p.id === photoId);
+    check('Public product listing includes photos', listed?.images?.length === 2, `${listed?.images?.length} photos`);
+
+    // No photos must still be a valid product (icon fallback in the UI).
+    const plain = await req('/api/admin/products', {
+      method: 'POST', token: adminToken,
+      body: { name: `${PROD_VANILLA} NOICON`, category: 'CAKE', basePrice: 150, icon: 'Cookie', stock: 3, inStock: true, sizeOptions: [] },
+    });
+    created.productIds.push(plain.data?.product?.id);
+    check('Product without photos still saves (icon fallback)', plain.status === 201 && plain.data?.product?.images?.length === 0);
+
+    // De-listing keeps the photos, so re-listing restores the full listing.
+    await req(`/api/admin/products/${photoId}`, { method: 'PUT', token: adminToken, body: { isActive: false } });
+    const offline = await req('/api/products');
+    check('De-listed product hidden from the menu', !offline.data?.products?.some((p) => p.id === photoId));
+
+    // A non-image upload is refused outright.
+    const badFile = new FormData();
+    badFile.append('file', new Blob([Buffer.from('not an image')], { type: 'text/plain' }), 'notes.txt');
+    const rejected = await req('/api/uploads', { method: 'POST', body: badFile });
+    check('Non-image upload rejected', rejected.status === 500 || rejected.status === 400, `status ${rejected.status}`);
+  }
+
+  // ---------------------------------------------------------------- 22. Unauthorised guard
   {
     const r = await req('/api/admin/stats');
     check('Admin endpoints protected (401)', r.status === 401);

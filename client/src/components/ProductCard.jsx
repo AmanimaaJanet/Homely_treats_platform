@@ -1,15 +1,13 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ghs } from '../lib/format.js';
-import { ProductIcon } from './ProductIcon.jsx';
+import ProductPhoto from './ProductPhoto.jsx';
 
 export default function ProductCard({ product }) {
   const navigate = useNavigate();
   return (
     <div className="product-card">
-      <div className="product-image">
-        <ProductIcon name={product.icon || product.emoji} size={52} />
-      </div>
+      <ProductPhoto product={product} iconSize={52} />
       <div className="product-info">
         {product.badge && <span className="product-badge">{product.badge}</span>}
         <div className="product-name">{product.name}</div>

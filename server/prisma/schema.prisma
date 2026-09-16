@@ -40,6 +40,10 @@ model Product {
   emoji       String        @default("Cake") // legacy field: stores a Lucide icon name
   icon        String        @default("Cake") // Lucide icon name for the product
   badge       String?
+  // Product photos. Order matters: images[0] is the cover shown on cards and in
+  // listings. Empty means the product falls back to its Lucide icon.
+  images      String[]      @default([])
+  imageAlt    String?       // optional alt text; falls back to the product name
   flavors     String[]      @default([])
   sizes       String[]      @default([])
   stock       Int           @default(0)

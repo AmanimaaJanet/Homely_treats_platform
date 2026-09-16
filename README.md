@@ -8,6 +8,8 @@ A full-stack bakery ordering platform built from your HTML mockup: **React** fro
 
 **Professional icon set:** the UI uses **[Lucide](https://lucide.dev) icons** (`lucide-react`) throughout instead of emojis — product cards, navigation, admin dashboard, payment methods, tracking timeline, notifications, and more. Products store a Lucide icon name (e.g. `Cake`, `CakeSlice`, `Heart`, `Citrus`, `Cookie`, `Leaf`, `Cherry`, `Croissant`) and can be changed per-product from the admin panel.
 
+**Product photos:** each product can carry up to 8 photos (`images[0]` is the cover). Admins manage them on the product form in **Admin → Products** — upload, reorder, set cover, delete — with storage on local disk in development or Cloudinary in production. Products without photos fall back to their Lucide icon, and the sample catalogue ships with stills taken from the bakery footage. Photos are cached by the service worker so a returning customer sees the menu instantly.
+
 **Bakery footage in the design:** the clips in the repo root are optimised to web-friendly files in `client/public/media/` (14 MB → 2.3 MB) and used as ambient design: the home hero and the menu banner play a muted, looping background video, and the "From Our Kitchen" section shows the dough and lamination clips. `VideoBlock` loads video only when scrolled into view, serves a smaller file to phones, pauses when the tab is hidden, and shows a still poster instead for visitors who set "reduce motion".
 
 **What's left to build:** see **[REMAINING_WORK.md](REMAINING_WORK.md)** — a prioritised gap analysis (P0 launch blockers first) with effort estimates, plus a **P0 progress** section showing what has already shipped.

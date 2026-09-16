@@ -4,6 +4,7 @@ import { Upload, Lock } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
 import { ghs, minDate } from '../lib/format.js';
+import ProductGallery from '../components/ProductGallery.jsx';
 
 const DEFAULT_FLAVORS = ['Vanilla', 'French Vanilla', 'Chocolate', 'Red Velvet', 'Lemon', 'Matcha'];
 const ICINGS = ['Buttercream', 'Fondant', 'Whipped Cream', 'Ganache', 'Naked (No Icing)'];
@@ -130,6 +131,19 @@ export default function CustomOrder() {
                 ))}
               </select>
             </div>
+
+            {product && (
+              <div className="order-product-preview">
+                <ProductGallery product={product} />
+                <div className="order-product-meta">
+                  <h3>{product.name}</h3>
+                  {product.description && <p className="muted small">{product.description}</p>}
+                  {product.stock > 0 && product.stock <= 5 && (
+                    <p className="stock-warning">Only {product.stock} left</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="form-row">
               <div className="form-group">

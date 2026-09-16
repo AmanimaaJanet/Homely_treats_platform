@@ -17,6 +17,33 @@ function clean(value, maxLen = 200) {
   return String(value).trim().slice(0, maxLen);
 }
 
+/**
+ * Sanitise the product image list: keep only strings that look like image URLs we
+ * produced (an /uploads/ path or an https URL from our storage), drop blanks and
+ * duplicates, and cap the count. Order is preserved because images[0] is the cover.
+ */
+const MAX_PRODUCT_IMAGES = 8;
+function normalizeImages(input) {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const raw of input) {
+    const url = String(raw || '').trim();
+    if (!url) continue;
+    // Same-origin asset paths only (uploads, or the bundled image directory),
+    // never a path that could climb out of the site root.
+    const isLocal = /^\/(uploads|catalogue|media)\/[A-Za-z0-9._-]+$/.test(url);
+    // Or a Cloudinary delivery URL, for products photographed in production.
+    const isHttps = /^https:\/\/res\.cloudinary\.com\/[\w./-]+$/.test(url);
+    if (!isLocal && !isHttps) continue; // reject anything else outright
+    if (seen.has(url)) continue;
+    seen.add(url);
+    out.push(url);
+    if (out.length >= MAX_PRODUCT_IMAGES) break;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Dashboard stats
 // ---------------------------------------------------------------------------
@@ -318,7 +345,7 @@ router.get('/products', async (req, res) => {
 
 router.post('/products', async (req, res) => {
   try {
-    const { name, description, category, basePrice, emoji, icon, badge, flavors, sizes, stock, inStock, featured, sizeOptions } =
+    const { name, description, category, basePrice, emoji, icon, badge, flavors, sizes, stock, inStock, featured, sizeOptions, images, imageAlt } =
       req.body || {};
     if (!name || !category || basePrice === undefined) {
       return res.status(400).json({ error: 'Name, category and base price are required' });
@@ -332,6 +359,8 @@ router.post('/products', async (req, res) => {
         emoji: icon || emoji || 'Cake',
         icon: icon || emoji || 'Cake',
         badge: badge || null,
+        images: normalizeImages(images),
+        imageAlt: imageAlt ? clean(imageAlt, 160) : null,
         flavors: Array.isArray(flavors) ? flavors : [],
         sizes: Array.isArray(sizes) ? sizes : [],
         stock: parseInt(stock || 0, 10),
@@ -358,7 +387,7 @@ router.post('/products', async (req, res) => {
 
 router.put('/products/:id', async (req, res) => {
   try {
-    const { name, description, category, basePrice, emoji, icon, badge, flavors, sizes, stock, inStock, featured, isActive, sizeOptions } =
+    const { name, description, category, basePrice, emoji, icon, badge, flavors, sizes, stock, inStock, featured, isActive, sizeOptions, images, imageAlt } =
       req.body || {};
     const product = await prisma.product.update({
       where: { id: req.params.id },
@@ -368,6 +397,8 @@ router.put('/products/:id', async (req, res) => {
         ...(category !== undefined && { category }),
         ...(basePrice !== undefined && { basePrice: Number(basePrice) }),
         ...((icon !== undefined || emoji !== undefined) && { icon: icon || emoji || 'Cake', emoji: icon || emoji || 'Cake' }),
+        ...(images !== undefined && { images: normalizeImages(images) }),
+        ...(imageAlt !== undefined && { imageAlt: imageAlt ? clean(imageAlt, 160) : null }),
         ...(badge !== undefined && { badge }),
         ...(flavors !== undefined && { flavors }),
         ...(sizes !== undefined && { sizes }),

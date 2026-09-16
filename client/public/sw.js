@@ -1,5 +1,6 @@
 // Homely Treats — service worker (PWA)
-const CACHE = 'homely-treats-v1';
+// Bump this when the precache list or asset strategy changes, so clients pick it up.
+const CACHE = 'homely-treats-v2';
 const PRECACHE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -27,8 +28,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets: cache-first, fall back to network, then cache
-  if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/') || url.pathname === '/manifest.webmanifest') {
+  // Static assets and product photography: cache-first, then network. Caching
+  // images means a returning customer sees the menu instantly (and offline)
+  // instead of re-downloading every photo over mobile data.
+  const isCacheableAsset =
+    url.pathname.startsWith('/assets/') ||
+    url.pathname.startsWith('/icons/') ||
+    url.pathname.startsWith('/catalogue/') ||
+    url.pathname.startsWith('/media/') ||
+    url.pathname === '/manifest.webmanifest' ||
+    /\.(png|jpe?g|webp|avif|svg|gif|woff2?)$/i.test(url.pathname);
+
+  if (isCacheableAsset) {
     event.respondWith(
       caches.match(event.request).then(
         (cached) =>

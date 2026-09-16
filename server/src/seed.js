@@ -56,6 +56,8 @@ const SAMPLE_PRODUCTS = [
     description: 'Laminated overnight and baked each morning for a flaky, buttery finish.',
     basePrice: 70,
     icon: 'Croissant',
+    images: ['/catalogue/croissants-1.jpg', '/catalogue/croissants-2.jpg'],
+    imageAlt: 'Freshly baked butter croissants on a slate board',
     badge: 'Baked daily',
     flavors: ['Plain', 'Chocolate', 'Almond'],
     featured: true,
@@ -71,6 +73,8 @@ const SAMPLE_PRODUCTS = [
     description: 'Crisp pastry shells filled with vanilla crème and topped with fresh seasonal fruit.',
     basePrice: 120,
     icon: 'Citrus',
+    images: ['/catalogue/fruit-tarts-1.jpg', '/catalogue/fruit-tarts-2.jpg', '/catalogue/fruit-tarts-3.jpg'],
+    imageAlt: 'Fruit tarts topped with fresh berries and kiwi',
     flavors: ['Seasonal fruit', 'Berry'],
     featured: true,
     stock: 18,
@@ -148,13 +152,21 @@ async function main() {
       const data = {
         ...fields,
         emoji: p.icon, // legacy field — stores the Lucide icon name
+        images: p.images || [],
+        imageAlt: p.imageAlt || null,
         sizes: sizes.map((s) => s.label),
         sizeOptions: { create: sizes },
       };
       if (existing) {
         await prisma.product.update({
           where: { id: existing.id },
-          data: { ...fields, sizes: data.sizes, sizeOptions: { deleteMany: {}, create: sizes } },
+          data: {
+            ...fields,
+            images: p.images || [],
+            imageAlt: p.imageAlt || null,
+            sizes: data.sizes,
+            sizeOptions: { deleteMany: {}, create: sizes },
+          },
         });
       } else {
         await prisma.product.create({ data });

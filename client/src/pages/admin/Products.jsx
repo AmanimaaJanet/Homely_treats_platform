@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import { TriangleAlert } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { TriangleAlert, Image as ImageIcon, Trash2, ArrowLeftCircle, Upload, Star } from 'lucide-react';
 import { api } from '../../api.js';
 import { useApp } from '../../store.jsx';
 import { ghs } from '../../lib/format.js';
 import { ProductIcon, PRODUCT_ICON_NAMES } from '../../components/ProductIcon.jsx';
+import ProductPhoto from '../../components/ProductPhoto.jsx';
 
 const CATEGORIES = [
   { id: 'CAKE', label: 'Cake' },
@@ -15,15 +16,81 @@ const CATEGORIES = [
 const EMPTY = {
   name: '', description: '', category: 'CAKE', basePrice: '', icon: 'Cake',
   badge: '', flavors: '', stock: 0, inStock: true, featured: false, sizeOptions: [],
+  images: [], imageAlt: '',
 };
+
+const MAX_PHOTOS = 8;
 
 export default function Products() {
   const { toast } = useApp();
   const [products, setProducts] = useState([]);
   const [editing, setEditing] = useState(null);
 
+  const photoInput = useRef(null);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+
   const load = () => api.get('/admin/products', { auth: true }).then((d) => setProducts(d.products)).catch(() => {});
   useEffect(load, []);
+
+  // ---- Product photo management ------------------------------------------
+  const images = editing?.images || [];
+
+  const uploadPhotos = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const room = MAX_PHOTOS - images.length;
+    if (room <= 0) {
+      toast(`Up to ${MAX_PHOTOS} photos per product`, 'error');
+      return;
+    }
+    setUploadingPhotos(true);
+    try {
+      const added = [];
+      for (const file of files.slice(0, room)) {
+        if (!file.type.startsWith('image/')) {
+          toast(`"${file.name}" is not an image — skipped`, 'error');
+          continue;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          toast(`"${file.name}" is larger than 5 MB — skipped`, 'error');
+          continue;
+        }
+        const { url } = await api.upload(file, { auth: true });
+        added.push(url);
+      }
+      if (added.length) {
+        setEditing((prev) => ({ ...prev, images: [...(prev.images || []), ...added] }));
+        toast(`${added.length} photo${added.length > 1 ? 's' : ''} added — remember to Save`, 'success');
+      }
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setUploadingPhotos(false);
+      if (photoInput.current) photoInput.current.value = '';
+    }
+  };
+
+  const makeCover = (i) => {
+    setEditing((prev) => {
+      const next = [...(prev.images || [])];
+      const [pick] = next.splice(i, 1);
+      return { ...prev, images: [pick, ...next] };
+    });
+  };
+
+  const movePhoto = (i, delta) => {
+    setEditing((prev) => {
+      const next = [...(prev.images || [])];
+      const j = i + delta;
+      if (j < 0 || j >= next.length) return prev;
+      [next[i], next[j]] = [next[j], next[i]];
+      return { ...prev, images: next };
+    });
+  };
+
+  const removePhoto = (i) => {
+    setEditing((prev) => ({ ...prev, images: (prev.images || []).filter((_, j) => j !== i) }));
+  };
 
   const setSize = (i, patch) => {
     setEditing({
@@ -54,6 +121,8 @@ export default function Products() {
       inStock: editing.inStock,
       featured: editing.featured,
       sizeOptions: (editing.sizeOptions || []).filter((s) => s.label),
+      images: editing.images || [],
+      imageAlt: editing.imageAlt || null,
     };
     try {
       if (editing.id) {
@@ -96,7 +165,7 @@ export default function Products() {
       <div className="products-grid">
         {products.map((p) => (
           <div className="product-card" key={p.id}>
-            <div className="product-image"><ProductIcon name={p.icon || p.emoji} size={48} /></div>
+            <ProductPhoto product={p} iconSize={48} />
             <div className="product-info">
               {p.badge && <span className="product-badge">{p.badge}</span>}
               <div className="product-name">{p.name}</div>
@@ -170,6 +239,73 @@ export default function Products() {
                     <button type="button" className="btn btn-danger btn-sm" onClick={() => removeSize(i)}>×</button>
                   </div>
                 ))}
+              </div>
+
+              {/* Product photos — first image is the cover */}
+              <div className="form-group photo-manager">
+                <label className="form-label">
+                  <ImageIcon size={14} /> Product photos ({images.length}/{MAX_PHOTOS})
+                </label>
+                <p className="muted small" style={{ marginBottom: 8 }}>
+                  The first photo is the cover shown on the menu. JPG or PNG, up to 5 MB each.
+                  With no photos, the product shows its icon instead.
+                </p>
+
+                <div className="photo-grid">
+                  {images.map((url, i) => (
+                    <div className={`photo-tile ${i === 0 ? 'is-cover' : ''}`} key={url}>
+                      <img src={url} alt="" loading="lazy" />
+                      {i === 0 && <span className="photo-cover-tag">Cover</span>}
+                      <div className="photo-tile-actions">
+                        {i !== 0 && (
+                          <button type="button" title="Make cover" onClick={() => makeCover(i)}>
+                            <Star size={12} />
+                          </button>
+                        )}
+                        <button type="button" title="Move left" onClick={() => movePhoto(i, -1)} disabled={i === 0}>
+                          <ArrowLeftCircle size={12} />
+                        </button>
+                        <button type="button" title="Move right" onClick={() => movePhoto(i, 1)} disabled={i === images.length - 1}>
+                          <ArrowLeftCircle size={12} style={{ transform: 'rotate(180deg)' }} />
+                        </button>
+                        <button type="button" className="danger" title="Remove" onClick={() => removePhoto(i)}>
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {images.length < MAX_PHOTOS && (
+                    <button
+                      type="button"
+                      className="photo-tile photo-add"
+                      onClick={() => photoInput.current?.click()}
+                      disabled={uploadingPhotos}
+                    >
+                      <Upload size={18} />
+                      <span>{uploadingPhotos ? 'Uploading…' : 'Add'}</span>
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  ref={photoInput}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  hidden
+                  onChange={uploadPhotos}
+                />
+
+                <div className="form-group" style={{ marginTop: 14 }}>
+                  <label className="form-label">Photo description (for screen readers, optional)</label>
+                  <input
+                    className="form-input"
+                    value={editing.imageAlt || ''}
+                    onChange={(e) => setEditing({ ...editing, imageAlt: e.target.value })}
+                    placeholder="Defaults to the product name"
+                  />
+                </div>
               </div>
 
               <div className="form-row">
