@@ -44,6 +44,7 @@ let adminToken = null;
 let janetToken = null;
 
 const created = { productIds: [], zoneIds: [], promoIds: [], orderIds: [], userId: null, userId2: null, riderIds: [], photoFiles: [] };
+const runStartedAt = new Date();
 
 function check(name, ok, extra = '') {
   if (ok) {
@@ -106,6 +107,10 @@ async function teardown() {
     }
     if (created.userId) await prisma.user.deleteMany({ where: { id: created.userId } });
     if (created.userId2) await prisma.user.deleteMany({ where: { id: created.userId2 } });
+
+    // The audit log is append-only in production, but a test run should not leave
+    // its own noise behind. Remove only rows created since this run began.
+    await prisma.auditLog.deleteMany({ where: { createdAt: { gte: runStartedAt } } });
 
     for (const f of created.photoFiles) await fs.promises.unlink(f).catch(() => {});
   } catch (err) {
