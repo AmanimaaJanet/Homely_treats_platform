@@ -1198,7 +1198,43 @@ async function main() {
     check('Template sending can be switched back on', backOn.data?.useTemplates === true);
   }
 
-  // ---------------------------------------------------------------- 27. Unauthorised guard
+  // ---------------------------------------------------------------- 27. Admin account state
+  {
+    // The portal warns until the published seed password is changed, so /auth/me has
+    // to report the state accurately — without leaking anything about the hash.
+    const me = await req('/api/auth/me', { token: adminToken });
+    check('Admin account state is reported', typeof me.data?.user?.usesDefaultPassword === 'boolean',
+      `usesDefaultPassword: ${me.data?.user?.usesDefaultPassword}`);
+    check('The admin account is identified by role', me.data?.user?.role === 'ADMIN');
+    check('No password material is ever returned', !JSON.stringify(me.data).includes('$2a$')
+      && !JSON.stringify(me.data).includes('passwordHash'));
+
+    const cust = await req('/api/auth/me', { token: janetToken });
+    check('Customers never carry the admin password flag', cust.data?.user?.usesDefaultPassword === false);
+
+    // Changing the password is refused without the current one, and a weak new one is
+    // rejected by policy before anything is written.
+    const noCurrent = await req('/api/auth/password', {
+      method: 'PUT', token: adminToken, body: { newPassword: 'somethingelse1' },
+    });
+    check('Password change requires the current password', noCurrent.status === 400);
+    const weak = await req('/api/auth/password', {
+      method: 'PUT', token: adminToken, body: { currentPassword: 'not-the-password', newPassword: 'short' },
+    });
+    check('A weak new password is rejected', weak.status === 400, weak.data?.error);
+    const wrongCurrent = await req('/api/auth/password', {
+      method: 'PUT', token: adminToken, body: { currentPassword: 'definitely-wrong-9', newPassword: 'aGoodPass123' },
+    });
+    check('A wrong current password cannot change the password', wrongCurrent.status === 400);
+    // Confirm nothing changed: the suite's admin token still works.
+    const stillAdmin = await req('/api/admin/stats', { token: adminToken });
+    check('Admin access is unaffected by refused password changes', stillAdmin.status === 200);
+
+    const anon = await req('/api/auth/password', { method: 'PUT', body: { currentPassword: 'x', newPassword: 'y' } });
+    check('Password change requires a session (401)', anon.status === 401);
+  }
+
+  // ---------------------------------------------------------------- 28. Unauthorised guard
   {
     const r = await req('/api/admin/stats');
     check('Admin endpoints protected (401)', r.status === 401);

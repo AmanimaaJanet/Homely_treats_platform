@@ -108,6 +108,7 @@ cd server && npm start      # http://localhost:5000
 
 > Full walkthrough — signing in, every screen, the daily routine and the first 15
 > minutes of setup — is in **[ADMIN_GUIDE.md](ADMIN_GUIDE.md)**.
+
 | Role | Email | Password |
 |---|---|---|
 | Admin | `admin@homelytreats.gh` | `admin123` |

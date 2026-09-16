@@ -305,7 +305,7 @@ verified separately: 5 forgot-password requests then 429.
 
 > Docs: **[ADMIN_GUIDE.md](ADMIN_GUIDE.md)** covers signing in and running the portal.
 
-> Running total: **207 end-to-end assertions passing** (`node test-e2e.mjs` from `server/`).
+> Running total: **216 end-to-end assertions passing** (`node test-e2e.mjs` from `server/`).
 
 | # | Item | Status |
 |---|---|---|
