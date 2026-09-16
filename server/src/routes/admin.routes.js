@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../prisma.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
-import { applyStatus } from '../services/orderEvents.js';
+import { applyStatus, refundOrder } from '../services/orderEvents.js';
 import { getSettings, saveSettings } from '../services/settings.js';
 import { audit } from '../services/audit.js';
 import { lowStockProducts, sendLowStockDigest } from '../services/stockAlerts.js';
@@ -179,6 +179,27 @@ router.patch('/orders/:id/status', async (req, res) => {
   }
 });
 
+// POST /api/admin/orders/:id/refund  { reason }
+// Full refund only — see refundOrder() for why partial refunds stay in the
+// Paystack dashboard. Refunds are recorded against the order and the customer is
+// told by SMS, WhatsApp and email.
+router.post('/orders/:id/refund', async (req, res) => {
+  try {
+    const { reason } = req.body || {};
+    const order = await refundOrder(req.params.id, { reason });
+    await audit(req, {
+      action: 'ORDER_REFUND',
+      entity: 'Order',
+      entityId: req.params.id,
+      detail: `Refunded GH₵ ${Number(order.refundAmount).toFixed(2)} via ${order.refundStatus}${reason ? ` — ${reason}` : ''}`,
+    });
+    res.json({ order });
+  } catch (err) {
+    console.error(err);
+    res.status(err.status || 500).json({ error: err.message || 'Failed to refund this order' });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Customers
 // ---------------------------------------------------------------------------
@@ -331,6 +352,93 @@ router.get('/audit', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load audit log' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Review moderation
+// ---------------------------------------------------------------------------
+const REVIEW_STATUSES = ['PENDING', 'APPROVED', 'HIDDEN'];
+
+// GET /api/admin/reviews?status=PENDING&search=&take=&skip=
+router.get('/reviews', async (req, res) => {
+  try {
+    const { status = 'ALL', search = '', take = '50', skip = '0' } = req.query;
+    const where = {};
+    if (REVIEW_STATUSES.includes(status)) where.status = status;
+    if (search.trim()) {
+      const q = String(search).trim();
+      where.OR = [
+        { comment: { contains: q, mode: 'insensitive' } },
+        { orderId: { contains: q, mode: 'insensitive' } },
+        { user: { is: { fullName: { contains: q, mode: 'insensitive' } } } },
+        { user: { is: { email: { contains: q, mode: 'insensitive' } } } },
+      ];
+    }
+
+    const [reviews, counts] = await Promise.all([
+      prisma.review.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: Math.min(parseInt(take, 10) || 50, 200),
+        skip: parseInt(skip, 10) || 0,
+        include: {
+          user: { select: { id: true, fullName: true, email: true, phone: true } },
+          order: { select: { id: true, total: true, createdAt: true } },
+        },
+      }),
+      prisma.review.groupBy({ by: ['status'], _count: true }),
+    ]);
+
+    const summary = { PENDING: 0, APPROVED: 0, HIDDEN: 0, ALL: 0 };
+    for (const row of counts) {
+      summary[row.status] = row._count;
+      summary.ALL += row._count;
+    }
+
+    // Anything waiting on the bakery floats to the top of the queue, newest first —
+    // a review the customer is still excited about is best published while it's fresh.
+    const order = { PENDING: 0, APPROVED: 1, HIDDEN: 2 };
+    reviews.sort((a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3));
+    res.json({ reviews, summary });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load reviews' });
+  }
+});
+
+// PATCH /api/admin/reviews/:id  { status: PENDING | APPROVED | HIDDEN }
+// Hiding keeps the row (and the customer's order history intact) while removing it
+// from the storefront — that is the difference between moderating and deleting.
+router.patch('/reviews/:id', async (req, res) => {
+  try {
+    const { status } = req.body || {};
+    if (!REVIEW_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `Status must be one of ${REVIEW_STATUSES.join(', ')}` });
+    }
+    const existing = await prisma.review.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Review not found' });
+
+    const review = await prisma.review.update({
+      where: { id: req.params.id },
+      data: {
+        status,
+        moderatedAt: new Date(),
+        moderatedBy: req.user?.email || 'admin',
+      },
+      include: { user: { select: { fullName: true, email: true } } },
+    });
+
+    await audit(req, {
+      action: 'REVIEW_MODERATE',
+      entity: 'Review',
+      entityId: review.id,
+      detail: `${existing.status} → ${status} for order ${review.orderId}`,
+    });
+    res.json({ review });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update the review' });
   }
 });
 
@@ -674,6 +782,10 @@ router.get('/reports', async (req, res) => {
     });
     const paid = orders.filter((o) => ['PAID', 'SIMULATED'].includes(o.paymentStatus));
     const revenue = Math.round(paid.reduce((s, o) => s + o.total, 0) * 100) / 100;
+    // Refunded orders are excluded from `paid` above, so they never inflate revenue —
+    // they are reported separately so the owner can see what was paid back.
+    const refunded = orders.filter((o) => o.paymentStatus === 'REFUNDED');
+    const refundTotal = Math.round(refunded.reduce((s, o) => s + (o.refundAmount || o.total), 0) * 100) / 100;
     const itemRows = await prisma.orderItem.findMany({
       where: { order: where },
       include: { product: true },
@@ -687,6 +799,7 @@ router.get('/reports', async (req, res) => {
     const topProducts = Object.values(topMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
     res.json({
       revenue,
+      refunds: { count: refunded.length, total: refundTotal },
       orderCount: orders.length,
       avgOrderValue: orders.length ? Math.round((revenue / orders.length) * 100) / 100 : 0,
       topProducts: topProducts.map((t) => ({ ...t, revenue: Math.round(t.revenue * 100) / 100 })),

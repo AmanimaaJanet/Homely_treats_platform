@@ -25,19 +25,25 @@ router.post('/', requireAuth, reviewLimiter, async (req, res) => {
     const existing = await prisma.review.findUnique({ where: { orderId: order.id } });
     if (existing) return res.status(409).json({ error: 'You have already reviewed this order' });
 
+    // Moderation: with auto-approval on (the default) the review appears at once;
+    // with it off the bakery reviews it first. Points are granted either way — the
+    // customer has done their part, and clawing points back on a hidden review
+    // would punish people for the bakery's queue.
+    const autoApprove = settings.autoApproveReviews !== false;
     const review = await prisma.review.create({
       data: {
         orderId: order.id,
         userId: req.user.id,
         rating: r,
         comment: comment ? String(comment).slice(0, 1000) : null,
+        status: autoApprove ? 'APPROVED' : 'PENDING',
       },
     });
 
     // Small thank-you bonus for reviewing
     await prisma.user.update({ where: { id: req.user.id }, data: { loyaltyPoints: { increment: 5 } } });
 
-    res.status(201).json({ review, bonusPoints: 5 });
+    res.status(201).json({ review, bonusPoints: 5, awaitingApproval: !autoApprove });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message || 'Failed to save review' });
@@ -45,9 +51,11 @@ router.post('/', requireAuth, reviewLimiter, async (req, res) => {
 });
 
 // GET /api/reviews/recent — latest approved reviews (public, for homepage testimonials)
+// Pending and hidden reviews never reach the storefront.
 router.get('/recent', async (req, res) => {
   try {
     const reviews = await prisma.review.findMany({
+      where: { status: 'APPROVED', comment: { not: null } },
       orderBy: { createdAt: 'desc' },
       take: 12,
       include: {
@@ -65,7 +73,11 @@ router.get('/recent', async (req, res) => {
 // GET /api/reviews/stats — average rating + count (public)
 router.get('/stats', async (req, res) => {
   try {
-    const agg = await prisma.review.aggregate({ _avg: { rating: true }, _count: true });
+    const agg = await prisma.review.aggregate({
+      where: { status: 'APPROVED' },
+      _avg: { rating: true },
+      _count: true,
+    });
     res.json({ average: Math.round((agg._avg.rating || 0) * 10) / 10, count: agg._count });
   } catch (err) {
     console.error(err);

@@ -28,6 +28,7 @@ import AdminReports from './pages/admin/Reports.jsx';
 import AdminSettings from './pages/admin/Settings.jsx';
 import AdminRiders from './pages/admin/Riders.jsx';
 import AdminAudit from './pages/admin/Audit.jsx';
+import AdminReviews from './pages/admin/Reviews.jsx';
 import PrintDoc from './pages/admin/PrintDoc.jsx';
 
 export default function App() {
@@ -60,6 +61,7 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminDashboard />} />
             <Route path="orders" element={<AdminOrders />} />
+            <Route path="reviews" element={<AdminReviews />} />
             <Route path="print/:id" element={<PrintDoc />} />
             <Route path="products" element={<AdminProducts />} />
             <Route path="customers" element={<AdminCustomers />} />

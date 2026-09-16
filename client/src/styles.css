@@ -838,3 +838,42 @@ a:hover { color: var(--pd); }
   .admin-layout { display: block !important; }
   body, .admin-root { background: #fff !important; }
 }
+
+/* Admin review moderation queue */
+.filter-tabs { display: flex; gap: 4px; background: #F3E7DA; padding: 4px; border-radius: 999px; flex-wrap: wrap; }
+.filter-tab {
+  display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent;
+  cursor: pointer; font: inherit; font-size: 13px; font-weight: 600; color: #7A5C44;
+  padding: 7px 14px; border-radius: 999px;
+}
+.filter-tab.active { background: #fff; color: #2C1A0E; box-shadow: 0 1px 4px rgba(44, 26, 14, .12); }
+.tab-count { background: #C4763B; color: #fff; border-radius: 999px; padding: 1px 7px; font-size: 11px; font-weight: 700; }
+
+.review-queue { display: flex; flex-direction: column; gap: 12px; }
+.review-card {
+  display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap;
+  background: #fff; border: 1px solid #E8D5C0; border-left: 4px solid #C4763B;
+  border-radius: 12px; padding: 16px 18px;
+}
+.review-card.status-approved { border-left-color: #2F6B45; }
+.review-card.status-hidden { border-left-color: #B9A79A; opacity: .82; }
+.review-main { flex: 1 1 420px; min-width: 0; }
+.review-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.review-comment { margin: 8px 0 6px; font-size: 14.5px; line-height: 1.6; color: #3A2415; }
+.review-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; min-width: 150px; }
+.status-pill { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
+.status-pill.pending { background: #FDEBCF; color: #8A4B10; }
+.status-pill.approved { background: #E1F0E5; color: #2F6B45; }
+.status-pill.hidden { background: #EFE7E1; color: #6B5544; }
+.stars-inline { display: inline-flex; gap: 1px; }
+.menu-count {
+  margin-left: auto; background: #C4763B; color: #fff; border-radius: 999px;
+  font-size: 11px; font-weight: 700; padding: 1px 7px; line-height: 1.5;
+}
+
+/* Refund panel in the order detail modal */
+.refund-box { border: 1px solid #E8D5C0; background: #FFFBF7; border-radius: 12px; padding: 14px 16px; margin-top: 16px; }
+.refund-box h4 { margin: 0 0 6px; font-size: 14px; }
+.refund-note { background: #FFF3F3; border: 1px solid #E7C3C3; border-radius: 10px; padding: 12px 14px; margin-top: 14px; }
+.refund-note strong { color: #991B1B; }
+.refund-meta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 12.5px; }

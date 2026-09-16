@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Cake, BarChart3, ClipboardList, Package, Users, Ticket, TrendingUp, Settings, LogOut, Bike, ScrollText } from 'lucide-react';
+import { Cake, BarChart3, ClipboardList, Package, Users, Ticket, TrendingUp, Settings, LogOut, Bike, ScrollText, MessageSquareQuote } from 'lucide-react';
+import { api } from '../../api.js';
 import { useApp } from '../../store.jsx';
 
 const MENU = [
@@ -8,6 +9,7 @@ const MENU = [
   { to: '/admin/orders', label: 'Orders', icon: ClipboardList },
   { to: '/admin/products', label: 'Products', icon: Package },
   { to: '/admin/customers', label: 'Customers', icon: Users },
+  { to: '/admin/reviews', label: 'Reviews', icon: MessageSquareQuote },
   { to: '/admin/promos', label: 'Promo Codes', icon: Ticket },
   { to: '/admin/reports', label: 'Reports', icon: TrendingUp },
   { to: '/admin/riders', label: 'Riders', icon: Bike },
@@ -18,12 +20,22 @@ const MENU = [
 export default function AdminLayout() {
   const { user, authReady, logout } = useApp();
   const navigate = useNavigate();
+  // A quiet count of reviews waiting on the bakery, so nothing sits unnoticed.
+  const [pendingReviews, setPendingReviews] = useState(0);
 
   useEffect(() => {
     if (authReady && (!user || user.role !== 'ADMIN')) {
       navigate('/signin');
     }
   }, [authReady, user, navigate]);
+
+  useEffect(() => {
+    if (!authReady || user?.role !== 'ADMIN') return;
+    api
+      .get('/admin/reviews?status=PENDING&take=1', { auth: true })
+      .then((d) => setPendingReviews(d.summary?.PENDING || 0))
+      .catch(() => {});
+  }, [authReady, user]);
 
   if (!authReady || !user || user.role !== 'ADMIN') {
     return <div className="empty-state"><p>Loading…</p></div>;
@@ -41,6 +53,11 @@ export default function AdminLayout() {
             <li key={m.to}>
               <NavLink to={m.to} end={m.end} className={({ isActive }) => (isActive ? 'active' : '')}>
                 <m.icon size={16} /> {m.label}
+                {m.to === '/admin/reviews' && pendingReviews > 0 && (
+                  <span className="menu-count" title={`${pendingReviews} review(s) waiting`}>
+                    {pendingReviews}
+                  </span>
+                )}
               </NavLink>
             </li>
           ))}

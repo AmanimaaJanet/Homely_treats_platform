@@ -16,6 +16,9 @@ const DEFAULTS = {
   enableWhatsapp: true,
   enableLoyalty: true,
   enableReviews: true,
+  // When true a new review appears on the storefront immediately. Turn it off to
+  // hold every review in the admin moderation queue first.
+  autoApproveReviews: true,
   smsOrderConfirmed: true,
   emailOrderConfirmed: true,
   adminAlertNewOrder: true,

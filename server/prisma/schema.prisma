@@ -79,9 +79,16 @@ model Order {
   guestEmail      String?
   guestPhone      String?
   status          String          @default("PENDING") // PENDING | CONFIRMED | IN_PROGRESS | READY | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
-  paymentStatus   String          @default("PENDING") // PENDING | PAID | FAILED | COD | SIMULATED
+  paymentStatus   String          @default("PENDING") // PENDING | PAID | FAILED | COD | SIMULATED | REFUNDED
   paymentMethod   String          @default("MOMO") // MOMO | ATL | CARD | COD
   paymentRef      String?
+  // Refunds. A refunded order flips paymentStatus to REFUNDED, which every revenue
+  // figure already excludes — so reports stay honest with no extra sums to maintain.
+  refundStatus    String?         // PAYSTACK_REFUNDED | OFFLINE | FAILED
+  refundAmount    Float?
+  refundReason    String?
+  refundRef       String?         // Paystack refund reference, or "offline" when settled by hand
+  refundedAt      DateTime?
   subtotal        Float
   discount        Float           @default(0)
   loyaltyDiscount Float           @default(0)
@@ -153,14 +160,19 @@ model Notification {
 }
 
 model Review {
-  id        String   @id @default(cuid())
-  orderId   String   @unique
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  rating    Int      // 1-5
-  comment   String?
-  createdAt DateTime @default(now())
+  id          String    @id @default(cuid())
+  orderId     String    @unique
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  rating      Int       // 1-5
+  comment     String?
+  // Moderation: PENDING (awaiting the bakery) | APPROVED (shown publicly) | HIDDEN (kept, not shown).
+  // Defaults to APPROVED so rows created before moderation existed stay visible.
+  status      String    @default("APPROVED")
+  moderatedAt DateTime?
+  moderatedBy String?
+  createdAt   DateTime  @default(now())
 }
 
 model Promo {

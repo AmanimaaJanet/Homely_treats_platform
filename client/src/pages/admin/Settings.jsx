@@ -171,6 +171,14 @@ export default function Settings() {
         <h3 className="form-heading">Loyalty & Reviews</h3>
         <Toggle label="Enable Loyalty Points (1 pt per GH₵ 1 · 20 pts = GH₵ 1)" checked={!!s.enableLoyalty} onChange={(v) => set('enableLoyalty', v)} />
         <Toggle label="Enable Customer Reviews (+5 pts per review)" checked={!!s.enableReviews} onChange={(v) => set('enableReviews', v)} />
+        <Toggle
+          label="Publish reviews immediately"
+          checked={s.autoApproveReviews !== false}
+          onChange={(v) => set('autoApproveReviews', v)}
+        />
+        <p className="muted small">
+          Switch this off to hold every new review in Admin → Reviews until you approve it.
+        </p>
       </div>
 
       <div className="section">

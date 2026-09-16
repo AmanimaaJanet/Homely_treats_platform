@@ -11,6 +11,7 @@ const MAP = {
   SIMULATED: 'ready',
   COD: 'delivered',
   FAILED: 'cancelled',
+  REFUNDED: 'cancelled',
 };
 
 const LABELS = {
@@ -24,6 +25,7 @@ const LABELS = {
   SIMULATED: 'Paid (Demo)',
   COD: 'Pay on Delivery',
   FAILED: 'Failed',
+  REFUNDED: 'Refunded',
 };
 
 export default function StatusBadge({ status }) {

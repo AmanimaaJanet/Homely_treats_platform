@@ -86,3 +86,40 @@ export function verifyWebhook(rawBody, signature) {
     return false;
   }
 }
+
+/**
+ * Refund a transaction in full.
+ *
+ * Paystack's refund endpoint takes the original transaction reference. Refunds
+ * can be partial (`amount`), but this app only issues full refunds from the admin
+ * screen: a partially refunded order would still count as paid in every revenue
+ * report, and silently overstating turnover is worse than asking the bakery to
+ * settle odd amounts from the Paystack dashboard.
+ *
+ * Returns { refunded, refundRef, status, note }. Paystack may answer with
+ * status "processing" (bank/mobile-money settlement is not instant) — that is a
+ * success for our purposes: the money is on its way and the order should stop
+ * counting as revenue.
+ */
+export async function refundTransaction(reference) {
+  if (!config.paystack.enabled) {
+    return { refunded: false, offline: true, note: 'Paystack keys are not configured' };
+  }
+  const res = await fetch('https://api.paystack.co/refund', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.paystack.secretKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ transaction: reference }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.status) {
+    return { refunded: false, error: data.message || `Paystack refund failed (${res.status})` };
+  }
+  return {
+    refunded: true,
+    refundRef: data.data?.reference || data.data?.id || reference,
+    status: data.data?.status || 'processing',
+  };
+}

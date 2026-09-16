@@ -971,7 +971,154 @@ async function main() {
     check('Stock alerts are admin-only (401)', anon.status === 401);
   }
 
-  // ---------------------------------------------------------------- 24. Unauthorised guard
+  // ---------------------------------------------------------------- 24. Review moderation
+  {
+    // Hold new reviews in the queue and confirm nothing leaks to the storefront.
+    const held = await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { autoApproveReviews: false } });
+    check('Moderation can be switched on', held.status === 200 && held.data?.settings?.autoApproveReviews === false);
+
+    const mkOrder = async () => {
+      const r = await req('/api/orders', {
+        method: 'POST', token: janetToken,
+        body: {
+          items: [{ productId: created.productIds[0], quantity: 1 }],
+          deliveryMethod: 'PICKUP', paymentMethod: 'COD', readyDate: READY_DATE,
+        },
+      });
+      const id = r.data?.order?.id;
+      if (id) created.orderIds.push(id);
+      return id;
+    };
+
+    // Baseline: earlier blocks already published a review, so compare deltas.
+    const baselineStats = (await req('/api/reviews/stats')).data?.count || 0;
+
+    const o1 = await mkOrder();
+    await req(`/api/admin/orders/${o1}/status`, { method: 'PATCH', token: adminToken, body: { status: 'DELIVERED' } });
+    const sub = await req('/api/reviews', {
+      method: 'POST', token: janetToken,
+      body: { orderId: o1, rating: 5, comment: `E2E lovely cake ${rnd}` },
+    });
+    const reviewId = sub.data?.review?.id;
+    check('A held review saves as PENDING', sub.status === 201 && sub.data?.review?.status === 'PENDING',
+      `status ${sub.data?.review?.status}`);
+    check('The customer is told their review awaits approval', sub.data?.awaitingApproval === true);
+    check('Reviewing still earns the bonus points', sub.data?.bonusPoints === 5);
+
+    const hiddenRecent = await req('/api/reviews/recent');
+    check('Pending review is not published on the storefront',
+      !hiddenRecent.data?.reviews?.some((r) => r.id === reviewId));
+    const hiddenStats = await req('/api/reviews/stats');
+    check('Pending review does not count towards the public rating', hiddenStats.data?.count === baselineStats,
+      `${baselineStats} → ${hiddenStats.data?.count}`);
+
+    const queue = await req('/api/admin/reviews?status=PENDING', { token: adminToken });
+    check('Admin queue lists the pending review', queue.status === 200 && queue.data?.reviews?.some((r) => r.id === reviewId));
+    check('Queue reports per-status counts', queue.data?.summary?.PENDING >= 1, JSON.stringify(queue.data?.summary));
+    check('Queue carries the customer and order for context',
+      !!queue.data?.reviews?.find((r) => r.id === reviewId)?.user?.email);
+
+    const bad = await req(`/api/admin/reviews/${reviewId}`, { method: 'PATCH', token: adminToken, body: { status: 'DELETED' } });
+    check('Unknown moderation status refused', bad.status === 400);
+
+    const approve = await req(`/api/admin/reviews/${reviewId}`, { method: 'PATCH', token: adminToken, body: { status: 'APPROVED' } });
+    check('Review can be published', approve.status === 200 && approve.data?.review?.status === 'APPROVED');
+    check('Moderation is stamped with who and when',
+      !!approve.data?.review?.moderatedAt && !!approve.data?.review?.moderatedBy,
+      approve.data?.review?.moderatedBy);
+
+    const liveRecent = await req('/api/reviews/recent');
+    check('Published review appears on the storefront', liveRecent.data?.reviews?.some((r) => r.id === reviewId));
+    const liveStats = await req('/api/reviews/stats');
+    check('Published review counts towards the public rating', liveStats.data?.count === baselineStats + 1,
+      `${baselineStats} → ${liveStats.data?.count}`);
+
+    const hide = await req(`/api/admin/reviews/${reviewId}`, { method: 'PATCH', token: adminToken, body: { status: 'HIDDEN' } });
+    check('A published review can be hidden again', hide.data?.review?.status === 'HIDDEN');
+    const afterHide = await req('/api/reviews/recent');
+    check('Hidden review is gone from the storefront', !afterHide.data?.reviews?.some((r) => r.id === reviewId));
+    check('Hiding keeps the review on record (nothing destroyed)',
+      (await req('/api/admin/reviews?status=HIDDEN', { token: adminToken })).data?.reviews?.some((r) => r.id === reviewId));
+
+    const modAudit = await req('/api/admin/audit?limit=200', { token: adminToken });
+    check('Moderation is written to the activity log',
+      (modAudit.data?.logs || modAudit.data?.entries || []).some((l) => l.action === 'REVIEW_MODERATE'));
+
+    const modAnon = await req('/api/admin/reviews');
+    check('Moderation endpoints are admin-only (401)', modAnon.status === 401);
+    await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { autoApproveReviews: true } });
+  }
+
+  // ---------------------------------------------------------------- 25. Refunds
+  {
+    const mkPaidOrder = async () => {
+      const r = await req('/api/orders', {
+        method: 'POST', token: janetToken,
+        body: {
+          items: [{ productId: created.productIds[0], quantity: 2 }],
+          deliveryMethod: 'PICKUP', paymentMethod: 'MOMO', readyDate: READY_DATE2,
+        },
+      });
+      const id = r.data?.order?.id;
+      if (id) created.orderIds.push(id);
+      return id;
+    };
+
+    // An unpaid order must not be refundable — there is no captured payment.
+    const unpaidId = await mkPaidOrder();
+    const unpaid = await req(`/api/admin/orders/${unpaidId}/refund`, { method: 'POST', token: adminToken, body: {} });
+    check('Unpaid orders cannot be refunded', unpaid.status === 400, `status ${unpaid.status}`);
+
+    // Pay (simulated checkout), then refund.
+    const paidId = await mkPaidOrder();
+    const beforeRefund = await req(`/api/admin/orders/${paidId}`, { token: adminToken });
+    const stockBefore = (await req('/api/products')).data?.products?.find((p) => p.id === created.productIds[0])?.stock;
+    await req(`/api/payments/${paidId}/simulate`, { method: 'POST' });
+
+    const refund = await req(`/api/admin/orders/${paidId}/refund`, {
+      method: 'POST', token: adminToken,
+      body: { reason: 'E2E refund check' },
+    });
+    check('A paid order can be refunded', refund.status === 200, `status ${refund.status}`);
+    check('Refund flips the payment status', refund.data?.order?.paymentStatus === 'REFUNDED');
+    check('Refund records the full amount', refund.data?.order?.refundAmount === beforeRefund.data?.order?.total,
+      `${refund.data?.order?.refundAmount} vs ${beforeRefund.data?.order?.total}`);
+    check('Refund keeps the reason', refund.data?.order?.refundReason === 'E2E refund check');
+    check('Refund is timestamped', !!refund.data?.order?.refundedAt);
+    check('Simulation-mode refunds are recorded as settled offline', refund.data?.order?.refundStatus === 'OFFLINE',
+      refund.data?.order?.refundStatus);
+
+    const stockAfter = (await req('/api/products')).data?.products?.find((p) => p.id === created.productIds[0])?.stock;
+    check('Refunding returns the stock to inventory', stockAfter === stockBefore + 2,
+      `${stockBefore} → ${stockAfter}`);
+
+    const twice = await req(`/api/admin/orders/${paidId}/refund`, { method: 'POST', token: adminToken, body: {} });
+    check('An order cannot be refunded twice (409)', twice.status === 409, `status ${twice.status}`);
+
+    // Revenue reporting must not count money that was given back.
+    const from = daysFromNow(-1);
+    const to = daysFromNow(1);
+    const report = await req(`/api/admin/reports?from=${from}&to=${to}`, { token: adminToken });
+    const refundedOrder = (report.data?.orders || []).find((o) => o.id === paidId);
+    check('Refunded order is marked REFUNDED in reports', refundedOrder?.paymentStatus === 'REFUNDED');
+    check('Refunded order is excluded from revenue', report.data?.refunds?.count >= 1,
+      `refunds ${JSON.stringify(report.data?.refunds)}`);
+    check('Reports show the refunded total separately', (report.data?.refunds?.total || 0) > 0,
+      `total ${report.data?.refunds?.total}`);
+
+    const timeline = await req(`/api/admin/orders/${paidId}`, { token: adminToken });
+    check('Refund appears on the order timeline',
+      (timeline.data?.order?.events || []).some((e) => e.status === 'REFUNDED'));
+
+    const refundAudit = await req('/api/admin/audit?limit=200', { token: adminToken });
+    check('Refund is written to the activity log',
+      (refundAudit.data?.logs || refundAudit.data?.entries || []).some((l) => l.action === 'ORDER_REFUND'));
+
+    const refundAnon = await req(`/api/admin/orders/${paidId}/refund`, { method: 'POST', body: {} });
+    check('Refunds are admin-only (401)', refundAnon.status === 401);
+  }
+
+  // ---------------------------------------------------------------- 26. Unauthorised guard
   {
     const r = await req('/api/admin/stats');
     check('Admin endpoints protected (401)', r.status === 401);

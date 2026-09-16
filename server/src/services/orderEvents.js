@@ -6,6 +6,7 @@ import { broadcastOrder } from './realtime.js';
 import { getSettings } from './settings.js';
 import { restoreStock } from './stock.js';
 import { config } from '../config.js';
+import { refundTransaction } from './paystack.js';
 
 /**
  * Central place for recording order status events, notifying the customer
@@ -84,6 +85,17 @@ export async function notifyCustomer(order, type, { note = '' } = {}) {
       email: {
         headline: 'Order cancelled',
         bodyLines: [`Hi ${name}, order <strong>${order.id}</strong> has been cancelled. Contact us if this was unexpected.`],
+      },
+    },
+    REFUNDED: {
+      sms: `Homely Treats: A refund of GH₵ ${Number(order.refundAmount || order.total).toFixed(2)} has been issued for order ${order.id}. It can take a few working days to reflect.`,
+      email: {
+        headline: 'Refund issued',
+        bodyLines: [
+          `Hi ${name}, we've issued a refund of <strong>GH₵ ${Number(order.refundAmount || order.total).toFixed(2)}</strong> for order <strong>${order.id}</strong>.`,
+          order.refundReason ? `Reason: ${order.refundReason}` : '',
+          `Mobile money and card refunds usually appear within a few working days, depending on your provider.`,
+        ].filter(Boolean),
       },
     },
   };
@@ -185,5 +197,87 @@ export async function applyStatus(orderId, status, note) {
     await notifyCustomer(order, typeMap[status], { note });
   }
   broadcastOrder(orderId, { status });
+  return order;
+}
+
+
+/**
+ * Refund a paid order.
+ *
+ * Two paths, because Ghanaian bakeries take money in two ways:
+ *   • Paid through Paystack — the refund is sent back to the original mobile-money
+ *     wallet or card and we keep Paystack's refund reference.
+ *   • Paid offline (cash, or a bank transfer the bakery confirmed by hand) — there is
+ *     nothing to reverse electronically, so the refund is recorded as settled offline
+ *     and the customer is told it has been issued.
+ *
+ * Refunds are full-order only: keeping a partially refunded order in the "paid"
+ * bucket would quietly overstate revenue in every report.
+ */
+export async function refundOrder(orderId, { reason } = {}) {
+  const before = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { user: true, items: true },
+  });
+  if (!before) throw Object.assign(new Error('Order not found'), { status: 404 });
+
+  if (before.paymentStatus === 'REFUNDED') {
+    throw Object.assign(new Error('This order has already been refunded'), { status: 409 });
+  }
+  if (!['PAID', 'SIMULATED'].includes(before.paymentStatus)) {
+    throw Object.assign(
+      new Error('Only paid orders can be refunded — this one has no captured payment'),
+      { status: 400 }
+    );
+  }
+
+  // Simulation-mode payments (and any reference Paystack never issued) are settled offline.
+  const viaPaystack = config.paystack.enabled && before.paymentRef && !String(before.paymentRef).startsWith('SIM-');
+
+  let refundStatus = 'OFFLINE';
+  let refundRef = 'offline';
+  if (viaPaystack) {
+    const result = await refundTransaction(before.paymentRef);
+    if (!result.refunded && result.error) {
+      // Record the failed attempt but leave the order paid — the money is still ours
+      // until Paystack confirms otherwise, and the bakery must retry or handle it by hand.
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { refundStatus: 'FAILED', refundReason: `${reason || 'Refund failed'} — ${result.error}` },
+      });
+      throw Object.assign(new Error(`Paystack refused the refund: ${result.error}`), { status: 502 });
+    }
+    refundStatus = 'PAYSTACK_REFUNDED';
+    refundRef = String(result.refundRef || before.paymentRef);
+  }
+
+  const order = await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      paymentStatus: 'REFUNDED',
+      refundStatus,
+      refundAmount: before.total,
+      refundReason: reason ? String(reason).slice(0, 500) : null,
+      refundRef,
+      refundedAt: new Date(),
+    },
+    include: { user: true, items: true },
+  });
+
+  await recordEvent(
+    orderId,
+    'REFUNDED',
+    `Refund of GH₵ ${Number(order.refundAmount).toFixed(2)} issued (${refundStatus === 'OFFLINE' ? 'settled offline' : `Paystack ref ${refundRef}`})${reason ? ` — ${reason}` : ''}`
+  );
+
+  // Free the stock back up: a refunded cake never left the shop, or came back.
+  try {
+    await restoreStock(before.items);
+  } catch (err) {
+    console.error('[stock] failed to restore stock after refund for', orderId, err.message);
+  }
+
+  await notifyCustomer(order, 'REFUNDED');
+  broadcastOrder(orderId, { status: order.status, paymentStatus: 'REFUNDED' });
   return order;
 }

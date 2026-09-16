@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Coins, ClipboardList, Receipt, Download } from 'lucide-react';
+import { Coins, ClipboardList, Receipt, Download, RotateCcw } from 'lucide-react';
 import { api } from '../../api.js';
 import { useApp } from '../../store.jsx';
 import StatusBadge from '../../components/StatusBadge.jsx';
@@ -90,6 +90,16 @@ export default function Reports() {
               <div className="stat-card-icon"><ClipboardList size={26} /></div>
               <div className="stat-card-value">{data.orderCount}</div>
               <div className="stat-card-label">Orders</div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-card-icon"><RotateCcw size={26} /></div>
+              <div className="stat-card-value">{ghs(data.refunds?.total || 0)}</div>
+              <div className="stat-card-label">Refunded</div>
+              <p className="trend-warn">
+                {data.refunds?.count
+                  ? `${data.refunds.count} order${data.refunds.count === 1 ? '' : 's'} · excluded from revenue`
+                  : 'Nothing refunded in this range'}
+              </p>
             </div>
             <div className="stat-card">
               <div className="stat-card-icon"><Receipt size={26} /></div>

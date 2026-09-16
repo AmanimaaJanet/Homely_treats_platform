@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Printer, ChefHat } from 'lucide-react';
+import { Printer, ChefHat, RotateCcw } from 'lucide-react';
 import { api } from '../../api.js';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import { ProductIcon } from '../../components/ProductIcon.jsx';
@@ -16,6 +16,8 @@ export default function Orders() {
   const [status, setStatus] = useState('ALL');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
+  const [refunding, setRefunding] = useState(false);
+  const [refundReason, setRefundReason] = useState('');
 
   const load = () => {
     const params = new URLSearchParams();
@@ -41,6 +43,27 @@ export default function Orders() {
     try {
       const { order } = await api.get(`/admin/orders/${id}`, { auth: true });
       setDetail(order);
+      setRefunding(false);
+      setRefundReason('');
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+
+  const refundable = detail && ['PAID', 'SIMULATED'].includes(detail.paymentStatus);
+
+  const doRefund = async () => {
+    try {
+      const { order } = await api.post(
+        `/admin/orders/${detail.id}/refund`,
+        { reason: refundReason },
+        { auth: true }
+      );
+      setDetail(order);
+      setOrders((os) => os.map((o) => (o.id === order.id ? { ...o, ...order } : o)));
+      setRefunding(false);
+      setRefundReason('');
+      toast(`Refunded ${ghs(order.refundAmount)} for ${order.id}. Customer notified.`, 'success');
     } catch (err) {
       toast(err.message, 'error');
     }
@@ -164,6 +187,57 @@ export default function Orders() {
                 {detail.notes && <p className="small"><strong>Notes:</strong> {detail.notes}</p>}
               </div>
             </div>
+
+            {detail.paymentStatus === 'REFUNDED' ? (
+              <div className="refund-note">
+                <strong>This order has been refunded.</strong>
+                <p className="small" style={{ margin: '6px 0 0' }}>
+                  {ghs(detail.refundAmount || detail.total)} returned
+                  {detail.refundStatus === 'OFFLINE' ? ' (settled offline)' : ''}
+                  {detail.refundRef && detail.refundRef !== 'offline' ? ` · Paystack ref ${detail.refundRef}` : ''}
+                  {detail.refundReason ? ` · ${detail.refundReason}` : ''}
+                </p>
+                <div className="refund-meta">
+                  <span className="muted">Refunded {fmtDateTime(detail.refundedAt)}</span>
+                  <span className="muted">Stock returned to inventory</span>
+                </div>
+              </div>
+            ) : refundable ? (
+              <div className="refund-box">
+                <h4><RotateCcw size={15} /> Refund this order</h4>
+                {!refunding ? (
+                  <>
+                    <p className="muted small" style={{ margin: '0 0 10px' }}>
+                      Returns the full {ghs(detail.total)} to the customer, frees the stock back up and notifies
+                      them by SMS, WhatsApp and email. The order then stops counting towards revenue.
+                    </p>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setRefunding(true)}>
+                      <RotateCcw size={15} /> Start a refund
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <label className="form-label" htmlFor="refund-reason">Reason (shown to the customer)</label>
+                    <input
+                      id="refund-reason"
+                      className="form-input"
+                      placeholder="e.g. Order cancelled — customer changed their mind"
+                      value={refundReason}
+                      onChange={(e) => setRefundReason(e.target.value)}
+                    />
+                    <p className="muted small" style={{ margin: '8px 0 10px' }}>
+                      Full refund only ({ghs(detail.total)}). For a part-refund, refund from your Paystack dashboard.
+                    </p>
+                    <div className="row-actions">
+                      <button className="btn btn-secondary btn-sm" onClick={() => setRefunding(false)}>Cancel</button>
+                      <button className="btn btn-primary btn-sm" onClick={doRefund}>
+                        Refund {ghs(detail.total)} now
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : null}
 
             <h4 className="form-heading">Status history</h4>
             <div className="timeline-list">

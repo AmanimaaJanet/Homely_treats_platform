@@ -106,8 +106,17 @@ export default function Account() {
   const submitReview = async (e) => {
     e.preventDefault();
     try {
-      const { bonusPoints } = await api.post('/reviews', { orderId: reviewing.id, rating: reviewForm.rating, comment: reviewForm.comment }, { auth: true });
-      toast(`Review submitted! +${bonusPoints} bonus points`, 'success');
+      const { bonusPoints, awaitingApproval } = await api.post(
+        '/reviews',
+        { orderId: reviewing.id, rating: reviewForm.rating, comment: reviewForm.comment },
+        { auth: true }
+      );
+      toast(
+        awaitingApproval
+          ? `Thank you! +${bonusPoints} points. Your review will appear once the bakery approves it.`
+          : `Review submitted! +${bonusPoints} bonus points`,
+        'success'
+      );
       setReviewing(null);
       setReviewForm({ rating: 5, comment: '' });
       const d = await api.get('/orders/my', { auth: true });
@@ -181,7 +190,13 @@ export default function Account() {
                             {o.status === 'DELIVERED' && !o.review && (
                               <button className="btn-link" onClick={() => setReviewing(o)}>Review</button>
                             )}
-                            {o.review && <span className="small"><Star size={13} className="star-fill-inline" /> {o.review.rating}/5</span>}
+                            {o.review && (
+                              <span className="small">
+                                <Star size={13} className="star-fill-inline" /> {o.review.rating}/5
+                                {o.review.status === 'PENDING' && <span className="muted"> · awaiting approval</span>}
+                                {o.review.status === 'HIDDEN' && <span className="muted"> · not published</span>}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
