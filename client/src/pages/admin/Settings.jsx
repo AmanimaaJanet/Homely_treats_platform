@@ -184,6 +184,26 @@ export default function Settings() {
         <Toggle label="Email order updates (confirmation, receipt, status)" checked={!!s.emailOrderConfirmed} onChange={(v) => set('emailOrderConfirmed', v)} />
         <h4 className="form-heading small">Admin Alerts</h4>
         <Toggle label="Email the business when a new order is placed" checked={!!s.adminAlertNewOrder} onChange={(v) => set('adminAlertNewOrder', v)} />
+        <Toggle
+          label="Email a daily low-stock digest"
+          checked={s.lowStockAlerts !== false}
+          onChange={(v) => set('lowStockAlerts', v)}
+        />
+        <label className="form-label" style={{ marginTop: '10px', maxWidth: '320px' }}>
+          Reorder threshold
+          <span className="muted small">
+            {' '}— products at or below this stock level appear on the dashboard and in the digest
+          </span>
+        </label>
+        <input
+          className="form-input"
+          type="number"
+          min="0"
+          max="999"
+          style={{ maxWidth: '160px' }}
+          value={s.lowStockThreshold ?? 5}
+          onChange={(e) => set('lowStockThreshold', Math.max(0, Number(e.target.value) || 0))}
+        />
       </div>
 
       <button className="btn btn-primary" disabled={saving} style={{ marginBottom: '2rem' }}>

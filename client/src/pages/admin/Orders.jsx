@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Printer, ChefHat } from 'lucide-react';
 import { api } from '../../api.js';
 import StatusBadge from '../../components/StatusBadge.jsx';
 import { ProductIcon } from '../../components/ProductIcon.jsx';
@@ -9,6 +11,7 @@ const STATUSES = ['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'READY', 'DELIVERED', '
 
 export default function Orders() {
   const { toast } = useApp();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState('ALL');
   const [search, setSearch] = useState('');
@@ -94,7 +97,23 @@ export default function Orders() {
                 </select>
               </td>
               <td>{fmtDate(o.createdAt)}</td>
-              <td><button className="btn btn-secondary btn-sm" onClick={() => openDetail(o.id)}>View →</button></td>
+              <td className="row-actions">
+                <button className="btn btn-secondary btn-sm" onClick={() => openDetail(o.id)}>View</button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  title="Print customer receipt"
+                  onClick={() => navigate(`/admin/print/${o.id}?doc=receipt&auto=1`)}
+                >
+                  <Printer size={14} /> Receipt
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  title="Print kitchen ticket"
+                  onClick={() => navigate(`/admin/print/${o.id}?doc=ticket&auto=1`)}
+                >
+                  <ChefHat size={14} /> Ticket
+                </button>
+              </td>
             </tr>
           ))}
           {orders.length === 0 && <tr><td colSpan="8" className="centered muted">No orders found</td></tr>}
@@ -106,7 +125,21 @@ export default function Orders() {
           <div className="modal-content modal-wide">
             <div className="modal-header">
               <h3>Order {detail.id}</h3>
-              <button className="close-btn" onClick={() => setDetail(null)}>×</button>
+              <div className="modal-header-actions">
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => navigate(`/admin/print/${detail.id}?doc=receipt`)}
+                >
+                  <Printer size={15} /> Receipt
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => navigate(`/admin/print/${detail.id}?doc=ticket`)}
+                >
+                  <ChefHat size={15} /> Kitchen ticket
+                </button>
+                <button className="close-btn" onClick={() => setDetail(null)}>×</button>
+              </div>
             </div>
 
             <div className="detail-grid">

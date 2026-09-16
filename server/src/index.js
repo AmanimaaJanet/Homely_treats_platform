@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { config } from './config.js';
 import { attachWebSocket } from './services/realtime.js';
 import { ensureUploadDir } from './services/storage.js';
+import { startStockAlerts } from './services/stockAlerts.js';
 import { apiLimiter } from './middleware/security.js';
 import { csrfGuard } from './middleware/session.js';
 
@@ -153,4 +154,7 @@ server.listen(config.port, '0.0.0.0', () => {
   console.log(`   Photo storage: ${config.storage.useCloudinary ? 'Cloudinary' : 'local disk (/uploads)'}`);
   console.log(`   WebSockets: /ws (real-time order updates)`);
   console.log('');
+
+  // Background job: email the bakery when stock runs low (at most once a day).
+  startStockAlerts();
 });

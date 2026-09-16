@@ -5,6 +5,7 @@ import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { applyStatus } from '../services/orderEvents.js';
 import { getSettings, saveSettings } from '../services/settings.js';
 import { audit } from '../services/audit.js';
+import { lowStockProducts, sendLowStockDigest } from '../services/stockAlerts.js';
 import { ORDER_STATUSES } from '../config.js';
 
 const router = Router();
@@ -330,6 +331,72 @@ router.get('/audit', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load audit log' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Low-stock alerts
+// ---------------------------------------------------------------------------
+// GET /api/admin/alerts/low-stock — products at or below the reorder threshold
+router.get('/alerts/low-stock', async (req, res) => {
+  try {
+    const settings = await getSettings();
+    const products = await lowStockProducts(settings);
+    res.json({ products, threshold: settings.lowStockThreshold ?? 5 });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to check stock' });
+  }
+});
+
+// POST /api/admin/alerts/low-stock/send — email the digest now
+router.post('/alerts/low-stock/send', async (req, res) => {
+  try {
+    const result = await sendLowStockDigest({ force: true });
+    await audit(req, {
+      action: 'STOCK_ALERT_SENT',
+      entity: 'Product',
+      detail: `Low-stock digest sent for ${result.count} product(s)`,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send the stock digest' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Printing — receipts (customer copy) and kitchen tickets
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/admin/orders/:id/print
+ *
+ * Gathers everything a printed document needs in one payload so the print view
+ * doesn't fan out across several endpoints: the order with its items, design
+ * photos, the customer, and the bakery's own details for the header.
+ */
+router.get('/orders/:id/print', async (req, res) => {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: req.params.id },
+      include: { items: true, photos: true, user: true },
+    });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    const settings = await getSettings();
+    res.json({
+      order,
+      business: {
+        name: settings.businessName || 'Homely Treats',
+        email: settings.businessEmail,
+        phone: settings.businessPhone,
+        address: settings.businessAddress,
+      },
+      printedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to prepare the printout' });
   }
 });
 

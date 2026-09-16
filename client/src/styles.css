@@ -726,3 +726,115 @@ a:hover { color: var(--pd); }
 }
 .photo-add:hover:not(:disabled) { border-color: var(--primary); color: var(--pd); background: var(--pl); }
 .photo-add:disabled { opacity: 0.6; cursor: default; }
+
+/* Order table actions + modal header actions (print buttons live here) */
+.row-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.row-actions .btn-ghost {
+  border: 1px solid var(--bd, #E8D5C0); border-radius: 8px; padding: 5px 10px;
+  gap: 5px; display: inline-flex; align-items: center;
+}
+.row-actions .btn-ghost:hover:not(:disabled) { background: var(--pl, #FDF1E4); }
+.modal-header-actions { display: flex; align-items: center; gap: 8px; }
+
+/* Low-stock alert panel (admin dashboard + products) */
+.stock-alert { border: 1.5px solid #E7C08A; background: #FFF9EF; border-radius: 14px; padding: 16px 18px; margin-bottom: 22px; }
+.stock-alert-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+.stock-alert-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15.5px; color: #7A3E12; }
+.stock-alert p { margin: 4px 0 0; color: #8A6244; font-size: 13px; }
+.stock-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.stock-chip {
+  display: inline-flex; align-items: center; gap: 8px; background: #fff;
+  border: 1px solid #EAD6BC; border-radius: 999px; padding: 6px 12px 6px 14px; font-size: 13px;
+}
+.stock-chip strong { font-variant-numeric: tabular-nums; }
+.stock-chip.sold-out { border-color: #E7A9A9; background: #FFF5F5; }
+.stock-chip.sold-out strong { color: #991B1B; }
+.stock-chip .muted { font-size: 11.5px; }
+.stock-ok { display: flex; align-items: center; gap: 8px; color: #2F6B45; font-size: 13.5px; }
+
+/* ---------------------------------------------------------------------------
+   Printable documents (receipt + kitchen ticket)
+   Screen: an A5-ish sheet on a neutral backdrop with a toolbar above it.
+   Print:  chrome removed, sheet laid out in millimetres so it lands correctly.
+   --------------------------------------------------------------------------- */
+.print-page { padding: 4px 0 40px; }
+
+.print-toolbar {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  justify-content: space-between; margin-bottom: 18px;
+}
+.print-tabs { display: flex; gap: 8px; background: #F3E7DA; padding: 4px; border-radius: 999px; }
+.print-tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 0; background: transparent; cursor: pointer; color: #7A5C44;
+  font: inherit; font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 999px;
+}
+.print-tab.active { background: #fff; color: #2C1A0E; box-shadow: 0 1px 4px rgba(44, 26, 14, .14); }
+
+.print-sheet {
+  width: 210mm; max-width: 100%; margin: 0 auto; background: #fff;
+  color: #1F1309; padding: 14mm 14mm 12mm; border: 1px solid #E8D5C0; border-radius: 12px;
+  box-shadow: 0 10px 34px rgba(44, 26, 14, .1); font-size: 12.5px; line-height: 1.5;
+}
+.print-ticket { width: 148mm; font-size: 13.5px; }
+
+.print-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;
+  border-bottom: 2px solid #2C1A0E; padding-bottom: 12px;
+}
+.print-head h1 { font-family: Georgia, serif; font-size: 22px; margin: 0 0 4px; letter-spacing: -.01em; }
+.print-sub { margin: 0; color: #6B5544; font-size: 11px; }
+.print-head-right { text-align: right; white-space: nowrap; }
+.print-doc-type { display: block; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #C4763B; font-weight: 700; }
+.print-doc-id { display: block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; font-weight: 700; margin-top: 3px; }
+
+.print-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 12px 0; border-bottom: 1px dashed #D8C2AB; }
+.print-meta > div, .print-parties > div, .print-payment > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.print-parties { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px dashed #D8C2AB; }
+.print-label { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #8A6E58; font-weight: 700; }
+
+.print-table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+.print-table th {
+  text-align: left; font-size: 10px; letter-spacing: .1em; text-transform: uppercase;
+  color: #6B5544; border-bottom: 1.5px solid #2C1A0E; padding: 0 8px 6px 0;
+}
+.print-table td { padding: 9px 8px 9px 0; border-bottom: 1px solid #F0E2D3; vertical-align: top; }
+.print-col-qty { width: 42px; }
+.print-col-money { width: 92px; text-align: right; padding-right: 0 !important; }
+.print-qty { font-weight: 700; font-size: 15px; }
+.print-opt { display: block; color: #7A5C44; font-size: 11px; }
+.print-inscription { display: block; margin-top: 3px; color: #92400E; font-style: italic; font-size: 11.5px; }
+
+.print-totals { margin-top: 14px; margin-left: auto; width: 62mm; }
+.print-total-row { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.print-grand-total { border-top: 1.5px solid #2C1A0E; margin-top: 4px; padding-top: 7px; font-size: 16px; font-weight: 700; }
+.print-words { margin: 6px 0 0; font-size: 10.5px; color: #6B5544; font-style: italic; }
+
+.print-payment { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 16px; padding-top: 12px; border-top: 1px dashed #D8C2AB; }
+.print-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; word-break: break-all; }
+
+.print-notes { margin-top: 16px; border: 1.5px solid #C4763B; border-radius: 10px; padding: 11px 13px; background: #FFF9F3; }
+.print-notes p { margin: 5px 0 0; font-size: 14px; line-height: 1.55; }
+.print-foot-note { margin: 12px 0 0; font-size: 12px; }
+
+.print-foot {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-top: 20px; padding-top: 10px; border-top: 1px solid #E8D5C0;
+  font-size: 10px; color: #7A5C44;
+}
+
+@media print {
+  @page { size: A5 portrait; margin: 10mm; }
+  .no-print, .admin-sidebar, .admin-topbar, .navbar, .footer, .toasts { display: none !important; }
+  .print-page { padding: 0; }
+  .print-sheet, .print-ticket {
+    width: auto; max-width: none; margin: 0; border: 0; border-radius: 0;
+    box-shadow: none; padding: 0; font-size: 11.5px;
+  }
+  .print-ticket { font-size: 13px; }
+  .print-table td, .print-meta, .print-parties { break-inside: avoid; }
+  .print-table tr { break-inside: avoid; }
+  .admin-content { padding: 0 !important; overflow: visible !important; }
+  .admin-layout { display: block !important; }
+  body, .admin-root { background: #fff !important; }
+}

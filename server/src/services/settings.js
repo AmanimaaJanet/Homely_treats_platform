@@ -19,6 +19,10 @@ const DEFAULTS = {
   smsOrderConfirmed: true,
   emailOrderConfirmed: true,
   adminAlertNewOrder: true,
+  // Alert the bakery before a product sells out. Threshold is the stock level at
+  // which a product counts as "running low".
+  lowStockAlerts: true,
+  lowStockThreshold: 5,
 };
 
 let cache = null;

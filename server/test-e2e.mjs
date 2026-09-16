@@ -890,7 +890,88 @@ async function main() {
     check('Non-image upload rejected', rejected.status === 500 || rejected.status === 400, `status ${rejected.status}`);
   }
 
-  // ---------------------------------------------------------------- 22. Unauthorised guard
+  // ---------------------------------------------------------------- 22. Receipts & kitchen tickets
+  {
+    // Print documents read from a single payload so a printed copy can't go
+    // half-stale between two requests.
+    const orderId = created.orderIds[0];
+    const print = await req(`/api/admin/orders/${orderId}/print`, { token: adminToken });
+    check('Print payload loads for an order', print.status === 200 && !!print.data?.order, `status ${print.status}`);
+    check('Print payload carries the order items', (print.data?.order?.items || []).length > 0);
+    check('Print payload carries bakery details for the header',
+      !!print.data?.business?.name && !!print.data?.business?.phone, print.data?.business?.name);
+    check('Print payload carries the customer', !!print.data?.order?.user?.fullName || !!print.data?.order?.guestName);
+    check('Print payload is timestamped', !Number.isNaN(Date.parse(print.data?.printedAt || '')));
+
+    // A receipt is only useful if the money adds up.
+    const o = print.data.order;
+    const lineTotal = o.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    check('Receipt line items add up to the subtotal', Math.abs(lineTotal - o.subtotal) < 0.01,
+      `${lineTotal} vs ${o.subtotal}`);
+    check('Receipt total = subtotal + delivery − discounts',
+      Math.abs((o.subtotal + o.deliveryFee - o.discount - o.loyaltyDiscount) - o.total) < 0.01,
+      `computed ${o.subtotal + o.deliveryFee - o.discount - o.loyaltyDiscount} vs ${o.total}`);
+
+    const missing = await req('/api/admin/orders/HT-DOES-NOT-EXIST/print', { token: adminToken });
+    check('Print of an unknown order is a clean 404', missing.status === 404);
+
+    const anon = await req(`/api/admin/orders/${orderId}/print`);
+    check('Print documents are admin-only (401)', anon.status === 401);
+  }
+
+  // ---------------------------------------------------------------- 23. Low-stock alerts
+  {
+    const threshold = await req('/api/admin/alerts/low-stock', { token: adminToken });
+    check('Low-stock list loads', threshold.status === 200 && Array.isArray(threshold.data?.products));
+    check('Low-stock list reports the reorder threshold', typeof threshold.data?.threshold === 'number',
+      `threshold ${threshold.data?.threshold}`);
+
+    // Create a deliberately nearly-empty product and confirm it surfaces.
+    const low = await req('/api/admin/products', {
+      method: 'POST', token: adminToken,
+      body: { name: `${PROD_CHOC} LOWSTOCK`, category: 'CAKE', basePrice: 120, icon: 'Cake', stock: 2, inStock: true, sizeOptions: [] },
+    });
+    const lowId = low.data?.product?.id;
+    created.productIds.push(lowId);
+
+    const after = await req('/api/admin/alerts/low-stock', { token: adminToken });
+    const flagged = after.data?.products?.find((p) => p.id === lowId);
+    check('Nearly-empty product appears in alerts', !!flagged, flagged ? `${flagged.stock} left` : 'missing');
+    check('Alerts are sorted by urgency (lowest stock first)',
+      (after.data?.products || []).every((p, i, arr) => i === 0 || arr[i - 1].stock <= p.stock));
+
+    // Well-stocked products stay out of the list.
+    const healthy = await req('/api/admin/products', {
+      method: 'POST', token: adminToken,
+      body: { name: `${PROD_CHOC} WELLSTOCKED`, category: 'CAKE', basePrice: 120, icon: 'Cake', stock: 40, inStock: true, sizeOptions: [] },
+    });
+    created.productIds.push(healthy.data?.product?.id);
+    const stillLow = await req('/api/admin/alerts/low-stock', { token: adminToken });
+    check('Well-stocked product stays out of alerts', !stillLow.data?.products?.some((p) => p.id === healthy.data?.product?.id));
+
+    // The threshold from settings is respected, not hard-coded.
+    const raise = await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { lowStockThreshold: 50 } });
+    check('Reorder threshold is configurable', raise.status === 200 && raise.data?.settings?.lowStockThreshold === 50);
+    const wide = await req('/api/admin/alerts/low-stock', { token: adminToken });
+    check('A wider threshold flags more products', wide.data?.products?.length > stillLow.data?.products?.length,
+      `${stillLow.data?.products?.length} → ${wide.data?.products?.length}`);
+    await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { lowStockThreshold: 5 } });
+
+    // Taking stock back up clears the alert.
+    await req(`/api/admin/products/${lowId}`, { method: 'PUT', token: adminToken, body: { stock: 25 } });
+    const cleared = await req('/api/admin/alerts/low-stock', { token: adminToken });
+    check('Restocking clears the alert', !cleared.data?.products?.some((p) => p.id === lowId));
+
+    // Sending the digest always reports back what it did.
+    const sent = await req('/api/admin/alerts/low-stock/send', { method: 'POST', token: adminToken });
+    check('Low-stock digest can be sent on demand', sent.status === 200 && sent.data?.sent === true,
+      JSON.stringify(sent.data));
+
+    const anon = await req('/api/admin/alerts/low-stock');
+    check('Stock alerts are admin-only (401)', anon.status === 401);
+  }
+
+  // ---------------------------------------------------------------- 24. Unauthorised guard
   {
     const r = await req('/api/admin/stats');
     check('Admin endpoints protected (401)', r.status === 401);
