@@ -115,13 +115,24 @@ Cloudinary URLs are accepted, so an injected external URL or a path-traversal at
 is discarded. The bundled bakery stills from your footage now illustrate the sample
 croissant and fruit-tart products.
 
-### 12. WhatsApp message templates
-Business-initiated WhatsApp messages outside a 24-hour customer window **must** use
-Meta-approved templates; today the app sends free-form text that will silently fail in
-production.
-**Build:** template registry (name + language + ordered variables), per-status template
-mapping in Settings, graceful SMS/email fallback when a template isn't approved, and a
-"test send" button. _Effort: M._
+### 12. WhatsApp message templates — ✅ **SHIPPED**
+WhatsApp only allows free-form text within 24 hours of the customer's last message;
+every other update must use a Meta-approved template. Eight templates now ship in a
+registry (`server/src/services/whatsappTemplates.js`) covering confirmed, payment
+received, being prepared, ready, out for delivery, delivered, cancelled and refunded —
+each with its exact name, language, category, ordered variables and body text. The app
+sends templates by default and treats the old plain text as a **fallback**: if Meta
+refuses a template (still in review, renamed, parameter mismatch) the refusal is logged
+with Meta's own wording and the message is retried as plain text, which succeeds if the
+customer messaged recently. If that fails too, the notification is logged FAILED — SMS
+and email still carry the news.
+
+**Admin → Settings → WhatsApp templates** lists every template with a copy button for
+the body text, the variable order, a sample rendering of the message the customer sees,
+and a **test send** to any number that reports Meta's response verbatim. Nothing needs
+a WhatsApp account to try it: without credentials the panel says *Not connected* and
+every send is simulated in the console. Full setup steps — including what to paste into
+Meta Business Manager — are in **[WHATSAPP_TEMPLATES.md](WHATSAPP_TEMPLATES.md)**.
 
 ### 13. Automatic low-stock alerts — ✅ **SHIPPED**
 A reorder threshold (default 5, editable in Settings) drives everything. The dashboard
@@ -292,7 +303,7 @@ verified separately: 5 forgot-password requests then 429.
 
 ### Phase 2 — selling properly: in progress
 
-> Running total: **186 end-to-end assertions passing** (`node test-e2e.mjs` from `server/`).
+> Running total: **207 end-to-end assertions passing** (`node test-e2e.mjs` from `server/`).
 
 | # | Item | Status |
 |---|---|---|
@@ -301,7 +312,7 @@ verified separately: 5 forgot-password requests then 429.
 | 14 | **Receipts and kitchen tickets** | ✅ shipped |
 | 5 | **Review moderation in admin** | ✅ shipped (rate limits + approval queue) |
 | 17 | **Refunds** | ✅ shipped (full refunds; see note above) |
-| 12 | WhatsApp message templates | next — needed before WhatsApp works in production |
+| 12 | **WhatsApp message templates** | ✅ shipped |
 | 15 | Delivery rules (min order, free over, more branches) | next |
 | 16 | Collection / delivery time slots | next |
 | 18 | Push notifications (PWA) | planned |

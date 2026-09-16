@@ -1118,7 +1118,87 @@ async function main() {
     check('Refunds are admin-only (401)', refundAnon.status === 401);
   }
 
-  // ---------------------------------------------------------------- 26. Unauthorised guard
+  // ---------------------------------------------------------------- 26. WhatsApp templates
+  {
+    const reg = await req('/api/admin/whatsapp/templates', { token: adminToken });
+    check('WhatsApp template registry loads', reg.status === 200 && Array.isArray(reg.data?.templates),
+      `status ${reg.status}`);
+    const tpls = reg.data?.templates || [];
+    check('Every order update has a template', tpls.length === 8, `${tpls.length} templates`);
+
+    const requiredTypes = ['ORDER_CONFIRMED', 'PAYMENT_VERIFIED', 'IN_PROGRESS', 'READY', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED', 'REFUNDED'];
+    check('Every status we notify about is covered',
+      requiredTypes.every((t) => tpls.some((x) => x.type === t)),
+      tpls.map((x) => x.type).join(', '));
+    check('Template names are valid for Meta (lowercase, digits, underscores)',
+      tpls.every((t) => /^[a-z0-9_]+$/.test(t.name)), tpls.map((t) => t.name).join(', '));
+    check('Template names are unique', new Set(tpls.map((t) => t.name)).size === tpls.length);
+    check('Each template declares its variables and a sample',
+      tpls.every((t) => Array.isArray(t.vars) && t.vars.length > 0 && t.sample.length === t.vars.length));
+    check('Each template declares a language and category',
+      tpls.every((t) => !!t.language && !!t.category), tpls[0]?.language);
+    check('Variables in the body match the declared variable count',
+      tpls.every((t) => {
+        const placeholders = (t.body.match(/\{\{\d+\}\}/g) || []).length;
+        return placeholders === t.vars.length;
+      }));
+    check('Previews render with no unfilled placeholders',
+      tpls.every((t) => t.preview && !t.preview.includes('{{')), tpls.find((t) => t.type === 'READY')?.preview);
+
+    check('Template sending is on by default', reg.data?.useTemplates === true);
+    check('The registry reports whether WhatsApp is connected',
+      typeof reg.data?.enabled === 'boolean', `connected: ${reg.data?.enabled}`);
+
+    // Test send — the button that proves an approved template works before it matters.
+    const sim = await req('/api/admin/whatsapp/test', {
+      method: 'POST', token: adminToken, body: { phone: '0551234567', type: 'READY' },
+    });
+    check('A test message can be sent', sim.status === 200 && sim.data?.ok === true, JSON.stringify(sim.data)?.slice(0, 120));
+    check('Test reports the template and language it used', sim.data?.template === 'order_ready' && !!sim.data?.language,
+      `${sim.data?.template} (${sim.data?.language})`);
+    check('Test fills one parameter per declared variable', sim.data?.parameters?.length === 3,
+      JSON.stringify(sim.data?.parameters));
+    check('Test renders the message the customer would see',
+      typeof sim.data?.preview === 'string' && sim.data.preview.length > 20, sim.data?.preview);
+
+    const badPhone = await req('/api/admin/whatsapp/test', {
+      method: 'POST', token: adminToken, body: { phone: '12345', type: 'READY' },
+    });
+    check('Test rejects a phone number WhatsApp could not reach', badPhone.status === 400, badPhone.data?.error);
+    const badType = await req('/api/admin/whatsapp/test', {
+      method: 'POST', token: adminToken, body: { phone: '0551234567', type: 'NOT_A_STATUS' },
+    });
+    check('Test rejects an unknown notification type', badType.status === 400);
+
+    const waAnon = await req('/api/admin/whatsapp/templates');
+    check('WhatsApp templates are admin-only (401)', waAnon.status === 401);
+
+    // A real order must actually go through the template layer.
+    const mk = await req('/api/orders', {
+      method: 'POST', token: janetToken,
+      body: {
+        items: [{ productId: created.productIds[0], quantity: 1 }],
+        deliveryMethod: 'PICKUP', paymentMethod: 'COD', readyDate: READY_DATE,
+      },
+    });
+    const waOrderId = mk.data?.order?.id;
+    if (waOrderId) created.orderIds.push(waOrderId);
+    const waOrder = await req(`/api/admin/orders/${waOrderId}`, { token: adminToken });
+    const waNotes = (waOrder.data?.order?.notifications || []).filter((n) => n.channel === 'WHATSAPP');
+    check('Order confirmation sent through the WhatsApp template layer',
+      waNotes.some((n) => (n.detail || '').includes('order_confirmed')),
+      waNotes.map((n) => n.detail).join(' | '));
+
+    // Switching templates off falls back to plain text (for the Meta test number).
+    await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { whatsappTemplates: false } });
+    const off = await req('/api/admin/whatsapp/templates', { token: adminToken });
+    check('Template sending can be switched off', off.data?.useTemplates === false);
+    await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { whatsappTemplates: true } });
+    const backOn = await req('/api/admin/whatsapp/templates', { token: adminToken });
+    check('Template sending can be switched back on', backOn.data?.useTemplates === true);
+  }
+
+  // ---------------------------------------------------------------- 27. Unauthorised guard
   {
     const r = await req('/api/admin/stats');
     check('Admin endpoints protected (401)', r.status === 401);

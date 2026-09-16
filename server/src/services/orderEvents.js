@@ -108,7 +108,9 @@ export async function notifyCustomer(order, type, { note = '' } = {}) {
       await sendSms({ phone, message: m.sms, orderId: order.id, type });
     }
     if (settings.enableWhatsapp !== false) {
-      await sendWhatsApp({ phone, message: m.sms, orderId: order.id, type });
+      // The order travels with the call so WhatsApp can fill an approved template's
+      // variables (name, order number, total, tracking link).
+      await sendWhatsApp({ phone, message: m.sms, orderId: order.id, type, order });
     }
   }
   if (email && settings.emailOrderConfirmed !== false) {

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Key, MessageCircle } from 'lucide-react';
 import { api } from '../../api.js';
 import { useApp } from '../../store.jsx';
+import WhatsAppTemplates from '../../components/WhatsAppTemplates.jsx';
 
 function Toggle({ label, checked, onChange }) {
   return (
@@ -187,7 +188,15 @@ export default function Settings() {
         <Toggle label="SMS order updates (confirmation, status, ready)" checked={!!s.smsOrderConfirmed} onChange={(v) => set('smsOrderConfirmed', v)} />
         <h4 className="form-heading small">WhatsApp (Cloud API)</h4>
         <Toggle label="WhatsApp order updates" checked={!!s.enableWhatsapp} onChange={(v) => set('enableWhatsapp', v)} />
-        <p className="muted small"><MessageCircle size={13} /> Configure <code>WHATSAPP_TOKEN</code> & <code>WHATSAPP_PHONE_NUMBER_ID</code> in <code>server/.env</code> (free test number available).</p>
+        <Toggle
+          label="Send approved templates (recommended — required outside the 24-hour window)"
+          checked={s.whatsappTemplates !== false}
+          onChange={(v) => set('whatsappTemplates', v)}
+        />
+        <p className="muted small">
+          <MessageCircle size={13} /> With this off, WhatsApp sends plain text, which only works within 24 hours
+          of the customer's last message.
+        </p>
         <h4 className="form-heading small">Email (Resend)</h4>
         <Toggle label="Email order updates (confirmation, receipt, status)" checked={!!s.emailOrderConfirmed} onChange={(v) => set('emailOrderConfirmed', v)} />
         <h4 className="form-heading small">Admin Alerts</h4>
@@ -213,6 +222,8 @@ export default function Settings() {
           onChange={(e) => set('lowStockThreshold', Math.max(0, Number(e.target.value) || 0))}
         />
       </div>
+
+      <WhatsAppTemplates />
 
       <button className="btn btn-primary" disabled={saving} style={{ marginBottom: '2rem' }}>
         {saving ? 'Saving…' : 'Save All Settings'}

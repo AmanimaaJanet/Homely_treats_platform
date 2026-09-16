@@ -877,3 +877,44 @@ a:hover { color: var(--pd); }
 .refund-note { background: #FFF3F3; border: 1px solid #E7C3C3; border-radius: 10px; padding: 12px 14px; margin-top: 14px; }
 .refund-note strong { color: #991B1B; }
 .refund-meta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 12.5px; }
+
+/* WhatsApp template manager (admin settings) */
+.wa-status {
+  display: flex; align-items: flex-start; gap: 8px; border-radius: 10px;
+  padding: 11px 14px; font-size: 13px; margin: 12px 0; line-height: 1.55;
+}
+.wa-status.on { background: #E1F0E5; color: #2F6B45; }
+.wa-status.off { background: #FFF6E3; color: #8A4B10; }
+.wa-test { margin: 16px 0; }
+.wa-list { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.wa-row { border: 1px solid #E8D5C0; border-radius: 10px; background: #fff; overflow: hidden; }
+.wa-row.open { border-color: #C4763B; }
+.wa-row-head {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: transparent; border: 0; cursor: pointer; font: inherit; text-align: left;
+  padding: 12px 14px; color: #2C1A0E;
+}
+.wa-row-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; text-transform: capitalize; }
+.wa-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+  background: #F3E7DA; padding: 2px 7px; border-radius: 6px; text-transform: none;
+}
+.wa-lang { font-size: 11px; color: #8A6E58; text-transform: uppercase; letter-spacing: .06em; }
+.wa-row-body { padding: 4px 14px 16px; border-top: 1px dashed #E8D5C0; }
+.wa-field { margin-top: 14px; }
+.wa-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
+  background: #FBF6F1; border: 1px solid #EADCCB; border-radius: 7px; padding: 5px 9px;
+}
+.wa-body { display: flex; align-items: flex-start; gap: 8px; margin-top: 6px; }
+.wa-body code {
+  flex: 1; display: block; background: #FBF6F1; border: 1px solid #EADCCB; border-radius: 8px;
+  padding: 10px 12px; font-size: 12.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-word;
+}
+.wa-vars { margin: 8px 0 0 18px; padding: 0; font-size: 12.5px; color: #6B5544; }
+.wa-vars code { color: #C4763B; font-weight: 700; }
+.wa-bubble {
+  background: #DCF8C6; border-radius: 12px 12px 12px 3px; padding: 10px 13px; margin-top: 6px;
+  max-width: 460px; box-shadow: 0 1px 2px rgba(44, 26, 14, .12);
+}
+.wa-bubble p { margin: 0; font-size: 13.5px; line-height: 1.55; color: #10240C; }

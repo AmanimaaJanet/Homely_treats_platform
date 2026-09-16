@@ -14,6 +14,11 @@ const DEFAULTS = {
   enableCard: true,
   enableCod: true,
   enableWhatsapp: true,
+  // Send Meta-approved WhatsApp templates rather than free-form text. Required in
+  // production: WhatsApp only allows free-form replies within 24 hours of the
+  // customer's last message.
+  whatsappTemplates: true,
+  whatsappTemplateLanguage: 'en',
   enableLoyalty: true,
   enableReviews: true,
   // When true a new review appears on the storefront immediately. Turn it off to

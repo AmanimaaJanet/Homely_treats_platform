@@ -48,7 +48,7 @@ A full-stack bakery ordering platform built from your HTML mockup: **React** fro
 |---|---|---|
 | **Paystack** | MTN MoMo, AirtelTigo, Vodafone Cash, Visa/MC | Test keys need **no business docs** — free signup |
 | **Resend** | Order confirmations, receipts, status updates, email verification | Free 100/day, 3,000/month |
-| **WhatsApp Cloud API** | WhatsApp notifications | Free test number, 1,000 conversations/month |
+| **WhatsApp Cloud API** | WhatsApp notifications using **Meta-approved templates** (required outside the 24-hour window), with automatic plain-text fallback and a test-send button | Free test number, 1,000 conversations/month — setup: [WHATSAPP_TEMPLATES.md](WHATSAPP_TEMPLATES.md) |
 | **Textbelt** | SMS (free 1/day) | ⚠️ free tier blocked for Ghana numbers |
 | **Arkesel** | SMS (Ghana-based) | ✅ recommended for GH — free trial credits |
 | **Cloudinary** | Design-photo storage (required on Render) | Free tier |
@@ -151,7 +151,9 @@ PAYSTACK_PUBLIC_KEY=
 RESEND_API_KEY=
 EMAIL_FROM=Homely Treats <onboarding@resend.dev>
 
-# WhatsApp Cloud API (blank = simulated)
+# WhatsApp Cloud API (blank = simulated). See WHATSAPP_TEMPLATES.md — WhatsApp
+# requires Meta-approved templates outside a 24-hour window; the app sends those
+# automatically and falls back to plain text.
 WHATSAPP_TOKEN=
 WHATSAPP_PHONE_NUMBER_ID=
 
@@ -235,6 +237,6 @@ The backend is hardened for production: Helmet security headers (tuned CSP), COR
 
 ## 💡 Future ideas
 
-- WhatsApp templates + a proper rider login/role, delivery zones beyond Accra, size-based *per-product* pricing refinements, order photo print/spec sheets, automated marketing emails, multi-vendor support.
+- Delivery rules beyond Accra (per-zone minimums, free delivery over GH₵ X, more pickup branches), collection/delivery time slots, PWA push notifications, reviews on product pages, automated marketing emails, multi-vendor support.
 
 Built as a full-stack upgrade of the original single-page mockup — © 2026 Homely Treats Service Limited.

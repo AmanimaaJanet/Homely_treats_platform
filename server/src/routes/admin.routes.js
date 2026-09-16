@@ -6,7 +6,9 @@ import { applyStatus, refundOrder } from '../services/orderEvents.js';
 import { getSettings, saveSettings } from '../services/settings.js';
 import { audit } from '../services/audit.js';
 import { lowStockProducts, sendLowStockDigest } from '../services/stockAlerts.js';
-import { ORDER_STATUSES } from '../config.js';
+import { describeTemplates } from '../services/whatsappTemplates.js';
+import { sendTemplateTest } from '../services/whatsapp.js';
+import { config, ORDER_STATUSES } from '../config.js';
 
 const router = Router();
 
@@ -352,6 +354,48 @@ router.get('/audit', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load audit log' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// WhatsApp templates
+// ---------------------------------------------------------------------------
+
+// GET /api/admin/whatsapp/templates — the registry, with a rendered preview of each
+// template so the bakery can see exactly what the customer receives.
+router.get('/whatsapp/templates', async (req, res) => {
+  try {
+    const settings = await getSettings();
+    res.json({
+      ...describeTemplates({
+        useTemplates: settings.whatsappTemplates !== false,
+        language: settings.whatsappTemplateLanguage || 'en',
+        enabled: config.whatsapp.enabled,
+      }),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load WhatsApp templates' });
+  }
+});
+
+// POST /api/admin/whatsapp/test  { phone, type }
+// Proves a template is approved and the credentials work — before it matters.
+router.post('/whatsapp/test', async (req, res) => {
+  try {
+    const { phone, type = 'ORDER_CONFIRMED' } = req.body || {};
+    const result = await sendTemplateTest({ phone, type });
+    if (result.ok) {
+      await audit(req, {
+        action: 'WHATSAPP_TEST',
+        entity: 'Setting',
+        detail: `Test template ${result.template} to ${result.to}${result.simulated ? ' (simulated)' : ''}`,
+      });
+    }
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send the test message' });
   }
 });
 
