@@ -59,8 +59,10 @@ async function logNotification(orderId, channel, type, status, detail) {
  * (terracotta #C4763B · cream #FDF8F3 · dark chocolate #2C1A0E · gold #E8B86D).
  * Icons are intentionally omitted: email clients can't render the Lucide SVG set.
  */
-export function orderEmailTemplate({ subject, headline, bodyLines, order, ctaUrl }) {
-  const items = (order.items || [])
+export function orderEmailTemplate({ subject, headline, bodyLines, order, ctaUrl, ctaLabel = 'Track your order' }) {
+  // `order` is optional: a back-in-stock alert is about a product, not a basket, so the
+  // items box and total simply drop out of the layout when there is no order.
+  const items = (order?.items || [])
     .map(
       (i) =>
         `<li style="margin:4px 0; color:#2C1A0E;">${i.name} × ${i.quantity} — GH₵ ${fmt(
@@ -76,17 +78,21 @@ export function orderEmailTemplate({ subject, headline, bodyLines, order, ctaUrl
     </div>
     <div style="padding:24px;">
       ${bodyLines.map((l) => `<p style="margin:8px 0; color:#7A5C44; line-height:1.6;">${l}</p>`).join('')}
-      <div style="background:#F5E6D0; border-radius:10px; padding:16px; margin:18px 0;">
+      ${
+        order
+          ? `<div style="background:#F5E6D0; border-radius:10px; padding:16px; margin:18px 0;">
         <ul style="margin:0; padding-left:18px;">${items}</ul>
         <p style="margin:10px 0 0; color:#7B3F1A;"><strong>Total: GH₵ ${fmt(order.total)}</strong></p>
-      </div>
+      </div>`
+          : ''
+      }
       ${
         ctaUrl
-          ? `<a href="${ctaUrl}" style="display:inline-block; background:#C4763B; color:#fff; padding:13px 26px; border-radius:100px; text-decoration:none; font-weight:bold;">Track your order</a>`
+          ? `<a href="${ctaUrl}" style="display:inline-block; background:#C4763B; color:#fff; padding:13px 26px; border-radius:100px; text-decoration:none; font-weight:bold;">${ctaLabel}</a>`
           : ''
       }
       <p style="margin-top:22px; color:#7A5C44; font-size:12px; border-top:1px solid #E8D5C0; padding-top:14px;">
-        Homely Treats · Airport Residential, Accra<br />Order ${order.id}
+        Homely Treats · Airport Residential, Accra${order ? `<br />Order ${order.id}` : ''}
       </p>
     </div>
   </div>`;

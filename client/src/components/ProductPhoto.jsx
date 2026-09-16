@@ -14,17 +14,27 @@ export default function ProductPhoto({
   className = '',
   iconSize = 52,
   eager = false,
+  onClick,
 }) {
   const photo = product?.images?.[0];
+  const clickable = typeof onClick === 'function';
   if (!photo) {
     return (
-      <div className={`product-image ${className}`}>
+      <div
+        className={`product-image ${className} ${clickable ? 'clickable' : ''}`}
+        onClick={onClick}
+        role={clickable ? 'button' : undefined}
+      >
         <ProductIcon name={product?.icon || product?.emoji} size={iconSize} />
       </div>
     );
   }
   return (
-    <div className={`product-image has-photo ${className}`}>
+    <div
+      className={`product-image has-photo ${className} ${clickable ? 'clickable' : ''}`}
+      onClick={onClick}
+      role={clickable ? 'button' : undefined}
+    >
       <img
         src={photo}
         // Alt text describes the product for screen readers; admins can override it.

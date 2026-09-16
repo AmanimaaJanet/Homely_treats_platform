@@ -1,80 +1,40 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom';
-import { Printer, ArrowLeft, ReceiptText, ChefHat } from 'lucide-react';
+import { Printer, ArrowLeft, ImageIcon } from 'lucide-react';
 import { api } from '../../api.js';
-import { ghs, fmtDate, fmtDateTime } from '../../lib/format.js';
+import { ghs } from '../../lib/format.js';
+import { amountInWords } from '../../lib/words.js';
 
 /**
- * Printable documents for an order: the customer receipt and the kitchen ticket.
+ * Print views — the paper the kitchen and the counter actually use.
  *
- * Both render from a single payload (/admin/orders/:id/print) so the printout can
- * be built with no extra round-trips once the preview is open. The page lives
- * inside the admin layout so it inherits the admin auth guard and sidebar, but
- * everything except the sheet is hidden by `@media print`, and the sheet itself is
- * laid out in millimetres so it lands correctly on A5/A4.
+ * Three documents, one page: a customer **receipt**, a **kitchen ticket** (big type,
+ * the deadline at the top, the writing pulled out where it can't be missed) and the
+ * **delivery note** (rider, address, what to collect). `?doc=` picks one, `?auto=1`
+ * opens the browser's print dialog straight away — which is what a counter phone wants.
  *
- * URL: /admin/print/HT-20260916-0001?doc=receipt|ticket  (add &auto=1 to print at once)
+ * Print styling lives in styles.css so it also reaches the printer from a build; the
+ * rules hide the app chrome, keep line items from splitting across pages, and drop the
+ * colours a cheap thermal printer would only smear.
  */
 
-const PAYMENT_LABELS = {
-  MOMO: 'Mobile Money',
-  ATL: 'Telecel Cash',
-  CARD: 'Card',
-  COD: 'Cash on delivery',
-};
+const money = (n) => ghs(Number(n || 0));
 
-const ONES = [
-  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
-  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen',
-];
-const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'];
+const stamp = (value) =>
+  new Date(value).toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
 
-/** 1234 -> "one thousand two hundred and thirty-four". Receipts read better with words. */
-function numberToWords(n) {
-  const num = Math.floor(Math.abs(Number(n) || 0));
-  if (num < 20) return ONES[num];
-  if (num < 100) {
-    const t = TENS[Math.floor(num / 10)];
-    return num % 10 ? `${t}-${ONES[num % 10]}` : t;
-  }
-  if (num < 1000) {
-    const rest = num % 100;
-    return `${ONES[Math.floor(num / 100)]} hundred${rest ? ` and ${numberToWords(rest)}` : ''}`;
-  }
-  if (num < 1000000) {
-    const rest = num % 1000;
-    return `${numberToWords(Math.floor(num / 1000))} thousand${rest ? ` ${numberToWords(rest)}` : ''}`;
-  }
-  const rest = num % 1000000;
-  return `${numberToWords(Math.floor(num / 1000000))} million${rest ? ` ${numberToWords(rest)}` : ''}`;
-}
-
-function amountInWords(amount) {
-  const total = Number(amount || 0);
-  const cedis = Math.floor(total);
-  const pesewas = Math.round((total - cedis) * 100);
-  const cediWord = `${numberToWords(cedis)} cedi${cedis === 1 ? '' : 's'}`;
-  if (!pesewas) return `${cediWord} only`;
-  return `${cediWord} and ${numberToWords(pesewas)} pesewa${pesewas === 1 ? '' : 's'} only`;
-}
-
-function optionsOf(item) {
-  return [item.size, item.flavor, item.icing].filter(Boolean).join(' · ');
-}
-
-function customerOf(order) {
-  return {
-    name: order.user?.fullName || order.guestName || 'Guest',
-    phone: order.user?.phone || order.guestPhone || '—',
-    email: order.user?.email || order.guestEmail || '—',
-  };
-}
+const day = (value) =>
+  value
+    ? new Date(value).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })
+    : '—';
 
 export default function PrintDoc() {
   const { id } = useParams();
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
   const navigate = useNavigate();
-  const doc = params.get('doc') === 'ticket' ? 'ticket' : 'receipt';
+  const doc = params.get('doc') || 'receipt';
   const auto = params.get('auto') === '1';
 
   const [data, setData] = useState(null);
@@ -82,230 +42,228 @@ export default function PrintDoc() {
 
   useEffect(() => {
     api
-      .get(`/admin/orders/${encodeURIComponent(id)}/print`, { auth: true })
+      .get(`/admin/orders/${id}/print?doc=${doc}`, { auth: true })
       .then(setData)
       .catch((err) => setError(err.message));
-  }, [id]);
+  }, [id, doc]);
 
-  // ?auto=1 prints as soon as the sheet is ready — handy for a "Print" button that
-  // opens a fresh tab, and it keeps the browser's own print preview working.
+  // Give the browser a moment to lay the page out before opening the dialog.
   useEffect(() => {
-    if (!data || !auto) return;
-    const t = setTimeout(() => window.print(), 350);
+    if (!auto || !data) return;
+    const t = setTimeout(() => window.print(), 400);
     return () => clearTimeout(t);
-  }, [data, auto]);
+  }, [auto, data]);
 
-  if (error) {
-    return (
-      <div className="empty-state">
-        <p>{error}</p>
-        <button className="btn btn-secondary" onClick={() => navigate('/admin/orders')}>
-          Back to orders
-        </button>
-      </div>
-    );
-  }
-  if (!data) return <div className="empty-state"><p>Preparing document…</p></div>;
+  if (error) return <div className="empty-state"><p>{error}</p></div>;
+  if (!data) return <div className="empty-state"><p>Preparing the document…</p></div>;
 
-  const { order, business, printedAt } = data;
-  const customer = customerOf(order);
-  const isTicket = doc === 'ticket';
-  const title = isTicket ? 'Kitchen Ticket' : 'Receipt';
-  const paid = ['PAID', 'SIMULATED', 'COD'].includes(order.paymentStatus);
+  const { order, shop, document: docLabel } = data;
+  const isKitchen = doc === 'kitchen';
+  const isDelivery = doc === 'delivery';
+  const items = order.items || [];
 
   return (
     <div className="print-page">
-      {/* Screen-only toolbar — never printed */}
       <div className="print-toolbar no-print">
-        <button className="btn btn-secondary btn-sm" onClick={() => navigate('/admin/orders')}>
-          <ArrowLeft size={15} /> Orders
+        <button className="btn btn-ghost btn-sm" onClick={() => navigate('/admin/orders')}>
+          <ArrowLeft size={15} /> Back to orders
         </button>
-        <div className="print-tabs">
-          <button
-            className={`print-tab ${!isTicket ? 'active' : ''}`}
-            onClick={() => setParams({ doc: 'receipt' })}
-          >
-            <ReceiptText size={15} /> Customer receipt
-          </button>
-          <button
-            className={`print-tab ${isTicket ? 'active' : ''}`}
-            onClick={() => setParams({ doc: 'ticket' })}
-          >
-            <ChefHat size={15} /> Kitchen ticket
+        <div className="row-actions">
+          {[
+            ['receipt', 'Receipt'],
+            ['kitchen', 'Kitchen ticket'],
+            ['delivery', 'Delivery note'],
+          ].map(([key, label]) => (
+            <button
+              key={key}
+              className={`btn btn-sm ${doc === key ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => navigate(`/admin/print/${id}?doc=${key}`)}
+            >
+              {label}
+            </button>
+          ))}
+          <button className="btn btn-primary btn-sm" onClick={() => window.print()}>
+            <Printer size={15} /> Print
           </button>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={() => window.print()}>
-          <Printer size={15} /> Print {title.toLowerCase()}
-        </button>
       </div>
 
-      <div className={`print-sheet ${isTicket ? 'print-ticket' : 'print-receipt'}`}>
-        {/* ---------------------------------------------------------------- */}
+      <div className="print-sheet">
         <header className="print-head">
           <div>
-            <h1>{business.name}</h1>
-            <p className="print-sub">
-              {business.address}
-              {business.phone ? ` · ${business.phone}` : ''}
-              {business.email ? ` · ${business.email}` : ''}
-            </p>
+            <h1>{shop.name}</h1>
+            {shop.address && <p>{shop.address}</p>}
+            {shop.phone && <p>{shop.phone}</p>}
+            {shop.email && <p>{shop.email}</p>}
           </div>
           <div className="print-head-right">
-            <span className="print-doc-type">{title}</span>
-            <span className="print-doc-id">{order.id}</span>
+            <h2>{docLabel}</h2>
+            <p className="print-id">{order.id}</p>
+            <p>{stamp(order.createdAt)}</p>
+            <p className={`print-status ${order.status === 'CANCELLED' ? 'cancelled' : ''}`}>{order.status}</p>
           </div>
         </header>
 
-        <div className="print-meta">
-          <div>
-            <span className="print-label">Received / issued</span>
-            <strong>{fmtDateTime(printedAt)}</strong>
-          </div>
-          <div>
-            <span className="print-label">{isTicket ? 'Needed by' : 'Ready date'}</span>
-            <strong>{fmtDate(order.readyDate)}</strong>
-          </div>
-          <div>
-            <span className="print-label">Fulfilment</span>
-            <strong>{order.deliveryMethod === 'DELIVERY' ? 'Delivery' : 'Pickup'}</strong>
-          </div>
-          <div>
-            <span className="print-label">Order status</span>
-            <strong>{order.status.replace(/_/g, ' ')}</strong>
-          </div>
-        </div>
+        <hr />
 
-        {!isTicket && (
-          <div className="print-parties">
-            <div>
-              <span className="print-label">Customer</span>
-              <strong>{customer.name}</strong>
-              <span>{customer.phone}</span>
-              <span>{customer.email}</span>
-            </div>
-            <div>
-              <span className="print-label">
-                {order.deliveryMethod === 'DELIVERY' ? 'Deliver to' : 'Collection point'}
-              </span>
-              {order.deliveryMethod === 'DELIVERY' ? (
-                <>
-                  <strong>{order.deliveryAddress}</strong>
-                  {order.deliveryZone ? <span>Zone: {order.deliveryZone}</span> : null}
-                </>
-              ) : (
-                <strong>{business.name}, {business.address}</strong>
-              )}
-              {order.riderName ? <span>Rider: {order.riderName} ({order.riderPhone})</span> : null}
-            </div>
-          </div>
-        )}
-
-        <table className="print-table">
-          <thead>
-            <tr>
-              <th className="print-col-qty">Qty</th>
-              <th>Item</th>
-              {!isTicket && <th className="print-col-money">Unit</th>}
-              {!isTicket && <th className="print-col-money">Amount</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {order.items.map((item) => (
-              <tr key={item.id}>
-                <td className="print-col-qty print-qty">{item.quantity}</td>
-                <td>
-                  <strong>{item.name}</strong>
-                  {optionsOf(item) ? <span className="print-opt">{optionsOf(item)}</span> : null}
-                  {item.inscription ? (
-                    <span className="print-inscription">Inscription: “{item.inscription}”</span>
-                  ) : null}
-                </td>
-                {!isTicket && <td className="print-col-money">{ghs(item.price)}</td>}
-                {!isTicket && (
-                  <td className="print-col-money">{ghs(item.price * item.quantity)}</td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {!isTicket && (
+        {isKitchen ? (
           <>
-            <div className="print-totals">
-              <div className="print-total-row">
-                <span>Subtotal</span>
-                <span>{ghs(order.subtotal)}</span>
-              </div>
-              {order.deliveryFee > 0 && (
-                <div className="print-total-row">
-                  <span>Delivery{order.deliveryZone ? ` — ${order.deliveryZone}` : ''}</span>
-                  <span>{ghs(order.deliveryFee)}</span>
-                </div>
-              )}
-              {order.discount > 0 && (
-                <div className="print-total-row">
-                  <span>Discount{order.promoCode ? ` (${order.promoCode})` : ''}</span>
-                  <span>−{ghs(order.discount)}</span>
-                </div>
-              )}
-              {order.loyaltyDiscount > 0 && (
-                <div className="print-total-row">
-                  <span>Loyalty points ({order.pointsRedeemed} pts)</span>
-                  <span>−{ghs(order.loyaltyDiscount)}</span>
-                </div>
-              )}
-              <div className="print-total-row print-grand-total">
-                <span>Total</span>
-                <span>{ghs(order.total)}</span>
-              </div>
-              <p className="print-words">In words: {amountInWords(order.total)}</p>
+            {/* The kitchen's copy: what to bake, for when, and the writing that must not be missed. */}
+            <div className="print-deadline">
+              <span>Needed by</span>
+              <strong>
+                {day(order.readyDate)}
+                {order.timeSlot ? ` · ${order.timeSlot}` : ''}
+              </strong>
+              <span className="print-mode">
+                {order.deliveryMethod === 'DELIVERY' ? 'DELIVERY' : 'COLLECTION'}
+              </span>
             </div>
+
+            <table className="print-table kitchen">
+              <thead>
+                <tr>
+                  <th style={{ width: '58px' }}>Qty</th>
+                  <th>Bake this</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it) => (
+                  <tr key={it.id}>
+                    <td className="qty">{it.quantity}×</td>
+                    <td>
+                      <strong>{it.name}</strong>
+                      {it.size && <div>Size: {it.size}</div>}
+                      {it.flavor && <div>Flavour: {it.flavor}</div>}
+                      {it.icing && <div>Icing: {it.icing}</div>}
+                      {it.inscription && <div className="print-inscription">Writing: “{it.inscription}”</div>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {order.notes && (
+              <div className="print-callout">
+                <strong>Order notes</strong>
+                <p>{order.notes}</p>
+              </div>
+            )}
+
+            {order.photoCount > 0 && (
+              <p className="print-words">
+                <ImageIcon size={13} /> {order.photoCount} reference photo
+                {order.photoCount === 1 ? '' : 's'} attached to this order — open it on screen to view.
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="print-parties">
+              <div>
+                <h3>Billed to</h3>
+                <p><strong>{order.customer.name}</strong></p>
+                {order.customer.email && <p>{order.customer.email}</p>}
+                {order.customer.phone && <p>{order.customer.phone}</p>}
+              </div>
+              <div>
+                <h3>{isDelivery ? 'Deliver to' : 'Collection'}</h3>
+                {isDelivery ? (
+                  <>
+                    <p>{order.deliveryAddress || '—'}</p>
+                    {order.deliveryZone && <p>Zone: {order.deliveryZone}</p>}
+                    {order.riderName && <p>Rider: {order.riderName}{order.riderPhone ? ` · ${order.riderPhone}` : ''}</p>}
+                  </>
+                ) : (
+                  <p>{order.pickupLocation || shop.address || 'Our shop'}</p>
+                )}
+                <p>
+                  {isDelivery ? 'Delivery date: ' : 'Collect from: '}
+                  {day(order.readyDate)}
+                  {order.timeSlot ? ` · ${order.timeSlot}` : ''}
+                </p>
+              </div>
+            </div>
+
+            <table className="print-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th style={{ width: '52px' }} className="right">Qty</th>
+                  <th style={{ width: '96px' }} className="right">Unit</th>
+                  <th style={{ width: '104px' }} className="right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((it) => (
+                  <tr key={it.id}>
+                    <td>
+                      {it.name}
+                      {it.size && <span className="muted"> · {it.size}</span>}
+                      {it.inscription && <div className="print-inscription">Writing: “{it.inscription}”</div>}
+                    </td>
+                    <td className="right">{it.quantity}</td>
+                    <td className="right">{money(it.unitPrice)}</td>
+                    <td className="right">{money(it.lineTotal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div className="print-totals">
+              <div><span>Subtotal</span><span>{money(order.money.subtotal)}</span></div>
+              {Number(order.money.deliveryFee) > 0 && (
+                <div>
+                  <span>Delivery{order.deliveryZone ? ` (${order.deliveryZone})` : ''}</span>
+                  <span>{money(order.money.deliveryFee)}</span>
+                </div>
+              )}
+              {Number(order.money.discount) > 0 && (
+                <div className="credit">
+                  <span>Discount{order.promoCode ? ` (${order.promoCode})` : ''}</span>
+                  <span>−{money(order.money.discount)}</span>
+                </div>
+              )}
+              {Number(order.money.loyaltyDiscount) > 0 && (
+                <div className="credit">
+                  <span>Loyalty points used ({order.pointsRedeemed})</span>
+                  <span>−{money(order.money.loyaltyDiscount)}</span>
+                </div>
+              )}
+              <div className="grand"><span>Total</span><span>{money(order.money.total)}</span></div>
+            </div>
+
+            <p className="print-words">
+              <strong>Amount in words:</strong> {amountInWords(order.money.total)}
+            </p>
 
             <div className="print-payment">
-              <div>
-                <span className="print-label">Payment method</span>
-                <strong>{PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod}</strong>
-              </div>
-              <div>
-                <span className="print-label">Payment status</span>
-                <strong>{paid ? order.paymentStatus : 'Not yet paid'}</strong>
-              </div>
-              {order.paymentRef ? (
-                <div>
-                  <span className="print-label">Reference</span>
-                  <strong className="print-mono">{order.paymentRef}</strong>
-                </div>
-              ) : null}
+              <p>
+                <strong>Payment:</strong> {order.paymentMethod} · {order.paymentStatus}
+              </p>
+              {order.paymentRef && <p><strong>Reference:</strong> {order.paymentRef}</p>}
+              {order.pointsEarned > 0 && (
+                <p><strong>Loyalty:</strong> {order.pointsEarned} points earned on this order</p>
+              )}
+              {order.refund && (
+                <p>
+                  <strong>Refunded:</strong> {money(order.refund.amount)}
+                  {order.refund.reason ? ` — ${order.refund.reason}` : ''}
+                </p>
+              )}
+              {order.notes && <p><strong>Notes:</strong> {order.notes}</p>}
+              {isDelivery && (
+                <p className="print-sign">
+                  Received by ________________________  Signature ________________________
+                </p>
+              )}
             </div>
           </>
         )}
 
-        {isTicket && order.notes ? (
-          <div className="print-notes">
-            <span className="print-label">Notes for the kitchen</span>
-            <p>{order.notes}</p>
-          </div>
-        ) : null}
-
-        {isTicket && order.deliveryMethod === 'DELIVERY' ? (
-          <p className="print-foot-note">
-            Deliver to: {order.deliveryAddress}
-            {order.deliveryZone ? ` (${order.deliveryZone})` : ''} — contact {customer.name} on {customer.phone}
-          </p>
-        ) : null}
-
         <footer className="print-foot">
-          {isTicket ? (
-            <span>Print two copies: one for the bench, one for packing. Write the order number on every box.</span>
-          ) : (
-            <>
-              <span>
-                Thank you for choosing {business.name}. This receipt was generated on{' '}
-                {fmtDateTime(printedAt)} for order {order.id}.
-              </span>
-              <span>Questions? Call {business.phone || business.email}.</span>
-            </>
-          )}
+          <p>{shop.footer}</p>
+          <p className="muted small">Printed {stamp(data.printedAt)} · {order.id}</p>
         </footer>
       </div>
     </div>

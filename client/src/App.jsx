@@ -5,6 +5,8 @@ import Footer from './components/Footer.jsx';
 import Toasts from './components/Toasts.jsx';
 import Home from './pages/Home.jsx';
 import Menu from './pages/Menu.jsx';
+import ProductDetail from './pages/ProductDetail.jsx';
+import PrintDoc from './pages/admin/PrintDoc.jsx';
 import CustomOrder from './pages/CustomOrder.jsx';
 import Cart from './pages/Cart.jsx';
 import Track from './pages/Track.jsx';
@@ -30,7 +32,6 @@ import AdminRiders from './pages/admin/Riders.jsx';
 import AdminAudit from './pages/admin/Audit.jsx';
 import AdminReviews from './pages/admin/Reviews.jsx';
 import AdminDeliveries from './pages/admin/Deliveries.jsx';
-import PrintDoc from './pages/admin/PrintDoc.jsx';
 
 export default function App() {
   const location = useLocation();
@@ -44,6 +45,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/menu" element={<Menu />} />
+          <Route path="/menu/:id" element={<ProductDetail />} />
           <Route path="/custom-order" element={<CustomOrder />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/track" element={<Track />} />

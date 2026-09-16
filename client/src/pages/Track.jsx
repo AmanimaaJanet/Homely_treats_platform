@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { MessageSquare, Mail, MessageCircle, Bike, Copy, Check, Circle } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { MessageSquare, Mail, MessageCircle, Bike, Copy, Check, Circle, UserPlus, LogIn } from 'lucide-react';
 import { api } from '../api.js';
+import { useApp } from '../store.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import { ProductIcon } from '../components/ProductIcon.jsx';
 import { ghs, fmtDate, fmtDateTime } from '../lib/format.js';
@@ -16,6 +17,8 @@ export default function Track() {
   const [loading, setLoading] = useState(false);
   const [live, setLive] = useState(false);
   const [pickupAddress, setPickupAddress] = useState('Airport Residential, Accra');
+  const { user } = useApp();
+  const navigate = useNavigate();
   const wsRef = useRef(null);
   const refRef = useRef(ref);
   refRef.current = ref;
@@ -88,10 +91,33 @@ export default function Track() {
   };
 
   const { order, timeline } = data || {};
+  // A guest order is a dead end unless we offer the next step. Shown only when the
+  // visitor is signed out: "keep this order — and order faster next time".
+  const showClaim = order && !user && !order.userId;
 
   return (
     <div className="page">
       <div className="container">
+        {showClaim && (
+          <section className="claim-panel">
+            <div>
+              <strong><UserPlus size={16} /> Keep track of this order</strong>
+              <p className="muted small" style={{ margin: '4px 0 0' }}>
+                Create an account with the same email you ordered with and this order joins your
+                history — plus you can reorder in two taps next time.
+              </p>
+            </div>
+            <div className="row-actions">
+              <button className="btn btn-primary btn-sm" onClick={() => navigate('/register')}>
+                <UserPlus size={14} /> Create an account
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => navigate('/signin')}>
+                <LogIn size={14} /> Sign in
+              </button>
+            </div>
+          </section>
+        )}
+
         <div className="section">
           <h2 className="section-title">Track Your Order</h2>
           <p className="centered muted">Enter your order reference to see real-time status updates</p>

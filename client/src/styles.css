@@ -966,3 +966,153 @@ a:hover { color: var(--pd); }
 .cal-slots { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
 .cal-slot { font-size: 10px; background: #F3E7DA; color: #6B5544; border-radius: 5px; padding: 2px 5px; }
 .cal-slot.full { background: #F6D2D2; color: #991B1B; }
+
+/* Wishlist hearts, product ratings, and the product detail page */
+.product-card.sold-out .product-image { opacity: .55; }
+.wish-heart {
+  position: absolute; top: 10px; left: 10px; z-index: 2;
+  width: 34px; height: 34px; border-radius: 50%; border: 1px solid #E8D5C0;
+  background: rgba(255, 255, 255, .92); color: #B4634B; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 4px rgba(44, 26, 14, .12);
+}
+.wish-heart.saved { background: #B4634B; border-color: #B4634B; color: #fff; }
+.wish-heart:disabled { opacity: .6; }
+.product-image.clickable { cursor: pointer; }
+.product-name { cursor: pointer; }
+.product-rating { display: flex; align-items: center; gap: 5px; font-size: 12.5px; margin: 2px 0 4px; }
+.product-actions { display: flex; flex-direction: column; gap: 6px; }
+
+.product-detail { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 860px) { .product-detail { grid-template-columns: 1fr; gap: 20px; } }
+.product-detail h1 { margin: 6px 0 10px; font-size: 30px; }
+.detail-price { font-size: 24px; font-weight: 700; color: var(--pd, #A9622F); margin: 6px 0 12px; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.review-summary {
+  display: flex; gap: 20px; align-items: center; flex-wrap: wrap;
+  border: 1px solid #E8D5C0; border-radius: 12px; padding: 14px 18px; background: #fff;
+}
+.review-score { font-size: 34px; font-weight: 700; line-height: 1; }
+.review-histogram { display: flex; flex-direction: column; gap: 3px; min-width: 190px; }
+.hist-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #6B5544; }
+.hist-bar { flex: 1; height: 7px; background: #F0E2D3; border-radius: 999px; overflow: hidden; }
+.hist-fill { height: 100%; background: #E8B86D; }
+.review-item { border-bottom: 1px solid #F0E2D3; padding: 14px 0; }
+.review-item:last-child { border-bottom: 0; }
+.review-author { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.verified-pill { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: #E1F0E5; color: #2F6B45; border-radius: 999px; padding: 2px 8px; }
+
+/* Saved items (wishlist) */
+.saved-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 12px; }
+.saved-item {
+  display: flex; gap: 12px; align-items: center; background: #fff; border: 1px solid #E8D5C0;
+  border-radius: 12px; padding: 12px; flex-wrap: wrap;
+}
+.saved-item .product-image { width: 58px; height: 58px; flex: 0 0 58px; border-radius: 10px; }
+.saved-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+/* Push notification opt-in */
+.push-panel {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  border: 1px solid #E8D5C0; border-radius: 12px; padding: 14px 16px; background: #fff;
+}
+.push-panel.compact { padding: 12px 14px; }
+.push-panel strong { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; }
+
+/* ---------------------------------------------------------------------------
+   Print views: receipt, kitchen ticket, delivery note (/admin/print/:id)
+   --------------------------------------------------------------------------- */
+.print-page { background: #F4F1EC; min-height: 100vh; padding: 18px; }
+.print-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.print-sheet {
+  background: #fff; max-width: 760px; margin: 0 auto; padding: 30px 34px;
+  border-radius: 10px; box-shadow: 0 6px 28px rgba(44, 26, 14, .10); color: #221610;
+  font-size: 13.5px; line-height: 1.45;
+}
+.print-sheet h1 { font-size: 21px; margin: 0 0 4px; }
+.print-sheet h2 { font-size: 15px; margin: 0; text-transform: uppercase; letter-spacing: .08em; }
+.print-sheet h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 5px; color: #6B5544; }
+.print-sheet p { margin: 2px 0; }
+.print-head { display: flex; justify-content: space-between; gap: 24px; }
+.print-head-right { text-align: right; }
+.print-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; font-weight: 700; }
+.print-status { display: inline-block; border: 1px solid #221610; border-radius: 4px; padding: 1px 7px; font-size: 11px; letter-spacing: .05em; }
+.print-status.cancelled { border-style: dashed; }
+.print-sheet hr { border: 0; border-top: 1.5px solid #221610; margin: 14px 0 16px; }
+.print-parties { display: flex; gap: 28px; margin-bottom: 18px; }
+.print-parties > div { flex: 1; }
+.print-deadline {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  border: 2px solid #221610; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px;
+}
+.print-deadline strong { font-size: 19px; }
+.print-mode { margin-left: auto; font-weight: 700; letter-spacing: .08em; font-size: 12px; }
+.print-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+.print-table th { text-align: left; border-bottom: 1.5px solid #221610; padding: 6px 4px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em; }
+.print-table td { padding: 7px 4px; border-bottom: 1px solid #E4DACD; vertical-align: top; }
+.print-table .right { text-align: right; }
+.print-table .qty { font-size: 17px; font-weight: 700; }
+.print-table.kitchen td { padding: 10px 4px; font-size: 15px; }
+.print-inscription { font-style: italic; }
+.print-callout { border: 1.5px dashed #221610; border-radius: 6px; padding: 10px 14px; margin-top: 6px; }
+.print-totals { margin-left: auto; width: 300px; }
+.print-totals > div { display: flex; justify-content: space-between; padding: 3px 0; }
+.print-totals .credit { color: #2F6B45; }
+.print-totals .grand { border-top: 1.5px solid #221610; margin-top: 6px; padding-top: 7px; font-weight: 700; font-size: 16px; }
+.print-words { margin: 12px 0 14px; font-size: 12.5px; }
+.print-payment { border-top: 1px solid #E4DACD; padding-top: 10px; font-size: 12.5px; }
+.print-sign { margin-top: 18px; letter-spacing: .02em; }
+.print-foot { border-top: 1.5px solid #221610; margin-top: 20px; padding-top: 10px; text-align: center; }
+
+/* Low-stock panel */
+.low-stock-panel { border: 1px solid #F0D6A8; background: #FFFBF2; border-radius: 12px; padding: 14px 16px; }
+.low-stock-panel h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 14px; }
+.low-stock-list { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 12px; }
+.low-stock-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; }
+.low-stock-row .qty-badge { font-weight: 700; border-radius: 999px; padding: 1px 9px; font-size: 12px; }
+.qty-badge.out { background: #FBE3E3; color: #9B2C2C; }
+.qty-badge.low { background: #FDF0D5; color: #8A5A00; }
+
+@media print {
+  /* Printing from the admin shell must produce paper, not a screenshot of the app. */
+  .no-print, .admin-sidebar, .admin-menu, .toast-stack, nav, footer { display: none !important; }
+  .admin-layout, .admin-content, .admin-root, .app-shell, main { display: block !important; padding: 0 !important; margin: 0 !important; background: #fff !important; max-width: none !important; }
+  .print-page { background: #fff; padding: 0; }
+  .print-sheet { box-shadow: none; border-radius: 0; max-width: none; padding: 0 6mm; font-size: 12pt; }
+  .print-table tr, .print-totals, .print-deadline { page-break-inside: avoid; }
+  @page { margin: 12mm; }
+}
+
+/* Mini charts (admin reports) */
+.mini-columns { display: flex; align-items: flex-end; gap: 3px; width: 100%; }
+.mini-column { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; }
+.mini-column-bar { width: 100%; background: linear-gradient(180deg, #D08A5C, #A9622F); border-radius: 3px 3px 0 0; min-height: 0; }
+.mini-column-label { font-size: 9.5px; color: #8A7461; margin-top: 3px; }
+.mini-bars { display: flex; flex-direction: column; gap: 8px; }
+.mini-bar-row { display: grid; grid-template-columns: minmax(88px, 1.1fr) 2fr auto; align-items: center; gap: 10px; font-size: 13px; }
+.mini-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mini-bar-track { background: #F0E2D3; border-radius: 999px; height: 9px; overflow: hidden; }
+.mini-bar-fill { display: block; height: 100%; background: linear-gradient(90deg, #E8B86D, #B4634B); }
+.mini-bar-value { white-space: nowrap; }
+.mini-line svg { width: 100%; display: block; }
+.mini-line-labels { display: flex; justify-content: space-between; font-size: 10px; color: #8A7461; margin-top: 2px; }
+.report-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+@media (max-width: 620px) {
+  .mini-bar-row { grid-template-columns: minmax(70px, 1fr) 1.4fr auto; font-size: 12px; }
+}
+
+/* Guest → account prompt on the tracking page */
+.claim-panel {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  border: 1px solid #E8D5C0; background: #FFFBF4; border-radius: 12px; padding: 14px 16px;
+  margin: 16px auto 0; max-width: 720px;
+}
+.claim-panel strong { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; }
+
+/* Bulk selection + CSV import (admin products) */
+.bulk-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.bulk-toolbar .spacer { flex: 1; }
+.check-inline { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.product-card.bulk-selected { outline: 2px solid #B4634B; outline-offset: 1px; }
+.bulk-check { position: absolute; top: 10px; right: 10px; z-index: 2; background: rgba(255,255,255,.92); border-radius: 6px; padding: 3px 5px; cursor: pointer; box-shadow: 0 1px 4px rgba(44,26,14,.12); }
+.bulk-check input { cursor: pointer; }

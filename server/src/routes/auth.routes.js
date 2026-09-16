@@ -35,6 +35,8 @@ const clean = (v, max) => String(v ?? '').trim().slice(0, max);
 const validEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v || ''));
 
 // POST /api/auth/register
+import { linkGuestOrders } from '../services/guestOrders.js';
+
 router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { fullName, email, phone, password } = req.body || {};
@@ -91,10 +93,17 @@ router.post('/register', registerLimiter, async (req, res) => {
       type: 'ORDER_CONFIRMED', // reused channel, logged generically
     });
 
+    // Attach any orders this person placed as a guest, so their history is not a dead
+    // end (see services/guestOrders.js for the matching rules).
+    const claim = await linkGuestOrders(user).catch((err) => {
+      console.error('[auth] linking guest orders failed:', err.message);
+      return { claimed: 0, orders: [] };
+    });
+
     const token = signToken(user);
     setSessionCookies(res, token);
     // `token` is still returned for API clients (the browser uses the cookie).
-    res.status(201).json({ token, user: publicUser(user), verifyUrl });
+    res.status(201).json({ token, user: publicUser(user), verifyUrl, claimedOrders: claim.claimed });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Registration failed' });
@@ -159,11 +168,21 @@ router.get('/verify', async (req, res) => {
     const { token } = req.query;
     const user = await prisma.user.findFirst({ where: { verificationToken: String(token || '') } });
     if (!user) return res.status(400).json({ error: 'Invalid or expired verification link' });
-    await prisma.user.update({
+    const verified = await prisma.user.update({
       where: { id: user.id },
       data: { emailVerified: true, verificationToken: null },
     });
-    res.json({ ok: true, message: 'Email verified successfully' });
+
+    // Now that the address is confirmed, the orders they placed as a guest can be
+    // attached to the account — this is the moment the email/phone match becomes
+    // trustworthy (see services/guestOrders.js).
+    const claim = await linkGuestOrders(verified).catch(() => ({ claimed: 0 }));
+
+    res.json({
+      ok: true,
+      message: 'Email verified successfully',
+      claimedOrders: claim.claimed,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Verification failed' });

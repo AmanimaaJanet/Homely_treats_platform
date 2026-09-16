@@ -7,6 +7,9 @@ import { getSettings, saveSettings } from '../services/settings.js';
 import { audit } from '../services/audit.js';
 import { lowStockProducts, sendLowStockDigest } from '../services/stockAlerts.js';
 import { describeTemplates } from '../services/whatsappTemplates.js';
+import { notifyBackInStock } from '../services/stockNotifications.js';
+import { buildAnalytics, monthlyTrend } from '../services/analytics.js';
+import { customerKey } from '../services/analytics.js';
 import { sendTemplateTest } from '../services/whatsapp.js';
 import { config, ORDER_STATUSES } from '../config.js';
 
@@ -26,6 +29,32 @@ function clean(value, maxLen = 200) {
  * duplicates, and cap the count. Order is preserved because images[0] is the cover.
  */
 const MAX_PRODUCT_IMAGES = 8;
+
+/**
+ * Back-in-stock alerting. A product that was out and is now available wakes up
+ * everyone who asked to be told; anything else is silent (a price edit, a re-list, or
+ * raising stock on something that never sold out).
+ */
+async function announceRestock(before, after) {
+  try {
+    const wasOut = (before?.stock ?? 0) <= 0;
+    const isBack = after.stock > 0 && after.inStock !== false;
+    if (!wasOut || !isBack) return {};
+    const result = await notifyBackInStock(after, { previousStock: before?.stock ?? 0 });
+    if (result.notified > 0) {
+      await audit(null, {
+        action: 'BACK_IN_STOCK',
+        entity: 'Product',
+        entityId: after.id,
+        detail: `Restocked "${after.name}" — ${result.notified} waiting customer(s) emailed`,
+      });
+    }
+    return { restockNotified: result.notified };
+  } catch (err) {
+    console.error('[stock] back-in-stock notification failed:', err.message);
+    return {};
+  }
+}
 
 /**
  * Per-product notice, in days. Empty means "use the shop-wide lead time" (stored as
@@ -530,6 +559,385 @@ router.post('/alerts/low-stock/send', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Bulk catalogue work: many products at once, CSV import, duplicate
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/admin/products/bulk
+ *
+ * A bakery changes its whole menu at once — "everything up 10% for the festive
+ * season", "Christmas cakes off the menu in January". Doing that one product at a
+ * time is how mistakes get made, so this takes a list of ids and one instruction.
+ *
+ * Size prices move with the base price (a 10% rise is a 10% rise across the board),
+ * which is the whole point of storing sizes against the product.
+ */
+router.post('/products/bulk', async (req, res) => {
+  try {
+    const { ids, action, value, mode = 'percent' } = req.body || {};
+    const list = Array.isArray(ids) ? ids.map(String).filter(Boolean) : [];
+    if (list.length === 0) return res.status(400).json({ error: 'Select at least one product' });
+    if (list.length > 200) return res.status(400).json({ error: 'Bulk actions are limited to 200 products at a time' });
+
+    const products = await prisma.product.findMany({
+      where: { id: { in: list } },
+      include: { sizeOptions: true },
+    });
+    if (products.length === 0) return res.status(404).json({ error: 'None of those products exist' });
+
+    let summary = '';
+
+    switch (action) {
+      case 'activate':
+      case 'deactivate': {
+        const on = action === 'activate';
+        await prisma.product.updateMany({ where: { id: { in: list } }, data: { inStock: on } });
+        summary = `${products.length} product(s) marked ${on ? 'available' : 'sold out'}`;
+        break;
+      }
+      case 'feature':
+      case 'unfeature': {
+        const on = action === 'feature';
+        await prisma.product.updateMany({ where: { id: { in: list } }, data: { featured: on } });
+        summary = `${products.length} product(s) ${on ? 'added to' : 'removed from'} the featured list`;
+        break;
+      }
+      case 'list':
+      case 'delist': {
+        const on = action === 'list';
+        await prisma.product.updateMany({ where: { id: { in: list } }, data: { isActive: on } });
+        summary = `${products.length} product(s) ${on ? 're-listed' : 'de-listed from the menu'}`;
+        break;
+      }
+      case 'stock': {
+        const stock = Math.max(0, parseInt(value, 10));
+        if (Number.isNaN(stock)) return res.status(400).json({ error: 'Give a stock number' });
+        await prisma.product.updateMany({ where: { id: { in: list } }, data: { stock, inStock: stock > 0 } });
+        summary = `Stock set to ${stock} on ${products.length} product(s)`;
+        break;
+      }
+      case 'priceAdjust': {
+        const amount = Number(value);
+        if (!Number.isFinite(amount)) return res.status(400).json({ error: 'Give a price adjustment' });
+        if (mode === 'percent' && amount <= -100) {
+          return res.status(400).json({ error: 'A discount of 100% or more would make the menu free' });
+        }
+        const adjust = (price) => {
+          const next = mode === 'percent' ? price * (1 + amount / 100) : price + amount;
+          return Math.max(0, Math.round(next * 100) / 100);
+        };
+        for (const product of products) {
+          await prisma.product.update({
+            where: { id: product.id },
+            data: {
+              basePrice: adjust(product.basePrice),
+              // Sizes follow the base price so a rise stays proportional across the menu.
+              sizeOptions: {
+                update: product.sizeOptions.map((sz) => ({ where: { id: sz.id }, data: { price: adjust(sz.price) } })),
+              },
+            },
+          });
+        }
+        summary =
+          mode === 'percent'
+            ? `Prices ${amount >= 0 ? 'raised' : 'lowered'} ${Math.abs(amount)}% on ${products.length} product(s)`
+            : `Prices ${amount >= 0 ? 'raised' : 'lowered'} by GH₵ ${Math.abs(amount).toFixed(2)} on ${products.length} product(s)`;
+        break;
+      }
+      default:
+        return res.status(400).json({ error: 'Unknown bulk action' });
+    }
+
+    await audit(req, {
+      action: 'PRODUCT_BULK',
+      entity: 'Product',
+      entityId: null,
+      detail: summary,
+    });
+
+    const updated = await prisma.product.findMany({
+      where: { id: { in: list } },
+      orderBy: { createdAt: 'asc' },
+      ...includeSizes,
+    });
+    res.json({ updated: products.length, summary, products: updated });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to apply the bulk action' });
+  }
+});
+
+/**
+ * POST /api/admin/products/:id/duplicate
+ *
+ * A "copy" is how a seasonal variant gets made (the same brownie, a Christmas name and
+ * a new photo). The copy starts de-listed and out of stock so it cannot be sold by
+ * accident before someone has opened it and filled in the details.
+ */
+router.post('/products/:id/duplicate', async (req, res) => {
+  try {
+    const source = await prisma.product.findUnique({
+      where: { id: req.params.id },
+      include: { sizeOptions: true },
+    });
+    if (!source) return res.status(404).json({ error: 'Product not found' });
+
+    const copy = await prisma.product.create({
+      data: {
+        name: `${source.name} (copy)`,
+        description: source.description,
+        category: source.category,
+        basePrice: source.basePrice,
+        emoji: source.emoji,
+        icon: source.icon,
+        badge: source.badge,
+        images: source.images || [],
+        imageAlt: source.imageAlt,
+        flavors: source.flavors || [],
+        sizes: source.sizes || [],
+        stock: 0,
+        inStock: false,
+        isActive: false,
+        featured: false,
+        leadDays: source.leadDays,
+        sizeOptions: {
+          create: source.sizeOptions.map((sz) => ({
+            label: sz.label,
+            serves: sz.serves,
+            price: sz.price,
+          })),
+        },
+      },
+      ...includeSizes,
+    });
+
+    await audit(req, {
+      action: 'PRODUCT_DUPLICATE',
+      entity: 'Product',
+      entityId: copy.id,
+      detail: `Duplicated "${source.name}" as "${copy.name}" (de-listed until reviewed)`,
+    });
+    res.status(201).json({ product: copy });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to duplicate the product' });
+  }
+});
+
+/** The exact columns the importer reads, with one example row. */
+const IMPORT_COLUMNS = ['name', 'category', 'basePrice', 'description', 'badge', 'stock', 'inStock', 'leadDays', 'flavors', 'sizes', 'images'];
+
+function importTemplateCsv() {
+  const example = [
+    'Red Velvet Cake',
+    'CAKE',
+    '280',
+    'Cream cheese frosting, baked to order',
+    'Bestseller',
+    '8',
+    'true',
+    '2',
+    'Vanilla|Red velvet',
+    'Small:220|Large:380',
+    'https://example.com/red-velvet.jpg',
+  ];
+  return `${IMPORT_COLUMNS.join(',')}\n${example.map((v) => (v.includes(',') ? `"${v}"` : v)).join(',')}\n`;
+}
+
+// GET /api/admin/products/import-template — a CSV the owner can fill in Excel
+router.get('/products/import-template', async (req, res) => {
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="homely-treats-product-template.csv"');
+  res.send('\uFEFF' + importTemplateCsv());
+});
+
+/** Split a CSV line, honouring quoted fields ("a,b" is one value). */
+function splitCsvLine(line) {
+  const out = [];
+  let field = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '"' && line[i + 1] === '"') { field += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else field += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',') { out.push(field); field = ''; }
+    else field += ch;
+  }
+  out.push(field);
+  return out.map((f) => f.trim());
+}
+
+/**
+ * POST /api/admin/products/import { csv, updateExisting }
+ *
+ * Rows are matched to existing products by name: an unchanged name updates that product
+ * (so a price list can be re-imported after a rise), a new name creates one. Every row
+ * is reported back — including the ones that failed and why — because a silent partial
+ * import is worse than none at all.
+ */
+router.post('/products/import', async (req, res) => {
+  try {
+    const csv = String(req.body?.csv || '').replace(/^\uFEFF/, '');
+    const updateExisting = req.body?.updateExisting !== false;
+    if (!csv.trim()) return res.status(400).json({ error: 'Paste or upload a CSV first' });
+
+    const lines = csv.split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2) return res.status(400).json({ error: 'The CSV needs a header row and at least one product' });
+
+    const header = splitCsvLine(lines[0]).map((h) => h.toLowerCase());
+    const idx = {};
+    IMPORT_COLUMNS.forEach((col) => { idx[col] = header.indexOf(col.toLowerCase()); });
+    if (idx.name === -1 || idx.category === -1 || idx.basePrice === -1) {
+      return res.status(400).json({ error: 'The CSV must have at least: name, category, basePrice' });
+    }
+
+    const created = [];
+    const updated = [];
+    const errors = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cells = splitCsvLine(lines[i]);
+      const pick = (col) => (idx[col] === -1 ? '' : cells[idx[col]] ?? '');
+      const name = pick('name');
+      const category = pick('category').toUpperCase();
+      const basePrice = Number(pick('basePrice'));
+      const lineNo = i + 1;
+
+      if (!name) { errors.push({ line: lineNo, message: 'Missing product name' }); continue; }
+      if (!['CAKE', 'CUPCAKE', 'PASTRY', 'CONFECTIONERY'].includes(category)) {
+        errors.push({ line: lineNo, message: `Unknown category "${category}" (use CAKE, CUPCAKE, PASTRY or CONFECTIONERY)` });
+        continue;
+      }
+      if (!Number.isFinite(basePrice) || basePrice < 0) {
+        errors.push({ line: lineNo, message: `"${pick('basePrice')}" is not a price` });
+        continue;
+      }
+
+      // sizes look like "Small:220|Large:380", with an optional third value for how
+      // many people the size serves: "Small:220:6".
+      const sizes = pick('sizes')
+        ? pick('sizes').split('|').map((pair) => {
+            const [label, price, serves] = pair.split(':');
+            return {
+              label: (label || '').trim(),
+              price: Number(price),
+              serves: Number(serves) > 0 ? parseInt(serves, 10) : 1,
+            };
+          }).filter((sz) => sz.label && Number.isFinite(sz.price) && sz.price >= 0)
+        : [];
+
+      const data = {
+        name,
+        category,
+        basePrice,
+        description: pick('description') || null,
+        badge: pick('badge') || null,
+        stock: pick('stock') === '' ? 0 : Math.max(0, parseInt(pick('stock'), 10) || 0),
+        inStock: pick('inStock') === '' ? true : /^(true|yes|1|y)$/i.test(pick('inStock')),
+        leadDays: normalizeLeadDays(pick('leadDays')),
+        flavors: pick('flavors') ? pick('flavors').split('|').map((f) => f.trim()).filter(Boolean) : [],
+        images: pick('images') ? normalizeImages(pick('images').split('|').map((u) => u.trim())) : [],
+      };
+
+      try {
+        const existing = await prisma.product.findFirst({ where: { name } });
+        if (existing && !updateExisting) {
+          errors.push({ line: lineNo, message: `"${name}" already exists (updates are switched off)` });
+          continue;
+        }
+        if (existing) {
+          const saved = await prisma.product.update({
+            where: { id: existing.id },
+            data: { ...data, emoji: existing.emoji, icon: existing.icon || existing.emoji },
+            ...includeSizes,
+          });
+          updated.push(saved.name);
+        } else {
+          const saved = await prisma.product.create({
+            data: {
+              ...data,
+              icon: 'Cake',
+              emoji: 'Cake',
+              sizeOptions: { create: sizes.map((sz) => ({ label: sz.label, price: sz.price, serves: sz.serves })) },
+            },
+            ...includeSizes,
+          });
+          created.push(saved.name);
+        }
+      } catch (err) {
+        console.error('[import] row failed:', err.message);
+        errors.push({ line: lineNo, message: `Could not save "${name}"` });
+      }
+    }
+
+    await audit(req, {
+      action: 'PRODUCT_IMPORT',
+      entity: 'Product',
+      entityId: null,
+      detail: `CSV import: ${created.length} created, ${updated.length} updated, ${errors.length} row(s) skipped`,
+    });
+
+    res.json({
+      created: created.length,
+      updated: updated.length,
+      skipped: errors.length,
+      createdNames: created.slice(0, 20),
+      updatedNames: updated.slice(0, 20),
+      errors,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to import the file' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Bulk order actions
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/admin/orders/bulk { ids, status }
+ *
+ * Monday morning: fifteen orders came in over the weekend and they all need confirming
+ * before the kitchen plans the day. Each one goes through the same status path as a
+ * single update, so the customer still gets their SMS, WhatsApp and email.
+ */
+router.post('/orders/bulk', async (req, res) => {
+  try {
+    const { ids, status } = req.body || {};
+    const list = Array.isArray(ids) ? ids.map(String).filter(Boolean) : [];
+    if (list.length === 0) return res.status(400).json({ error: 'Select at least one order' });
+    if (list.length > 100) return res.status(400).json({ error: 'Bulk order updates are limited to 100 orders at a time' });
+    if (!ORDER_STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status' });
+
+    const results = [];
+    for (const id of list) {
+      try {
+        const order = await applyStatus(id, status, `Status set to ${status} by admin (bulk)`);
+        results.push({ id, ok: true, status: order.status });
+      } catch (err) {
+        results.push({ id, ok: false, error: err.status === 404 ? 'Not found' : err.message });
+      }
+    }
+
+    const done = results.filter((r) => r.ok).length;
+    await audit(req, {
+      action: 'ORDER_BULK',
+      entity: 'Order',
+      entityId: null,
+      detail: `${done} order(s) set to ${status}`,
+    });
+    res.json({ updated: done, failed: results.length - done, results });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update those orders' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Printing — receipts (customer copy) and kitchen tickets
 // ---------------------------------------------------------------------------
 
@@ -547,14 +955,80 @@ router.get('/orders/:id/print', async (req, res) => {
       include: { items: true, photos: true, user: true },
     });
     if (!order) return res.status(404).json({ error: 'Order not found' });
+
     const settings = await getSettings();
+    const doc = ['receipt', 'kitchen', 'delivery'].includes(req.query.doc) ? req.query.doc : 'receipt';
+    const DOC_LABELS = {
+      receipt: 'Receipt',
+      kitchen: 'Kitchen ticket',
+      delivery: 'Delivery note',
+    };
+
+    // Shape the payload the way the paper reads, rather than making the print view
+    // know about guest columns, American spellings in the schema, or null customers.
+    const customerName = order.user?.fullName || order.guestName || 'Walk-in customer';
+    const items = order.items.map((it) => ({
+      id: it.id,
+      name: it.name,
+      size: it.size || null,
+      flavor: it.flavor || null,
+      icing: it.icing || null,
+      inscription: it.inscription || null,
+      quantity: it.quantity,
+      unitPrice: it.price,
+      lineTotal: Math.round(it.price * it.quantity * 100) / 100,
+    }));
+
     res.json({
-      order,
-      business: {
+      document: DOC_LABELS[doc],
+      doc,
+      shop: {
         name: settings.businessName || 'Homely Treats',
-        email: settings.businessEmail,
-        phone: settings.businessPhone,
-        address: settings.businessAddress,
+        email: settings.businessEmail || null,
+        phone: settings.businessPhone || null,
+        address: settings.businessAddress || null,
+        footer:
+          doc === 'kitchen'
+            ? 'Allergen note: our kitchen handles wheat, dairy, eggs and nuts.'
+            : 'Thank you for ordering from our small kitchen.',
+      },
+      order: {
+        id: order.id,
+        status: order.status,
+        createdAt: order.createdAt,
+        readyDate: order.readyDate,
+        timeSlot: order.timeSlot,
+        deliveryMethod: order.deliveryMethod,
+        deliveryZone: order.deliveryZone,
+        deliveryAddress: order.deliveryAddress,
+        riderName: order.riderName,
+        riderPhone: order.riderPhone,
+        pickupLocation: order.pickupLocation,
+        notes: order.notes,
+        promoCode: order.promoCode,
+        customer: {
+          name: customerName,
+          email: order.user?.email || order.guestEmail || null,
+          phone: order.user?.phone || order.guestPhone || null,
+        },
+        items,
+        photoCount: order.photos?.length || 0,
+        photos: order.photos?.map((p) => p.url) || [],
+        money: {
+          subtotal: order.subtotal,
+          deliveryFee: order.deliveryFee,
+          discount: order.discount,
+          loyaltyDiscount: order.loyaltyDiscount,
+          total: order.total,
+        },
+        pointsRedeemed: order.pointsRedeemed,
+        pointsEarned: order.pointsEarned,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        paymentRef: order.paymentRef || null,
+        refund: order.refundAmount
+          ? { amount: order.refundAmount, reason: order.refundReason, ref: order.refundRef, at: order.refundedAt }
+          : null,
       },
       printedAt: new Date().toISOString(),
     });
@@ -621,6 +1095,9 @@ router.put('/products/:id', async (req, res) => {
   try {
     const { name, description, category, basePrice, emoji, icon, badge, flavors, sizes, stock, inStock, featured, isActive, sizeOptions, images, imageAlt, leadDays } =
       req.body || {};
+    // Read the current stock first: a product going from nothing to something is the
+    // moment the people waiting on it want to hear about.
+    const before = await prisma.product.findUnique({ where: { id: req.params.id }, select: { stock: true } });
     const product = await prisma.product.update({
       where: { id: req.params.id },
       data: {
@@ -654,7 +1131,8 @@ router.put('/products/:id', async (req, res) => {
         entityId: product.id,
         detail: `Updated "${product.name}" (price GH₵ ${product.basePrice}, stock ${product.stock})`,
       });
-      return res.json({ product: updated });
+      const restock = await announceRestock(before, updated);
+      return res.json({ product: updated, ...restock });
     }
     await audit(req, {
       action: 'PRODUCT_UPDATE',
@@ -662,7 +1140,8 @@ router.put('/products/:id', async (req, res) => {
       entityId: product.id,
       detail: `Updated "${product.name}" (price GH₵ ${product.basePrice}, stock ${product.stock})`,
     });
-    res.json({ product });
+    const restock = await announceRestock(before, product);
+    res.json({ product, ...restock });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update product' });
@@ -1095,6 +1574,15 @@ router.get('/delivery-calendar', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+/** How many calendar days the returned orders span (1 for a single day, 0 when empty). */
+function byDaySpan(orders) {
+  if (orders.length === 0) return 0;
+  const days = new Set(
+    orders.map((o) => new Date(o.createdAt).toISOString().slice(0, 10))
+  );
+  return days.size;
+}
+
 function parseRange(query) {
   const from = query.from ? new Date(query.from) : null;
   const to = query.to ? new Date(query.to) : null;
@@ -1122,9 +1610,11 @@ router.get('/reports', async (req, res) => {
     // they are reported separately so the owner can see what was paid back.
     const refunded = orders.filter((o) => o.paymentStatus === 'REFUNDED');
     const refundTotal = Math.round(refunded.reduce((s, o) => s + (o.refundAmount || o.total), 0) * 100) / 100;
+    // Line items carry their order's date, zone and status, so the deeper breakdowns
+    // (by product, by zone, by weekday) need no further queries.
     const itemRows = await prisma.orderItem.findMany({
       where: { order: where },
-      include: { product: true },
+      include: { product: true, order: { select: { createdAt: true, id: true } } },
     });
     const topMap = {};
     for (const it of itemRows) {
@@ -1133,12 +1623,22 @@ router.get('/reports', async (req, res) => {
       topMap[it.name].revenue += it.price * it.quantity;
     }
     const topProducts = Object.values(topMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+    const analytics = buildAnalytics({ orders, itemRows });
+    const trend = await monthlyTrend(prisma, 12);
+
     res.json({
+      range: {
+        from: from ? from.toISOString() : null,
+        to: to ? to.toISOString() : null,
+        days: byDaySpan(orders),
+      },
       revenue,
       refunds: { count: refunded.length, total: refundTotal },
       orderCount: orders.length,
       avgOrderValue: orders.length ? Math.round((revenue / orders.length) * 100) / 100 : 0,
       topProducts: topProducts.map((t) => ({ ...t, revenue: Math.round(t.revenue * 100) / 100 })),
+      analytics,
+      trend,
       orders,
     });
   } catch (err) {

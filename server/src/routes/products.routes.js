@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../prisma.js';
+import { ratingsByProduct, productReviewSummary } from '../services/productReviews.js';
 
 const router = Router();
 
@@ -26,7 +27,11 @@ router.get('/', async (req, res) => {
       orderBy,
       include: { sizeOptions: { orderBy: { price: 'asc' } } },
     });
-    res.json({ products });
+    // Stars on the menu cards, from approved reviews only.
+    const ratings = await ratingsByProduct();
+    res.json({
+      products: products.map((p) => ({ ...p, rating: ratings[p.id] || { average: 0, count: 0 } })),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load products' });
@@ -40,8 +45,13 @@ router.get('/:id', async (req, res) => {
       where: { id: req.params.id },
       include: { sizeOptions: { orderBy: { price: 'asc' } } },
     });
+    // De-listed products stay visible to anyone holding the link (and to admin screens)
+    // so a shared URL doesn't 404, but the storefront checks `isActive` before ordering.
     if (!product) return res.status(404).json({ error: 'Product not found' });
-    res.json({ product });
+
+    // What customers say about it, from approved reviews of orders that contained it.
+    const reviews = await productReviewSummary(product.id);
+    res.json({ product: { ...product, ...reviews } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load product' });

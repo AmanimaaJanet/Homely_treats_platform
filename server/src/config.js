@@ -38,6 +38,13 @@ export const config = {
   databaseUrl:
     process.env.DATABASE_URL ||
     'postgresql://homely:homely@localhost:5432/homely?schema=public',
+  push: {
+    // Web push (PWA). Generate keys with: npm run push:keys
+    publicKey: process.env.VAPID_PUBLIC_KEY || '',
+    privateKey: process.env.VAPID_PRIVATE_KEY || '',
+    subject: process.env.VAPID_SUBJECT || 'mailto:orders@homelytreats.gh',
+    enabled: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
+  },
   paystack: {
     // Ghana payments: MTN MoMo, AirtelTigo, Vodafone Cash & cards all go through Paystack
     secretKey: process.env.PAYSTACK_SECRET_KEY || '',

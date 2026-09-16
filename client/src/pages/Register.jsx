@@ -6,8 +6,9 @@ import { useApp } from '../store.jsx';
 
 const PERKS = [
   'Track all your orders in real time',
+  'Past guest orders are added to your history automatically',
   'Save custom order templates',
-  'Get exclusive deals & notifications',
+  'Get exclusive deals and restock alerts',
 ];
 
 export default function Register() {
@@ -30,14 +31,21 @@ export default function Register() {
     }
     setBusy(true);
     try {
-      const { token, user } = await api.post('/auth/register', {
+      const { token, user, claimedOrders } = await api.post('/auth/register', {
         fullName: form.fullName,
         email: form.email,
         phone: form.phone,
         password: form.password,
       });
       login(token, user);
-      toast('Account created! Check your email to verify.', 'success');
+      // Orders placed as a guest are attached to the new account, so say so — otherwise
+      // a returning customer has no way of knowing their history came with them.
+      toast(
+        claimedOrders > 0
+          ? `Account created — we found ${claimedOrders} earlier order${claimedOrders === 1 ? '' : 's'} and added them here.`
+          : 'Account created! Check your email to verify.',
+        'success'
+      );
       navigate('/account');
     } catch (err) {
       toast(err.message, 'error');

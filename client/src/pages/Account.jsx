@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardList, UserCircle, Lock, LogOut, Gem, Star, Cake, ShoppingBag } from 'lucide-react';
+import { ClipboardList, UserCircle, Lock, LogOut, Gem, Star, Cake, ShoppingBag, Heart, Bell } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
+import PushToggle from '../components/PushToggle.jsx';
+import SavedItems from '../components/SavedItems.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import { ghs, fmtDate, initials } from '../lib/format.js';
 
@@ -144,6 +146,7 @@ export default function Account() {
             <ul className="account-menu">
               <li className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}><ClipboardList size={16} /> My Orders</li>
               <li className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}><UserCircle size={16} /> Edit Profile</li>
+              <li className={tab === 'saved' ? 'active' : ''} onClick={() => setTab('saved')}><Heart size={16} /> Saved & Alerts</li>
               <li className={tab === 'password' ? 'active' : ''} onClick={() => setTab('password')}><Lock size={16} /> Change Password</li>
               <li className="danger" onClick={() => { logout(); navigate('/'); }}><LogOut size={16} /> Sign Out</li>
             </ul>
@@ -225,6 +228,17 @@ export default function Account() {
                   </div>
                   <button className="btn btn-primary">Save Changes</button>
                 </form>
+              </div>
+            )}
+
+            {tab === 'saved' && (
+              <div className="section">
+                <h2 className="form-heading"><Heart size={16} /> Saved items</h2>
+                <SavedItems />
+                <h2 className="form-heading" style={{ marginTop: '1.75rem' }}>
+                  <Bell size={16} /> Order alerts
+                </h2>
+                <PushToggle />
               </div>
             )}
 

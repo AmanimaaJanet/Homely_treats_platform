@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { TriangleAlert, Image as ImageIcon, Trash2, ArrowLeftCircle, Upload, Star } from 'lucide-react';
+import { TriangleAlert, Image as ImageIcon, Trash2, ArrowLeftCircle, Upload, Star, Copy, Download } from 'lucide-react';
 import { api } from '../../api.js';
 import { useApp } from '../../store.jsx';
 import { ghs } from '../../lib/format.js';
@@ -29,8 +29,116 @@ export default function Products() {
   const photoInput = useRef(null);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
+  // Bulk catalogue work: a seasonal price change or a January menu clear touches the
+  // whole list, and doing that one product at a time is how mistakes happen.
+  const importInput = useRef(null);
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkAction, setBulkAction] = useState('activate');
+  const [bulkValue, setBulkValue] = useState('');
+  const [bulkMode, setBulkMode] = useState('percent');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+
   const load = () => api.get('/admin/products', { auth: true }).then((d) => setProducts(d.products)).catch(() => {});
   useEffect(load, []);
+
+  // ---- Bulk actions ------------------------------------------------------
+  const toggleSelect = (id) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const allSelected = products.length > 0 && selected.size === products.length;
+  const toggleAll = () =>
+    setSelected(allSelected ? new Set() : new Set(products.map((p) => p.id)));
+
+  const applyBulk = async () => {
+    if (selected.size === 0) return;
+    const needsValue = bulkAction === 'stock' || bulkAction === 'priceAdjust';
+    if (needsValue && bulkValue === '') {
+      toast(bulkAction === 'stock' ? 'Enter the stock level' : 'Enter the price adjustment', 'error');
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const res = await api.post(
+        '/admin/products/bulk',
+        {
+          ids: [...selected],
+          action: bulkAction,
+          value: needsValue ? Number(bulkValue) : undefined,
+          mode: bulkMode,
+        },
+        { auth: true }
+      );
+      toast(res.summary, 'success');
+      setSelected(new Set());
+      setBulkValue('');
+      await load();
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const duplicate = async (product) => {
+    try {
+      const res = await api.post(`/admin/products/${product.id}/duplicate`, {}, { auth: true });
+      toast(`Copied as "${res.product.name}" — de-listed until you review it.`, 'success');
+      await load();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+
+  // ---- CSV import --------------------------------------------------------
+  const onImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const csv = await file.text();
+      const res = await api.post('/admin/products/import', { csv, updateExisting: true }, { auth: true });
+      setImportResult(res);
+      toast(
+        `Import finished — ${res.created} added, ${res.updated} updated${res.skipped ? `, ${res.skipped} skipped` : ''}.`,
+        res.skipped ? 'error' : 'success'
+      );
+      await load();
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadTemplate = async () => {
+    try {
+      const token = localStorage.getItem('ht_token');
+      const res = await fetch('/api/admin/products/import-template', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Could not download the template');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'homely-treats-product-template.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
 
   // ---- Product photo management ------------------------------------------
   const images = editing?.images || [];
@@ -163,9 +271,81 @@ export default function Products() {
         </div>
       )}
 
+      <div className="admin-toolbar bulk-toolbar">
+        <label className="check-inline">
+          <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+          <span className="small">{allSelected ? 'Clear' : 'Select all'} ({products.length})</span>
+        </label>
+        <span className="muted small">{selected.size} selected</span>
+
+        <select className="form-select" value={bulkAction} onChange={(e) => setBulkAction(e.target.value)}>
+          <option value="activate">Mark available</option>
+          <option value="deactivate">Mark sold out</option>
+          <option value="feature">Add to featured</option>
+          <option value="unfeature">Remove from featured</option>
+          <option value="list">Re-list on the menu</option>
+          <option value="delist">De-list from the menu</option>
+          <option value="stock">Set stock to…</option>
+          <option value="priceAdjust">Adjust prices…</option>
+        </select>
+
+        {(bulkAction === 'stock' || bulkAction === 'priceAdjust') && (
+          <>
+            <input
+              className="form-input"
+              type="number"
+              step="any"
+              value={bulkValue}
+              onChange={(e) => setBulkValue(e.target.value)}
+              placeholder={bulkAction === 'stock' ? 'Stock level' : 'e.g. 10 or -15'}
+              style={{ maxWidth: '150px' }}
+            />
+            {bulkAction === 'priceAdjust' && (
+              <select className="form-select" value={bulkMode} onChange={(e) => setBulkMode(e.target.value)} style={{ maxWidth: '130px' }}>
+                <option value="percent">percent</option>
+                <option value="amount">GH₵ each</option>
+              </select>
+            )}
+          </>
+        )}
+
+        <button className="btn btn-primary btn-sm" onClick={applyBulk} disabled={bulkBusy || selected.size === 0}>
+          {bulkBusy ? 'Applying…' : 'Apply to selected'}
+        </button>
+
+        <span className="spacer" />
+
+        <input ref={importInput} type="file" accept=".csv,text/csv" hidden onChange={onImportFile} />
+        <button className="btn btn-secondary btn-sm" onClick={() => importInput.current?.click()} disabled={importing}>
+          <Upload size={14} /> {importing ? 'Importing…' : 'Import CSV'}
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={downloadTemplate}>
+          <Download size={14} /> Template
+        </button>
+      </div>
+
+      {importResult && (
+        <div className={`alert ${importResult.skipped ? 'warn' : 'success'}`}>
+          <strong>Import finished</strong>
+          <p className="small">
+            {importResult.created} added · {importResult.updated} updated · {importResult.skipped} skipped
+          </p>
+          {importResult.errors?.slice(0, 5).map((e) => (
+            <p className="small" key={e.line}>Line {e.line}: {e.message}</p>
+          ))}
+          {importResult.errors?.length > 5 && (
+            <p className="small">…and {importResult.errors.length - 5} more row(s) skipped</p>
+          )}
+          <button className="btn btn-ghost btn-sm" onClick={() => setImportResult(null)}>Dismiss</button>
+        </div>
+      )}
+
       <div className="products-grid">
         {products.map((p) => (
-          <div className="product-card" key={p.id}>
+          <div className={`product-card ${selected.has(p.id) ? 'bulk-selected' : ''}`} key={p.id}>
+            <label className="bulk-check" title="Select for a bulk action">
+              <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} />
+            </label>
             <ProductPhoto product={p} iconSize={48} />
             <div className="product-info">
               {p.badge && <span className="product-badge">{p.badge}</span>}
@@ -179,6 +359,9 @@ export default function Products() {
               )}
               <div className="row-actions" style={{ marginTop: '0.75rem' }}>
                 <button className="btn btn-secondary btn-sm" onClick={() => setEditing({ ...p, flavors: (p.flavors || []).join(', ') })}>Edit</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => duplicate(p)} title="Copy this product as a starting point">
+                  <Copy size={14} /> Duplicate
+                </button>
                 <button className="btn btn-danger btn-sm" onClick={() => remove(p)}>Deactivate</button>
               </div>
             </div>

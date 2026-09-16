@@ -25,6 +25,8 @@ import reviewRoutes from './routes/reviews.routes.js';
 import riderRoutes from './routes/rider.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import deliveryRoutes from './routes/delivery.routes.js';
+import wishlistRoutes from './routes/wishlist.routes.js';
+import pushRoutes from './routes/push.routes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -129,6 +131,8 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/rider', riderRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/delivery', deliveryRoutes);
+app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/push', pushRoutes);
 
 // Serve the built React app in production
 const clientDist = path.resolve(__dirname, '../../client/dist');
@@ -155,6 +159,7 @@ server.listen(config.port, '0.0.0.0', () => {
   console.log(`   SMS: ${config.sms.provider} (${config.sms.provider === 'textbelt' ? (config.sms.apiKey === 'textbelt' ? 'free tier, 1/day' : 'paid key') : config.sms.arkeselKey ? 'key set' : 'no key'})`);
   console.log(`   Photo storage: ${config.storage.useCloudinary ? 'Cloudinary' : 'local disk (/uploads)'}`);
   console.log(`   WebSockets: /ws (real-time order updates)`);
+  console.log(`   Web push: ${config.push.enabled ? 'ENABLED (VAPID keys set)' : 'SIMULATED (no VAPID keys)'}`);
   console.log('');
 
   // Background job: email the bakery when stock runs low (at most once a day).

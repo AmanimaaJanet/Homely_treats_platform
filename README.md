@@ -29,25 +29,29 @@ A full-stack bakery ordering platform built from your HTML mockup: **React** fro
 - 👤 **Accounts** — register, sign in, email verification, profile, password change, order history with **"Order again"**, **loyalty points** balance
 - ⭐ **Reviews & ratings** — rate delivered orders (earn +5 bonus points); published on the homepage once approved when moderation is on
 - 🛵 **Rider app** at `/rider` — riders accept deliveries and mark them delivered (updates the customer's tracker instantly)
-- 📱 **PWA** — installable to the home screen (manifest + service worker + icons)
+- 📱 **PWA** — installable to the home screen, with free **web push alerts** ("your cake is ready") alongside SMS, WhatsApp and email
+- ❤️ **Saved items & restock alerts** — heart any product; if it's sold out we email you the moment it's back
+- ⭐ **Product pages** — photos, size prices, real ratings and verified-purchase reviews per product
 
 ### Admin portal (`/admin`)
-- 📊 **Dashboard** — revenue, orders, customers, 8-month revenue chart, category donut
+- 📊 **Dashboard** — revenue, orders, customers, 8-month revenue chart, category donut, low-stock panel
 - 📋 **Orders** — filter/search, detail view with photos, design uploads & status history, one-click status updates (auto-notifies customer via SMS + WhatsApp + email + WebSocket), and **Print receipt / Print ticket** buttons
-- 🗂️ **Products** — full CRUD incl. **size-tier pricing**, up to 8 photos per product, and a **low-stock panel** that emails a daily restock digest
-- 🖨️ **Printing** — a branded **customer receipt** and a **kitchen ticket** for any order (A5, one click, amount written in words)
+- 🗂️ **Products** — full CRUD incl. **size-tier pricing** and up to 8 photos each, **bulk actions** (availability, featured, stock, ±% price change), **CSV import/template**, and **duplicate-a-product**
+- 🖨️ **Printing** — a branded **customer receipt**, a **kitchen ticket** (definitive bake list, deadline at the top) and a **delivery note** for any order (one click, amount written in words)
 - ⭐ **Reviews** — approval queue with Publish / Hide / Re-queue, plus a waiting-count badge in the sidebar
 - 💸 **Refunds** — refund a paid order through Paystack or record one settled offline; stock returns and the customer is notified
 - 👥 **Customers** — orders, spend, loyalty points
 - 🎟️ **Promo codes** — percentage/fixed discounts with usage limits
-- 📈 **Reports** — date-range sales report, top products, **CSV export**
-- ⚙️ **Settings** — business info, lead time, **delivery zones management**, payment methods, loyalty/reviews toggles, notification toggles
+- 📈 **Reports** — date ranges with quick presets, revenue by day/zone/payment method, busiest weekdays and windows, repeat-customer rate, AOV, 12-month trend, top products with share of sales, **CSV export**
+- 🚚 **Deliveries** — zones with fees plus **minimum basket / free-over / ETA note**, pickup counters, collection windows with **daily capacity**, **closed days** and a 14-day kitchen calendar
+- ⚙️ **Settings** — business info, lead time, payment methods, loyalty/reviews toggles, low-stock threshold, notification toggles, WhatsApp templates (zone rules now live under Deliveries)
 
 ### Integrations (all degrade gracefully to simulation when keys are absent)
 | Service | What it does | Notes |
 |---|---|---|
 | **Paystack** | MTN MoMo, AirtelTigo, Vodafone Cash, Visa/MC | Test keys need **no business docs** — free signup |
 | **Resend** | Order confirmations, receipts, status updates, email verification | Free 100/day, 3,000/month |
+| **Web push (VAPID)** | Instant free alerts on the customer's phone, from the PWA — no credits, no phone number |
 | **WhatsApp Cloud API** | WhatsApp notifications using **Meta-approved templates** (required outside the 24-hour window), with automatic plain-text fallback and a test-send button | Free test number, 1,000 conversations/month — setup: [WHATSAPP_TEMPLATES.md](WHATSAPP_TEMPLATES.md) |
 | **Textbelt** | SMS (free 1/day) | ⚠️ free tier blocked for Ghana numbers |
 | **Arkesel** | SMS (Ghana-based) | ✅ recommended for GH — free trial credits |
@@ -127,7 +131,7 @@ cd server && npm start      # http://localhost:5000
 
 ## 🧪 Testing
 
-A self-contained end-to-end test (50+ assertions) covers every feature. It builds its own fixtures through the admin API and cleans up afterwards, so it runs against a clean database:
+A self-contained end-to-end test (348 assertions) covers every feature. It builds its own fixtures through the admin API and cleans up afterwards, so it runs against a clean database:
 
 ```bash
 cd server
@@ -154,6 +158,12 @@ PAYSTACK_PUBLIC_KEY=
 # Resend (blank = emails printed to console)
 RESEND_API_KEY=
 EMAIL_FROM=Homely Treats <onboarding@resend.dev>
+
+# Web push / PWA notifications (blank = simulated). Generate with:
+#   cd server && npm run push:keys
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:orders@homelytreats.gh
 
 # WhatsApp Cloud API (blank = simulated). See WHATSAPP_TEMPLATES.md — WhatsApp
 # requires Meta-approved templates outside a 24-hour window; the app sends those
@@ -189,18 +199,24 @@ homely-treats/
 │   ├── public/              # manifest.webmanifest, sw.js, icons/
 │   └── src/
 │       ├── pages/           # Home, Menu, CustomOrder, Cart, Track, Rider, Auth, Account, admin/*
-│       ├── components/      # Navbar, Footer, ProductCard, StatusBadge, Toasts
+│       ├── components/      # Navbar, Footer, ProductCard, ProductGallery, SavedItems, PushToggle, MiniChart, …
 │       ├── store.jsx        # auth + cart state (localStorage-persisted)
 │       ├── api.js           # fetch wrapper + loyalty helpers
 │       └── styles.css
 ├── server/                  # Node.js + Express + Prisma + WebSockets
-│   ├── prisma/schema.prisma # User, Product, ProductSize, DeliveryZone, Order, OrderItem,
-│   │                        # OrderPhoto, OrderEvent, Notification, Review, Promo, Setting
+│   ├── prisma/schema.prisma # User, Product, ProductSize, WishlistItem, PushSubscription,
+│   │                        # DeliveryZone, PickupLocation, TimeSlot, BlackoutDate, Order,
+│   │                        # OrderItem, OrderPhoto, OrderEvent, Notification, Review, Promo,
+│   │                        # PromoRedemption, AuditLog, Setting
 │   ├── src/
-│   │   ├── routes/          # auth, products, orders, payments, promos, admin, uploads, zones, reviews, rider
-│   │   ├── services/        # paystack, email, sms, whatsapp, storage, loyalty, realtime (WS), orderEvents, settings
+│   │   ├── routes/          # auth, products, orders, payments, promos, admin, uploads, zones,
+│   │   │                    # delivery, reviews, wishlist, push, rider
+│   │   ├── services/        # paystack, email, sms, whatsapp + whatsappTemplates, push,
+│   │   │                    # stockAlerts, stockNotifications, delivery, analytics,
+│   │   │                    # guestOrders, productReviews, storage, loyalty, realtime (WS),
+│   │   │                    # orderEvents, settings, audit
 │   │   └── seed.js
-│   └── test-e2e.mjs         # 47-assertion feature test
+│   └── test-e2e.mjs         # 348-assertion end-to-end feature test
 ├── scripts/                 # setup.sh (macOS/Linux/WSL) + setup.ps1 (Windows)
 ├── RENDER_DEPLOY.md         # step-by-step Render + Postgres deployment
 └── WINDOWS_SETUP.md         # Windows / VS Code instructions

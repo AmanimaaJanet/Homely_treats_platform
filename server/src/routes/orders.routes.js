@@ -69,6 +69,25 @@ async function resolveUnitPrice(product, sizeLabel) {
 // ---------------------------------------------------------------------------
 // POST /api/orders  — create an order (guest or signed-in)
 // ---------------------------------------------------------------------------
+/**
+ * POST /api/orders/guest-hint { email }
+ *
+ * After a guest checks out we offer to keep their order history — this says whether
+ * that email already has an account, so they are sent to sign in instead of being
+ * asked to register twice. It never reveals anything else about the address.
+ */
+router.post('/guest-hint', async (req, res) => {
+  try {
+    const email = String(req.body?.email || '').toLowerCase().trim();
+    if (!email) return res.status(400).json({ error: 'An email address is required' });
+    const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    res.json({ hasAccount: Boolean(existing) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not check that address' });
+  }
+});
+
 router.post('/', optionalAuth, async (req, res) => {
   try {
     const {

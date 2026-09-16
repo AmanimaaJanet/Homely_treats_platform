@@ -16,6 +16,9 @@ export default function Orders() {
   const [status, setStatus] = useState('ALL');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
+  // Printing is a link, not a modal: /admin/print/:id opens a clean page the browser
+  // can send straight to the kitchen printer.
+  const printUrl = (orderId, doc = 'receipt') => `#/admin/print/${orderId}?doc=${doc}`;
   const [refunding, setRefunding] = useState(false);
   const [refundReason, setRefundReason] = useState('');
 
@@ -132,7 +135,7 @@ export default function Orders() {
                 <button
                   className="btn btn-ghost btn-sm"
                   title="Print kitchen ticket"
-                  onClick={() => navigate(`/admin/print/${o.id}?doc=ticket&auto=1`)}
+                  onClick={() => navigate(`/admin/print/${o.id}?doc=kitchen&auto=1`)}
                 >
                   <ChefHat size={14} /> Ticket
                 </button>
@@ -157,7 +160,7 @@ export default function Orders() {
                 </button>
                 <button
                   className="btn btn-secondary btn-sm"
-                  onClick={() => navigate(`/admin/print/${detail.id}?doc=ticket`)}
+                  onClick={() => navigate(`/admin/print/${detail.id}?doc=kitchen`)}
                 >
                   <ChefHat size={15} /> Kitchen ticket
                 </button>

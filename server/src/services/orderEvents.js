@@ -5,6 +5,7 @@ import { sendWhatsApp } from './whatsapp.js';
 import { broadcastOrder } from './realtime.js';
 import { getSettings } from './settings.js';
 import { restoreStock } from './stock.js';
+import { sendPushToUser } from './push.js';
 import { config } from '../config.js';
 import { refundTransaction } from './paystack.js';
 
@@ -52,6 +53,9 @@ export async function notifyCustomer(order, type, { note = '' } = {}) {
       },
     },
     READY: {
+      pushBody: order.deliveryMethod === 'DELIVERY'
+        ? `Order ${order.id} is ready — our rider is on the way.`
+        : `Order ${order.id} is ready. Please collect it from our shop.`,
       sms: `Homely Treats: Great news! Order ${order.id} is ready for ${order.deliveryMethod === 'DELIVERY' ? 'delivery' : 'pickup'}. ${trackUrl}`,
       email: {
         headline: 'Your order is ready!',
@@ -64,6 +68,7 @@ export async function notifyCustomer(order, type, { note = '' } = {}) {
       },
     },
     OUT_FOR_DELIVERY: {
+      pushBody: `Order ${order.id} is on the way with ${order.riderName || 'our rider'}.`,
       sms: `Homely Treats: ${order.riderName || 'Your order'} is on the way! Track: ${trackUrl}`,
       email: {
         headline: 'Out for delivery',
@@ -88,6 +93,7 @@ export async function notifyCustomer(order, type, { note = '' } = {}) {
       },
     },
     REFUNDED: {
+      pushBody: `Refund of GH₵ ${Number(order.refundAmount || order.total).toFixed(2)} issued for ${order.id}.`,
       sms: `Homely Treats: A refund of GH₵ ${Number(order.refundAmount || order.total).toFixed(2)} has been issued for order ${order.id}. It can take a few working days to reflect.`,
       email: {
         headline: 'Refund issued',
@@ -121,6 +127,21 @@ export async function notifyCustomer(order, type, { note = '' } = {}) {
       orderId: order.id,
       type,
     });
+  }
+
+  // Web push, for customers who installed the app: free, instant, and it lands on the
+  // lock screen — the channel that actually gets read for "your cake is ready".
+  if (order.userId && settings.enablePush !== false) {
+    try {
+      await sendPushToUser(order.userId, {
+        title: m.email.headline,
+        body: (m.pushBody || m.sms || '').slice(0, 160),
+        url: `/track?ref=${order.id}`,
+        tag: `order-${order.id}`,
+      });
+    } catch (err) {
+      console.error('[push] order notification failed:', err.message);
+    }
   }
 }
 
