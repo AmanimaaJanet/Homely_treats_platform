@@ -55,11 +55,17 @@ throwaway addresses can register, order, and earn loyalty points.
 **Build:** require a verified email to sign in to an account (guest checkout still
 works), plus a friendly "resend verification" prompt. _Effort: S._
 
-### 5. Reviews can be spammed, and can't be moderated 🟠
-`POST /api/reviews` has no rate limit, and there's no admin screen to hide or delete a
-review — so one angry customer can post repeatedly with no recourse.
-**Build:** per-user + per-order review limits, one review per delivered order, admin
-moderation (hide / delete / reply), and optional "verified purchase" badge. _Effort: S._
+### 5. Reviews — spam limits and moderation ✅ **SHIPPED**
+`POST /api/reviews` is limited to 10 submissions per hour per IP, one review per
+delivered order, and reviews now carry a moderation status: **PENDING / APPROVED /
+HIDDEN**. With "Publish reviews immediately" on (the default) a review appears at once;
+switch it off in Settings and every new review waits in **Admin → Reviews**, which shows
+Awaiting review / Published / Hidden with counts and Publish, Hide and Re-queue actions.
+Only approved reviews reach the storefront or the public rating, and hiding keeps the
+row rather than destroying it — the difference between moderating and deleting. The
+customer keeps their bonus points either way, and the sidebar badge shows how many
+reviews are waiting so nothing sits unnoticed. _Still to consider: a reply field and a
+"verified purchase" badge._
 
 ### 6. No audit log for admin actions 🟠 _accountability_
 Nothing records who changed a price, cancelled an order, marked something delivered,
@@ -117,16 +123,24 @@ production.
 mapping in Settings, graceful SMS/email fallback when a template isn't approved, and a
 "test send" button. _Effort: M._
 
-### 13. Automatic low-stock alerts
-Today low stock is a passive panel on the Products page.
-**Build:** per-product reorder threshold, daily digest email to the bakery, and an
-in-admin alert badge — driven by the real stock decrements from item 2. _Effort: S._
+### 13. Automatic low-stock alerts — ✅ **SHIPPED**
+A reorder threshold (default 5, editable in Settings) drives everything. The dashboard
+opens with a live panel listing what is at or below the threshold, sold-out items
+called out separately, with an "Email me now" button; the hourly server job emails the
+bakery a daily digest of the same list. Alerts are driven by the real stock decrements
+from item 2, so a product drops out of the panel the moment it is restocked. Because a
+sleeping free-tier host can miss a scheduled tick, the dashboard list is always live —
+the digest is a convenience, not the only line of defence.
 
-### 14. Receipts and kitchen tickets
-Customers have no printable proof of purchase and the kitchen has no printable spec
-sheet for custom orders (photo, inscription, flavours, date, zone).
-**Build:** a print-optimised receipt (customer + bakery copy) and a kitchen ticket per
-order, both with a "Print" button in admin; optional PDF. _Effort: M._
+### 14. Receipts and kitchen tickets — ✅ **SHIPPED**
+Every order row and the order detail modal carry **Receipt** and **Ticket** buttons
+(`/admin/print/:id?doc=receipt|ticket`). The receipt is a proper branded document: the
+bakery's details, the customer, delivery address and zone, line items with
+size/flavour/icing and cake inscription, the subtotal → delivery → discount → loyalty
+→ total breakdown with the amount written in words, and the payment method, status and
+reference. The kitchen ticket drops pricing and leads with the "needed by" date, the
+full spec per line and the notes box. Both render as an A5 sheet and print with the
+sidebar and toolbar hidden, so only the document reaches paper.
 
 ### 15. Delivery rules that match real operations
 Zones and fees exist; what's missing: delivery outside Accra, more than one pickup
@@ -139,11 +153,19 @@ Customers pick a date but not a time, and lead time isn't enforced per product.
 **Build:** configurable slots per day (with capacity caps), per-product minimum lead
 time, blackout dates (holidays), and slot validation at checkout. _Effort: M._
 
-### 17. Refunds
-There's no way to refund a Paystack payment or record one, which you'll need the first
-time an order goes wrong.
-**Build:** Paystack refund API call from the order screen, refund record + reason,
-automatic customer notification, and partial refunds. _Effort: M._
+### 17. Refunds — ✅ **SHIPPED**
+Admin → Orders → *Start a refund* refunds a paid order in full. Paystack payments go
+straight back to the original mobile-money wallet or card and the refund reference is
+kept; payments taken offline (cash, or a transfer you confirmed by hand) are recorded
+as settled offline. A refused Paystack refund returns a clear error and leaves the
+order **paid** — money is never marked returned when it wasn't. A refund also returns
+the stock, writes a timeline entry, emails/SMSes/WhatsApps the customer and lands in
+the activity log. Refunded orders drop out of every revenue figure and are reported
+separately, so turnover is never overstated.
+
+_Deliberately not built: partial refunds._ A part-refunded order would still sit in the
+"paid" bucket and quietly inflate revenue in every report; odd amounts are better
+settled from the Paystack dashboard, and the decision is explained in the code.
 
 ### 18. Push notifications (PWA)
 SMS costs money and Textbelt's free tier is blocked for Ghana. Web push is free and
@@ -270,10 +292,18 @@ verified separately: 5 forgot-password requests then 429.
 
 ### Phase 2 — selling properly: in progress
 
+> Running total: **186 end-to-end assertions passing** (`node test-e2e.mjs` from `server/`).
+
 | # | Item | Status |
 |---|---|---|
 | 11 | **Product photos and galleries** | ✅ shipped |
-| 14 | Receipts and kitchen tickets | next |
-| 13 | Automatic low-stock alerts | next |
-| 5 | Review moderation in admin | partially done (limits shipped; moderation screen still to build) |
-| 17 | Refunds | not started |
+| 13 | **Automatic low-stock alerts** | ✅ shipped |
+| 14 | **Receipts and kitchen tickets** | ✅ shipped |
+| 5 | **Review moderation in admin** | ✅ shipped (rate limits + approval queue) |
+| 17 | **Refunds** | ✅ shipped (full refunds; see note above) |
+| 12 | WhatsApp message templates | next — needed before WhatsApp works in production |
+| 15 | Delivery rules (min order, free over, more branches) | next |
+| 16 | Collection / delivery time slots | next |
+| 18 | Push notifications (PWA) | planned |
+| 19 | Reviews on product pages | planned |
+| 20 | Deeper sales analytics | planned |
