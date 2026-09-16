@@ -2,11 +2,12 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { getSettings } from '../services/settings.js';
+import { reviewLimiter } from '../middleware/security.js';
 
 const router = Router();
 
 // POST /api/reviews  { orderId, rating, comment }  — only for delivered orders you own
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, reviewLimiter, async (req, res) => {
   try {
     const settings = await getSettings();
     if (!settings.enableReviews) return res.status(403).json({ error: 'Reviews are currently disabled' });

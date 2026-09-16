@@ -10,6 +10,7 @@ import { WebSocket } from 'ws';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import fs from 'fs';
+import crypto from 'crypto';
 import path from 'path';
 
 const prisma = new PrismaClient();
@@ -42,7 +43,7 @@ let failed = 0;
 let adminToken = null;
 let janetToken = null;
 
-const created = { productIds: [], zoneIds: [], promoIds: [], orderIds: [], userId: null, photoFiles: [] };
+const created = { productIds: [], zoneIds: [], promoIds: [], orderIds: [], userId: null, userId2: null, riderIds: [], photoFiles: [] };
 
 function check(name, ok, extra = '') {
   if (ok) {
@@ -70,19 +71,46 @@ async function req(pathname, { method = 'GET', body, token, raw = false } = {}) 
 }
 
 async function teardown() {
+  // Some pushes record an id only when the call succeeded, so filter out the
+  // undefined entries — a single undefined breaks Prisma's `in` filter and would
+  // silently abandon the rest of the cleanup.
+  const ids = (list) => list.filter((x) => typeof x === 'string' && x.length > 0);
   try {
     if (created.userId) await prisma.review.deleteMany({ where: { userId: created.userId } });
-    if (created.orderIds.length) await prisma.order.deleteMany({ where: { id: { in: created.orderIds } } });
-    if (created.productIds.length) {
-      await prisma.productSize.deleteMany({ where: { productId: { in: created.productIds } } });
-      await prisma.product.deleteMany({ where: { id: { in: created.productIds } } });
+    if (created.userId2) await prisma.review.deleteMany({ where: { userId: created.userId2 } });
+
+    const orderIds = ids(created.orderIds);
+    if (orderIds.length) {
+      await prisma.promoRedemption.deleteMany({ where: { orderId: { in: orderIds } } });
+      await prisma.order.deleteMany({ where: { id: { in: orderIds } } });
     }
-    if (created.zoneIds.length) await prisma.deliveryZone.deleteMany({ where: { id: { in: created.zoneIds } } });
-    if (created.promoIds.length) await prisma.promo.deleteMany({ where: { id: { in: created.promoIds } } });
+    // Guest orders raised by the promo/stock blocks (keys contain the run marker).
+    await prisma.promoRedemption.deleteMany({ where: { customerKey: { contains: rnd.toLowerCase() } } });
+
+    // Products can only go once nothing references them.
+    const productIds = ids(created.productIds);
+    if (productIds.length) {
+      await prisma.productSize.deleteMany({ where: { productId: { in: productIds } } });
+      await prisma.product.deleteMany({ where: { id: { in: productIds } } });
+    }
+    const zoneIds = ids(created.zoneIds);
+    if (zoneIds.length) await prisma.deliveryZone.deleteMany({ where: { id: { in: zoneIds } } });
+    const promoIds = ids(created.promoIds);
+    if (promoIds.length) await prisma.promo.deleteMany({ where: { id: { in: promoIds } } });
+
+    const riderIds = ids(created.riderIds);
+    // Orders assigned to test riders are gone by now, so the accounts can go.
+    if (riderIds.length) {
+      await prisma.order.updateMany({ where: { riderId: { in: riderIds } }, data: { riderId: null } });
+      await prisma.user.deleteMany({ where: { id: { in: riderIds } } });
+    }
     if (created.userId) await prisma.user.deleteMany({ where: { id: created.userId } });
+    if (created.userId2) await prisma.user.deleteMany({ where: { id: created.userId2 } });
+
     for (const f of created.photoFiles) await fs.promises.unlink(f).catch(() => {});
   } catch (err) {
     console.error('⚠ teardown error:', err.message);
+    failed += 1; // surface it — a dirty database must never pass silently
   }
 }
 
@@ -358,18 +386,74 @@ async function main() {
     const setReady = await req(`/api/admin/orders/${riderOrderId}/status`, { method: 'PATCH', token: adminToken, body: { status: 'READY' } });
     check('Admin sets order READY', setReady.data?.order?.status === 'READY');
 
-    const { data: rides } = await req('/api/rider/orders');
-    const ready = rides?.orders?.find((o) => o.id === riderOrderId);
-    check('Rider sees READY delivery', !!ready && ready.status === 'READY', riderOrderId);
+    // --- Security: the rider app must be closed to anonymous callers --------
+    const anonList = await req('/api/rider/orders');
+    check('Anonymous rider access blocked (401)', anonList.status === 401, `status ${anonList.status}`);
+    const anonAccept = await req(`/api/rider/${riderOrderId}/accept`, { method: 'POST', body: { riderName: 'Impostor' } });
+    check('Anonymous accept blocked (401)', anonAccept.status === 401, `status ${anonAccept.status}`);
+    const wrongRole = await req('/api/rider/orders', { token: janetToken });
+    check('Customer cannot use rider endpoints (403)', wrongRole.status === 403, `status ${wrongRole.status}`);
 
-    const accept = await req(`/api/rider/${riderOrderId}/accept`, { method: 'POST', body: { riderName: 'E2E Rider', riderPhone: '0240000000' } });
+    // --- Admin creates a rider account (no rider self-signup exists) --------
+    const riderEmail = `rider.account.${rnd.toLowerCase()}@test.com`;
+    const mkRider = await req('/api/admin/riders', {
+      method: 'POST', token: adminToken,
+      body: { fullName: 'E2E Rider', email: riderEmail, phone: '0240000000', password: 'Rider12345' },
+    });
+    check('Admin creates rider account', mkRider.status === 201 && mkRider.data?.rider?.id, JSON.stringify(mkRider.data));
+    if (mkRider.data?.rider?.id) created.riderIds.push(mkRider.data.rider.id);
+
+    const weakRiderPw = await req('/api/admin/riders', {
+      method: 'POST', token: adminToken,
+      body: { fullName: 'Weak', email: `weak.rider.${rnd.toLowerCase()}@test.com`, phone: '0240000001', password: 'short' },
+    });
+    check('Rider creation rejects weak password', weakRiderPw.status === 400, `status ${weakRiderPw.status}`);
+
+    const riderLogin = await req('/api/auth/login', { method: 'POST', body: { email: riderEmail, password: 'Rider12345' } });
+    const riderToken = riderLogin.data?.token;
+    check('Rider can sign in', !!riderToken && riderLogin.data?.user?.role === 'RIDER');
+
+    const { data: rides } = await req('/api/rider/orders', { token: riderToken });
+    const ready = rides?.available?.find((o) => o.id === riderOrderId);
+    check('Rider sees READY delivery', !!ready && ready.status === 'READY', riderOrderId);
+    check('Unclaimed job hides customer address/phone',
+      !!ready && ready.deliveryAddress === undefined && ready.guestPhone === undefined);
+
+    const accept = await req(`/api/rider/${riderOrderId}/accept`, { method: 'POST', token: riderToken });
     check('Rider accepts → OUT_FOR_DELIVERY', accept.data?.order?.status === 'OUT_FOR_DELIVERY' && accept.data?.order?.riderName === 'E2E Rider');
+
+    const mine = await req('/api/rider/orders', { token: riderToken });
+    const claimedJob = mine.data?.mine?.find((o) => o.id === riderOrderId);
+    check('Accepted job reveals full details to its rider', !!claimedJob && !!claimedJob.deliveryAddress);
+
+    const secondRiderEmail = `rider.two.${rnd.toLowerCase()}@test.com`;
+    const mkRider2 = await req('/api/admin/riders', {
+      method: 'POST', token: adminToken,
+      body: { fullName: 'Second Rider', email: secondRiderEmail, phone: '0240000002', password: 'Rider12345' },
+    });
+    if (mkRider2.data?.rider?.id) created.riderIds.push(mkRider2.data.rider.id);
+    const rider2Login = await req('/api/auth/login', { method: 'POST', body: { email: secondRiderEmail, password: 'Rider12345' } });
+    const steal = await req(`/api/rider/${riderOrderId}/accept`, { method: 'POST', token: rider2Login.data?.token });
+    check('Second rider cannot steal an accepted job', steal.status === 409, `status ${steal.status}`);
 
     const track = await req(`/api/orders/track/${riderOrderId}`);
     check('Timeline includes out-for-delivery step', track.data?.timeline?.some((s) => s.key === 'OUT_FOR_DELIVERY' && s.done));
 
-    const deliver = await req(`/api/rider/${riderOrderId}/deliver`, { method: 'POST' });
+    const wrongDeliver = await req(`/api/rider/${riderOrderId}/deliver`, { method: 'POST', token: rider2Login.data?.token });
+    check('Only the assigned rider can mark delivered', wrongDeliver.status === 403, `status ${wrongDeliver.status}`);
+
+    const deliver = await req(`/api/rider/${riderOrderId}/deliver`, { method: 'POST', token: riderToken });
     check('Rider marks delivered', deliver.data?.order?.status === 'DELIVERED');
+
+    // Suspending a rider must cut access immediately, even with a live token.
+    if (mkRider.data?.rider?.id) {
+      const suspend = await req(`/api/admin/riders/${mkRider.data.rider.id}`, { method: 'PATCH', token: adminToken, body: { active: false } });
+      check('Admin suspends rider', suspend.data?.rider?.active === false);
+      const afterSuspend = await req('/api/rider/orders', { token: riderToken });
+      check('Suspended rider loses access immediately', afterSuspend.status === 403, `status ${afterSuspend.status}`);
+      const suspendLogin = await req('/api/auth/login', { method: 'POST', body: { email: riderEmail, password: 'Rider12345' } });
+      check('Suspended rider cannot sign in', suspendLogin.status === 403, `status ${suspendLogin.status}`);
+    }
   }
 
   // ---------------------------------------------------------------- 13. Sales reports + CSV
@@ -403,7 +487,225 @@ async function main() {
     check('Points refunded on cancel (+40)', ptsAfterCancel === ptsAfterRedeem + 40, `${ptsAfterRedeem} → ${ptsAfterCancel}`);
   }
 
-  // ---------------------------------------------------------------- 15. Unauthorised guard
+  // ---------------------------------------------------------------- 15. Stock control
+  {
+    // A dedicated product so we can drive stock down and back up.
+    const mk = await req('/api/admin/products', {
+      method: 'POST', token: adminToken,
+      body: { name: `${PROD_VANILLA} STOCK`, category: 'CAKE', basePrice: 100, icon: 'Cake',
+              inStock: true, stock: 3, sizeOptions: [] },
+    });
+    const stockId = mk.data?.product?.id;
+    created.productIds.push(stockId);
+    check('Stock product created with 3 units', mk.data?.product?.stock === 3);
+
+    const order = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: stockId, quantity: 2 }],
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE2, paymentMethod: 'COD',
+        guest: { name: 'Stock Test', email: `stock-${rnd.toLowerCase()}@test.com`, phone: '0550004444' },
+      },
+    });
+    created.orderIds.push(order.data?.order?.id);
+    check('Order for 2 of 3 succeeds', order.status === 201, `status ${order.status}`);
+
+    const after = await req(`/api/products`);
+    const p = after.data?.products?.find((x) => x.id === stockId);
+    check('Stock decremented 3 → 1', p?.stock === 1, `stock=${p?.stock}`);
+
+    const tooMany = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: stockId, quantity: 2 }],
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE2, paymentMethod: 'COD',
+        guest: { name: 'Stock Test', email: `stock2-${rnd.toLowerCase()}@test.com`, phone: '0550004445' },
+      },
+    });
+    check('Overselling is rejected (409)', tooMany.status === 409, `status ${tooMany.status}: ${tooMany.data?.error}`);
+    created.orderIds.push(tooMany.data?.order?.id);
+
+    const p2 = (await req('/api/products')).data?.products?.find((x) => x.id === stockId);
+    check('Failed order did not consume stock', p2?.stock === 1, `stock=${p2?.stock}`);
+
+    // Cancelling must return the reserved units.
+    const cancel = await req(`/api/orders/${order.data.order.id}/cancel`, { method: 'POST', token: adminToken });
+    check('Admin cancels stock order', cancel.data?.order?.status === 'CANCELLED');
+    const p3 = (await req('/api/products')).data?.products?.find((x) => x.id === stockId);
+    check('Stock restored on cancel 1 → 3', p3?.stock === 3, `stock=${p3?.stock}`);
+
+    // Selling out auto-marks the product out of stock.
+    const drain = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: stockId, quantity: 3 }],
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE2, paymentMethod: 'COD',
+        guest: { name: 'Stock Test', email: `stock3-${rnd.toLowerCase()}@test.com`, phone: '0550004446' },
+      },
+    });
+    created.orderIds.push(drain.data?.order?.id);
+    const p4 = (await req('/api/products')).data?.products?.find((x) => x.id === stockId);
+    check('Selling out sets inStock=false', p4?.stock === 0 && p4?.inStock === false, `stock=${p4?.stock} inStock=${p4?.inStock}`);
+
+    const soldOut = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: stockId, quantity: 1 }],
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE2, paymentMethod: 'COD',
+        guest: { name: 'Stock Test', email: `stock4-${rnd.toLowerCase()}@test.com`, phone: '0550004447' },
+      },
+    });
+    check('Sold-out product cannot be ordered', soldOut.status === 400 || soldOut.status === 409, `status ${soldOut.status}`);
+  }
+
+  // ---------------------------------------------------------------- 16. Password reset
+  {
+    const resetEmail = `reset.${rnd.toLowerCase()}@test.com`;
+    const reg = await req('/api/auth/register', {
+      method: 'POST',
+      body: { fullName: 'Reset Test', email: resetEmail, phone: '0550005555', password: 'Original123' },
+    });
+    check('Reset-test account registered', reg.status === 201, `status ${reg.status}`);
+
+    const unknown = await req('/api/auth/forgot-password', { method: 'POST', body: { email: `nobody.${rnd}@test.com` } });
+    check('Forgot-password does not leak unknown emails', unknown.status === 200 && unknown.data?.ok === true);
+    check('Unknown email gives the same response body',
+      JSON.stringify(unknown.data) === JSON.stringify({ ok: true, message: 'If that email is registered, a reset link is on its way.' }));
+
+    const forgot = await req('/api/auth/forgot-password', { method: 'POST', body: { email: resetEmail } });
+    check('Forgot-password accepted for real account', forgot.status === 200 && forgot.data?.ok === true);
+
+    // Only the hash is stored — read it straight from the DB as the "emailed" token stand-in.
+    const row = await prisma.user.findUnique({ where: { email: resetEmail } });
+    check('Reset token stored as a hash, never raw',
+      !!row?.resetTokenHash && row.resetTokenHash.length === 64 && !row.resetTokenHash.includes('='));
+    check('Reset token expires in the future', !!row?.resetTokenExpires && row.resetTokenExpires > new Date());
+
+    const badToken = await req('/api/auth/reset-password', { method: 'POST', body: { token: 'deadbeef'.repeat(8), password: 'BrandNew123' } });
+    check('Invalid reset token rejected (400)', badToken.status === 400, `status ${badToken.status}`);
+
+    const weakPw = await req('/api/auth/reset-password', { method: 'POST', body: { token: 'x'.repeat(64), password: 'weak' } });
+    check('Reset enforces password strength', weakPw.status === 400);
+
+    const exp = await prisma.user.update({
+      where: { id: row.id },
+      data: { resetTokenHash: row.resetTokenHash, resetTokenExpires: new Date(Date.now() - 60_000) },
+    });
+    const expired = await req('/api/auth/reset-password', { method: 'POST', body: { token: 'x'.repeat(64), password: 'BrandNew123' } });
+    check('Expired reset link rejected', expired.status === 400);
+
+    // Simulate the real flow: swap in a known raw token whose hash we store.
+    const raw = crypto.randomBytes(32).toString('hex');
+    const hashed = crypto.createHash('sha256').update(raw).digest('hex');
+    await prisma.user.update({
+      where: { id: row.id },
+      data: { resetTokenHash: hashed, resetTokenExpires: new Date(Date.now() + 10 * 60_000) },
+    });
+    const ok = await req('/api/auth/reset-password', { method: 'POST', body: { token: raw, password: 'BrandNew123' } });
+    check('Valid reset token changes the password', ok.status === 200 && ok.data?.ok === true, JSON.stringify(ok.data));
+
+    const oldLogin = await req('/api/auth/login', { method: 'POST', body: { email: resetEmail, password: 'Original123' } });
+    check('Old password no longer works', oldLogin.status === 401, `status ${oldLogin.status}`);
+    const newLogin = await req('/api/auth/login', { method: 'POST', body: { email: resetEmail, password: 'BrandNew123' } });
+    check('New password works', newLogin.status === 200 && !!newLogin.data?.token);
+
+    const afterUse = await prisma.user.findUnique({ where: { email: resetEmail } });
+    check('Reset token cleared after use (single use)', afterUse?.resetTokenHash === null && afterUse?.resetTokenExpires === null);
+
+    const replay = await req('/api/auth/reset-password', { method: 'POST', body: { token: raw, password: 'ReplayPass123' } });
+    check('Reset token cannot be replayed', replay.status === 400, `status ${replay.status}`);
+
+    created.userId2 = row.id;
+  }
+
+  // ---------------------------------------------------------------- 17. Promo abuse controls
+  {
+    // Minimum spend
+    const minSpendCode = `MIN${rnd}`.toUpperCase().slice(0, 10);
+    const mkMin = await req('/api/admin/promos', {
+      method: 'POST', token: adminToken,
+      body: { code: minSpendCode, type: 'PERCENT', value: 10, active: true, minSpend: 500 },
+    });
+    created.promoIds.push(mkMin.data?.promo?.id);
+    check('Promo created with minimum spend', mkMin.status === 201 && mkMin.data?.promo?.minSpend === 500);
+
+    const under = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: vanillaId, quantity: 1, size: '6 inch (serves 8)' }],
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE2, paymentMethod: 'COD', promoCode: minSpendCode,
+        guest: { name: 'Promo Test', email: `promo1-${rnd.toLowerCase()}@test.com`, phone: '0550006661' },
+      },
+    });
+    check('Below minimum spend is rejected', under.status === 400 && /minimum/i.test(under.data?.error || ''), under.data?.error);
+
+    // Per-customer limit
+    const perCustCode = `ONE${rnd}`.toUpperCase().slice(0, 10);
+    const mkPer = await req('/api/admin/promos', {
+      method: 'POST', token: adminToken,
+      body: { code: perCustCode, type: 'FIXED', value: 20, active: true, perCustomerLimit: 1 },
+    });
+    created.promoIds.push(mkPer.data?.promo?.id);
+    check('Promo created with per-customer limit', mkPer.data?.promo?.perCustomerLimit === 1);
+
+    const custEmail = `promo2-${rnd.toLowerCase()}@test.com`;
+    const first = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: vanillaId, quantity: 1, size: '6 inch (serves 8)' }],
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE2, paymentMethod: 'COD', promoCode: perCustCode,
+        guest: { name: 'Promo Test', email: custEmail, phone: '0550006662' },
+      },
+    });
+    created.orderIds.push(first.data?.order?.id);
+    check('First use of per-customer code succeeds', first.status === 201, `status ${first.status}`);
+    const second = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: vanillaId, quantity: 1, size: '6 inch (serves 8)' }],
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE2, paymentMethod: 'COD', promoCode: perCustCode,
+        guest: { name: 'Promo Test', email: custEmail, phone: '0550006662' },
+      },
+    });
+    created.orderIds.push(second.data?.order?.id);
+    check('Second use by same customer is rejected', second.status === 400 && /already used/i.test(second.data?.error || ''), second.data?.error);
+
+    // Cancelling releases the promo for that customer
+    const cancelFirst = await req(`/api/orders/${first.data.order.id}/cancel`, { method: 'POST', token: adminToken });
+    check('Promo order cancelled', cancelFirst.data?.order?.status === 'CANCELLED');
+    const afterRelease = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: vanillaId, quantity: 1, size: '6 inch (serves 8)' }],
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE2, paymentMethod: 'COD', promoCode: perCustCode,
+        guest: { name: 'Promo Test', email: custEmail, phone: '0550006662' },
+      },
+    });
+    created.orderIds.push(afterRelease.data?.order?.id);
+    check('Cancelling frees the promo for reuse', afterRelease.status === 201, `status ${afterRelease.status}: ${afterRelease.data?.error}`);
+
+    // Percentage sanity
+    const silly = await req('/api/admin/promos', {
+      method: 'POST', token: adminToken,
+      body: { code: `BAD${rnd}`.toUpperCase().slice(0, 10), type: 'PERCENT', value: 150 },
+    });
+    check('Promo above 100% rejected', silly.status === 400);
+  }
+
+  // ---------------------------------------------------------------- 18. Audit log
+  {
+    const { status, data } = await req('/api/admin/audit?limit=50', { token: adminToken });
+    check('Audit log readable by admin', status === 200 && Array.isArray(data?.logs));
+    const actions = (data?.logs || []).map((l) => l.action);
+    check('Audit recorded product creation', actions.includes('PRODUCT_CREATE'));
+    check('Audit recorded order status change', actions.includes('ORDER_STATUS'));
+    check('Audit recorded promo creation', actions.includes('PROMO_CREATE'));
+    check('Audit recorded rider creation', actions.includes('RIDER_CREATE'));
+    const anon = await req('/api/admin/audit');
+    check('Audit log blocked to anonymous callers', anon.status === 401);
+  }
+
+  // ---------------------------------------------------------------- 19. Unauthorised guard
   {
     const r = await req('/api/admin/stats');
     check('Admin endpoints protected (401)', r.status === 401);

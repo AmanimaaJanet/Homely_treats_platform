@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Cake, BarChart3, ClipboardList, Package, Users, Ticket, TrendingUp, Settings, LogOut } from 'lucide-react';
+import { Cake, BarChart3, ClipboardList, Package, Users, Ticket, TrendingUp, Settings, LogOut, Bike, ScrollText } from 'lucide-react';
 import { useApp } from '../../store.jsx';
 
 const MENU = [
@@ -10,6 +10,8 @@ const MENU = [
   { to: '/admin/customers', label: 'Customers', icon: Users },
   { to: '/admin/promos', label: 'Promo Codes', icon: Ticket },
   { to: '/admin/reports', label: 'Reports', icon: TrendingUp },
+  { to: '/admin/riders', label: 'Riders', icon: Bike },
+  { to: '/admin/audit', label: 'Activity log', icon: ScrollText },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 

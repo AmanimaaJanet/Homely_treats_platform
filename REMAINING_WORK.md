@@ -2,6 +2,11 @@
 
 _Audited 16 September 2026 against the running codebase._
 
+> **Status update — P0 build in progress.** Items **1 (rider auth)**, **2 (stock)**,
+> **3 (password reset)**, **5 (review limits)**, **6 (audit log)**, **7 (promo controls)**
+> and **8 (legal pages)** are now **built, tested and committed**. See
+> "P0 progress" at the bottom for exactly what shipped and what is still open.
+
 ## Where the app stands today
 
 **Done and working:** storefront (home, menu, custom order, cart, checkout, tracking),
@@ -201,3 +206,34 @@ past guest orders by email. _Effort: S._
   performance, a11y, SEO).
 
 Every phase ends with the E2E suite green and a fresh zip.
+
+---
+
+## P0 progress
+
+### Shipped
+
+| # | Item | What was built |
+|---|---|---|
+| 1 | **Rider authentication** | Riders are real accounts (`RIDER` role) created by an admin — there is no rider self-signup. Every rider endpoint requires an active rider. Unclaimed jobs expose only zone/value/item count; the customer's address and phone are revealed **only to the rider who accepts**. Accepting uses a conditional update, so two riders can't claim the same job; only the assigned rider can mark it delivered. Suspending a rider cuts access immediately (verified with a live token). 13 new assertions cover all of it, including that the old anonymous access now returns 401. |
+| 2 | **Stock control** | Stock is decremented atomically inside the order transaction (`updateMany` guarded by `stock >= qty`, aggregated per product so two lines of the same cake are satisfied from one pool). Overselling is rejected with a clear message; a failed order consumes no stock; cancelling returns it; selling out auto-marks the product `inStock = false`. |
+| 3 | **Password reset** | `/auth/forgot-password` + `/auth/reset-password`. Only a **SHA-256 hash** of the token is stored; the raw token exists only in the email. Single-use, 30-minute expiry, no account enumeration (identical response for unknown addresses), rate-limited to 5 requests/hour. Changing a password or completing a reset clears outstanding tokens. |
+| 5 | **Review abuse** | `reviewLimiter` (10/hour) on review submission. |
+| 6 | **Audit log** | Append-only `AuditLog` recording actor, action, entity, detail, IP and time for order status changes, product create/update/de-list, promo create/delete, settings changes and rider create/suspend. New **Admin → Activity log** screen with search and action filters. |
+| 7 | **Promo abuse controls** | Minimum spend, per-customer limit, first-order-only and expiry, backed by a `PromoRedemption` ledger keyed on user id or guest email/phone. Cancelling an order releases the use so a customer isn't punished for a cancelled basket. Admin UI exposes every condition; percentage discounts above 100% are rejected. |
+| 8 | **Legal pages** | `/privacy` and `/terms` written for a Ghanaian bakery under the Data Protection Act 2012 (Act 843) — accurate to what this software actually collects, who it is shared with (Paystack, Resend, SMS/WhatsApp, riders) and for how long. Linked from the footer. **Action for you:** replace the bracketed placeholders (business name, contact details, publish date) before launch. |
+
+### Still open in P0
+
+| # | Item | Why it matters | Effort |
+|---|---|---|---|
+| 4 | **Enforce email verification at sign-in** | Verification emails are sent and can be confirmed, but nothing requires it, so throwaway addresses can still register and order. Needs a decision on whether guest checkout stays fully open (recommended: yes). | S |
+| 9 | **Move sessions to httpOnly cookies** | Tokens currently live in `localStorage`, readable by any injected script. The CSP reduces but does not remove XSS risk. Needs CSRF protection alongside. | M |
+| 10 | **Bot protection on register / forgot-password** | Cloudflare Turnstile (free). Rate limits help; they don't stop determined scripted signups burning Resend quota. | S |
+
+### Testing note
+
+`DISABLE_RATE_LIMITS=true` (documented in `.env.example`) lets the E2E suite run repeatedly
+from one IP without tripping the limiters. It is **deliberately ignored when
+`NODE_ENV=production`**, so it can never weaken a deployed site. Rate limiting itself is
+verified separately: 5 forgot-password requests then 429.

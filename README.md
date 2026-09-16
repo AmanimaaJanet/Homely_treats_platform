@@ -10,7 +10,9 @@ A full-stack bakery ordering platform built from your HTML mockup: **React** fro
 
 **Bakery footage in the design:** the clips in the repo root are optimised to web-friendly files in `client/public/media/` (14 MB → 2.3 MB) and used as ambient design: the home hero and the menu banner play a muted, looping background video, and the "From Our Kitchen" section shows the dough and lamination clips. `VideoBlock` loads video only when scrolled into view, serves a smaller file to phones, pauses when the tab is hidden, and shows a still poster instead for visitors who set "reduce motion".
 
-**What's left to build:** see **[REMAINING_WORK.md](REMAINING_WORK.md)** — a prioritised gap analysis (P0 launch blockers first) with effort estimates.
+**What's left to build:** see **[REMAINING_WORK.md](REMAINING_WORK.md)** — a prioritised gap analysis (P0 launch blockers first) with effort estimates, plus a **P0 progress** section showing what has already shipped.
+
+**Roles:** customers sign up themselves; **riders** and **admins** cannot self-register. Admins are created by the seed script and riders are created by an admin in **Admin → Riders** (each rider then signs in at `/rider`). Rider endpoints require an active rider account, and a rider only sees a customer's address and phone number after accepting that delivery.
 
 ---
 

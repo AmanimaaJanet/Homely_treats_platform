@@ -4,6 +4,7 @@ import { sendSms } from './sms.js';
 import { sendWhatsApp } from './whatsapp.js';
 import { broadcastOrder } from './realtime.js';
 import { getSettings } from './settings.js';
+import { restoreStock } from './stock.js';
 import { config } from '../config.js';
 
 /**
@@ -109,13 +110,68 @@ export async function notifyCustomer(order, type, { note = '' } = {}) {
   }
 }
 
+/**
+ * Move an order to a new status. This is the ONLY path that changes status, so
+ * cancellation side-effects (stock restore, loyalty refund) can never be missed.
+ */
 export async function applyStatus(orderId, status, note) {
+  const before = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { items: true },
+  });
+  if (!before) throw Object.assign(new Error('Order not found'), { status: 404 });
+
   const order = await prisma.order.update({
     where: { id: orderId },
     data: { status, updatedAt: new Date() },
     include: { user: true, items: true },
   });
   await recordEvent(orderId, status, note);
+
+  // --- Cancellation side-effects (guarded so they run exactly once) ---------
+  const cancelledNow = status === 'CANCELLED' && before.status !== 'CANCELLED';
+  if (cancelledNow) {
+    // Return the reserved stock so the items can be sold again.
+    try {
+      await restoreStock(before.items);
+    } catch (err) {
+      console.error('[stock] failed to restore stock for', orderId, err.message);
+    }
+    // Refund loyalty points the customer spent on this order.
+    if (before.pointsRedeemed > 0 && before.userId) {
+      try {
+        await prisma.user.update({
+          where: { id: before.userId },
+          data: { loyaltyPoints: { increment: before.pointsRedeemed } },
+        });
+      } catch (err) {
+        console.error('[loyalty] failed to refund points for', orderId, err.message);
+      }
+    }
+    // A cancelled order must not count towards its promo code's usage limit.
+    if (before.promoCode) {
+      try {
+        await prisma.promo.updateMany({
+          where: { code: before.promoCode, usageCount: { gt: 0 } },
+          data: { usageCount: { decrement: 1 } },
+        });
+        await prisma.promoRedemption.deleteMany({ where: { orderId } });
+      } catch (err) {
+        console.error('[promo] failed to release promo usage for', orderId, err.message);
+      }
+    }
+  }
+  // Points earned on a cancelled/delivered-then-reversed order are also undone.
+  if (cancelledNow && before.pointsEarned > 0 && before.userId) {
+    try {
+      await prisma.user.update({
+        where: { id: before.userId },
+        data: { loyaltyPoints: { decrement: before.pointsEarned } },
+      });
+    } catch (err) {
+      console.error('[loyalty] failed to reverse earned points for', orderId, err.message);
+    }
+  }
 
   const typeMap = {
     CONFIRMED: 'ORDER_CONFIRMED',

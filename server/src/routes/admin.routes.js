@@ -1,13 +1,21 @@
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 import { prisma } from '../prisma.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { applyStatus } from '../services/orderEvents.js';
 import { getSettings, saveSettings } from '../services/settings.js';
+import { audit } from '../services/audit.js';
 import { ORDER_STATUSES } from '../config.js';
 
 const router = Router();
 
 router.use(requireAuth, requireAdmin);
+
+/** Trim a user-supplied string and cap its length (defensive against junk payloads). */
+function clean(value, maxLen = 200) {
+  if (value === undefined || value === null) return '';
+  return String(value).trim().slice(0, maxLen);
+}
 
 // ---------------------------------------------------------------------------
 // Dashboard stats
@@ -129,10 +137,17 @@ router.patch('/orders/:id/status', async (req, res) => {
     const { status } = req.body || {};
     if (!ORDER_STATUSES.includes(status)) return res.status(400).json({ error: 'Invalid status' });
     const order = await applyStatus(req.params.id, status, `Status updated to ${status} by admin`);
+    await audit(req, {
+      action: 'ORDER_STATUS',
+      entity: 'Order',
+      entityId: req.params.id,
+      detail: `Status set to ${status}`,
+    });
     res.json({ order });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message || 'Failed to update status' });
+    const code = err.status === 404 ? 404 : 500;
+    res.status(code).json({ error: err.status === 404 ? 'Order not found' : 'Failed to update status' });
   }
 });
 
@@ -164,6 +179,130 @@ router.get('/customers', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load customers' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Rider accounts — created here only; there is no rider self-signup
+// ---------------------------------------------------------------------------
+const RIDER_SELECT = {
+  id: true,
+  fullName: true,
+  email: true,
+  phone: true,
+  active: true,
+  createdAt: true,
+};
+
+router.get('/riders', async (req, res) => {
+  try {
+    const riders = await prisma.user.findMany({
+      where: { role: 'RIDER' },
+      orderBy: { createdAt: 'desc' },
+      select: RIDER_SELECT,
+    });
+    // Live workload per rider, so the admin can see who is carrying what.
+    const counts = await prisma.order.groupBy({
+      by: ['riderId'],
+      where: { status: 'OUT_FOR_DELIVERY', riderId: { not: null } },
+      _count: { _all: true },
+    });
+    const activeMap = Object.fromEntries(counts.map((c) => [c.riderId, c._count._all]));
+    res.json({ riders: riders.map((r) => ({ ...r, activeDeliveries: activeMap[r.id] || 0 })) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load riders' });
+  }
+});
+
+router.post('/riders', async (req, res) => {
+  try {
+    const fullName = clean(req.body?.fullName, 80);
+    const email = String(req.body?.email || '').toLowerCase().trim();
+    const phone = clean(req.body?.phone, 30);
+    const password = String(req.body?.password || '');
+
+    if (!fullName || !email || !phone) {
+      return res.status(400).json({ error: 'Name, email and phone are required' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters and include a letter and a number' });
+    }
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) return res.status(409).json({ error: 'An account with that email already exists' });
+
+    const rider = await prisma.user.create({
+      data: {
+        fullName,
+        email,
+        phone,
+        passwordHash: await bcrypt.hash(password, 12),
+        role: 'RIDER',
+        emailVerified: true, // created by an admin, so no verification email needed
+      },
+      select: RIDER_SELECT,
+    });
+    await audit(req, {
+      action: 'RIDER_CREATE',
+      entity: 'User',
+      entityId: rider.id,
+      detail: `Created rider ${rider.fullName} <${rider.email}>`,
+    });
+    res.status(201).json({ rider });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create rider' });
+  }
+});
+
+// PATCH /api/admin/riders/:id  { active } — suspend or reinstate a rider
+router.patch('/riders/:id', async (req, res) => {
+  try {
+    const active = req.body?.active === true || req.body?.active === 'true';
+    const rider = await prisma.user.findFirst({ where: { id: req.params.id, role: 'RIDER' } });
+    if (!rider) return res.status(404).json({ error: 'Rider not found' });
+    const updated = await prisma.user.update({
+      where: { id: rider.id },
+      data: { active },
+      select: RIDER_SELECT,
+    });
+    await audit(req, {
+      action: active ? 'RIDER_REINSTATE' : 'RIDER_SUSPEND',
+      entity: 'User',
+      entityId: rider.id,
+      detail: `${active ? 'Reinstated' : 'Suspended'} rider ${rider.fullName}`,
+    });
+    res.json({ rider: updated });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update rider' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Audit log — filterable record of privileged actions
+// ---------------------------------------------------------------------------
+router.get('/audit', async (req, res) => {
+  try {
+    const take = Math.min(200, Math.max(1, parseInt(req.query.limit || '100', 10)));
+    const where = {};
+    if (req.query.action) where.action = String(req.query.action);
+    if (req.query.search) {
+      const q = String(req.query.search).slice(0, 60);
+      where.OR = [
+        { actorEmail: { contains: q, mode: 'insensitive' } },
+        { detail: { contains: q, mode: 'insensitive' } },
+        { entityId: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    const logs = await prisma.auditLog.findMany({ where, orderBy: { createdAt: 'desc' }, take });
+    res.json({ logs });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load audit log' });
   }
 });
 
@@ -204,6 +343,12 @@ router.post('/products', async (req, res) => {
       },
       ...includeSizes,
     });
+    await audit(req, {
+      action: 'PRODUCT_CREATE',
+      entity: 'Product',
+      entityId: product.id,
+      detail: `Created "${product.name}" at GH₵ ${product.basePrice}`,
+    });
     res.status(201).json({ product });
   } catch (err) {
     console.error(err);
@@ -239,8 +384,20 @@ router.put('/products/:id', async (req, res) => {
         data: normalizeSizes(sizeOptions, product.basePrice).map((s) => ({ ...s, productId: product.id })),
       });
       const updated = await prisma.product.findUnique({ where: { id: product.id }, ...includeSizes });
+      await audit(req, {
+        action: 'PRODUCT_UPDATE',
+        entity: 'Product',
+        entityId: product.id,
+        detail: `Updated "${product.name}" (price GH₵ ${product.basePrice}, stock ${product.stock})`,
+      });
       return res.json({ product: updated });
     }
+    await audit(req, {
+      action: 'PRODUCT_UPDATE',
+      entity: 'Product',
+      entityId: product.id,
+      detail: `Updated "${product.name}" (price GH₵ ${product.basePrice}, stock ${product.stock})`,
+    });
     res.json({ product });
   } catch (err) {
     console.error(err);
@@ -250,7 +407,16 @@ router.put('/products/:id', async (req, res) => {
 
 router.delete('/products/:id', async (req, res) => {
   try {
-    await prisma.product.update({ where: { id: req.params.id }, data: { isActive: false } });
+    const product = await prisma.product.update({
+      where: { id: req.params.id },
+      data: { isActive: false },
+    });
+    await audit(req, {
+      action: 'PRODUCT_DELETE',
+      entity: 'Product',
+      entityId: product.id,
+      detail: `De-listed "${product.name}"`,
+    });
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -279,16 +445,40 @@ router.get('/promos', async (req, res) => {
 
 router.post('/promos', async (req, res) => {
   try {
-    const { code, type = 'PERCENT', value, active = true, usageLimit } = req.body || {};
+    const {
+      code,
+      type = 'PERCENT',
+      value,
+      active = true,
+      usageLimit,
+      minSpend,
+      perCustomerLimit,
+      firstOrderOnly,
+      expiresAt,
+    } = req.body || {};
     if (!code || value === undefined) return res.status(400).json({ error: 'Code and value required' });
+    if (!['PERCENT', 'FIXED'].includes(type)) return res.status(400).json({ error: 'Invalid discount type' });
+    const num = Number(value);
+    if (!Number.isFinite(num) || num <= 0) return res.status(400).json({ error: 'Discount value must be greater than zero' });
+    if (type === 'PERCENT' && num > 100) return res.status(400).json({ error: 'Percentage discount cannot exceed 100%' });
     const promo = await prisma.promo.create({
       data: {
-        code: String(code).toUpperCase().trim(),
+        code: String(code).toUpperCase().trim().slice(0, 32),
         type,
-        value: Number(value),
+        value: num,
         active: Boolean(active),
         usageLimit: usageLimit ? parseInt(usageLimit, 10) : null,
+        minSpend: minSpend ? Number(minSpend) : 0,
+        perCustomerLimit: perCustomerLimit ? parseInt(perCustomerLimit, 10) : null,
+        firstOrderOnly: Boolean(firstOrderOnly),
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
       },
+    });
+    await audit(req, {
+      action: 'PROMO_CREATE',
+      entity: 'Promo',
+      entityId: promo.id,
+      detail: `Created promo ${promo.code} (${promo.type} ${promo.value})`,
     });
     res.status(201).json({ promo });
   } catch (err) {
@@ -299,8 +489,19 @@ router.post('/promos', async (req, res) => {
 });
 
 router.delete('/promos/:id', async (req, res) => {
-  await prisma.promo.delete({ where: { id: req.params.id } });
-  res.json({ ok: true });
+  try {
+    const promo = await prisma.promo.delete({ where: { id: req.params.id } });
+    await audit(req, {
+      action: 'PROMO_DELETE',
+      entity: 'Promo',
+      entityId: promo.id,
+      detail: `Deleted promo ${promo.code}`,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(404).json({ error: 'Promo not found' });
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -465,6 +666,12 @@ router.get('/settings', async (req, res) => {
 
 router.put('/settings', async (req, res) => {
   const settings = await saveSettings(req.body || {});
+  await audit(req, {
+    action: 'SETTINGS_UPDATE',
+    entity: 'Setting',
+    entityId: null,
+    detail: `Updated keys: ${Object.keys(req.body || {}).slice(0, 12).join(', ')}`,
+  });
   res.json({ settings });
 });
 

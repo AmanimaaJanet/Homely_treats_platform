@@ -63,6 +63,10 @@ export default function SignIn() {
             </button>
           </form>
 
+          <p className="centered" style={{ marginTop: '1.25rem' }}>
+            <Link to="/forgot-password" className="link">Forgot your password?</Link>
+          </p>
+
           <p className="centered" style={{ marginTop: '1.5rem' }}>
             Don't have an account? <Link to="/register" className="link">Create one</Link>
           </p>

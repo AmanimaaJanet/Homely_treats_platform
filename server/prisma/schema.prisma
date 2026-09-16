@@ -15,13 +15,20 @@ model User {
   email             String   @unique
   phone             String
   passwordHash      String
-  role              String   @default("CUSTOMER") // CUSTOMER | ADMIN
+  role              String   @default("CUSTOMER") // CUSTOMER | ADMIN | RIDER
   emailVerified     Boolean  @default(false)
   verificationToken String?
+  // Password reset — only the SHA-256 hash of the emailed token is stored, so a
+  // database leak cannot be used to take over accounts. Single use (cleared on
+  // success) and short-lived (see RESET_TOKEN_TTL_MINUTES).
+  resetTokenHash    String?
+  resetTokenExpires DateTime?
+  active            Boolean  @default(true)
   loyaltyPoints     Int      @default(0)
   createdAt         DateTime @default(now())
   orders            Order[]
   reviews           Review[]
+  deliveries        Order[]  @relation("OrderRider")
 }
 
 model Product {
@@ -83,6 +90,9 @@ model Order {
   deliveryAddress String?
   riderName       String?
   riderPhone      String?
+  riderId         String?
+  rider           User?           @relation("OrderRider", fields: [riderId], references: [id])
+  riderAcceptedAt DateTime?
   readyDate       DateTime?
   notes           String?
   promoCode       String?
@@ -150,15 +160,50 @@ model Review {
 }
 
 model Promo {
-  id         String    @id @default(cuid())
-  code       String    @unique
-  type       String    @default("PERCENT") // PERCENT | FIXED
-  value      Float
-  active     Boolean   @default(true)
-  expiresAt  DateTime?
-  usageLimit Int?
-  usageCount Int       @default(0)
-  createdAt  DateTime  @default(now())
+  id              String    @id @default(cuid())
+  code            String    @unique
+  type            String    @default("PERCENT") // PERCENT | FIXED
+  value           Float
+  active          Boolean   @default(true)
+  expiresAt       DateTime?
+  usageLimit      Int?
+  usageCount      Int       @default(0)
+  // Abuse controls: minimum basket, per-customer cap, and first-order-only codes.
+  minSpend        Float     @default(0)
+  perCustomerLimit Int?
+  firstOrderOnly  Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  redemptions     PromoRedemption[]
+}
+
+model PromoRedemption {
+  id        String   @id @default(cuid())
+  promoId   String
+  promo     Promo    @relation(fields: [promoId], references: [id], onDelete: Cascade)
+  // Identifies the customer: the user id when signed in, otherwise the email or
+  // phone used at checkout, so guests can't loop a per-customer code either.
+  customerKey String
+  orderId   String?
+  createdAt DateTime @default(now())
+
+  @@index([promoId, customerKey])
+}
+
+// Append-only record of who did what in the admin portal (price changes, status
+// changes, refunds, settings, staff accounts) — needed to investigate disputes.
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  actorEmail String?
+  action    String   // e.g. ORDER_STATUS, PRODUCT_UPDATE, SETTINGS_UPDATE, RIDER_CREATE
+  entity    String?  // e.g. Order, Product
+  entityId  String?
+  detail    String?  // human-readable summary
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action])
 }
 
 model Setting {

@@ -10,6 +10,9 @@ import Cart from './pages/Cart.jsx';
 import Track from './pages/Track.jsx';
 import SignIn from './pages/SignIn.jsx';
 import Register from './pages/Register.jsx';
+import ForgotPassword from './pages/ForgotPassword.jsx';
+import ResetPassword from './pages/ResetPassword.jsx';
+import { Privacy, Terms } from './pages/Legal.jsx';
 import Verify from './pages/Verify.jsx';
 import Account from './pages/Account.jsx';
 import Rider from './pages/Rider.jsx';
@@ -23,6 +26,8 @@ import AdminCustomers from './pages/admin/Customers.jsx';
 import AdminPromos from './pages/admin/Promos.jsx';
 import AdminReports from './pages/admin/Reports.jsx';
 import AdminSettings from './pages/admin/Settings.jsx';
+import AdminRiders from './pages/admin/Riders.jsx';
+import AdminAudit from './pages/admin/Audit.jsx';
 
 export default function App() {
   const location = useLocation();
@@ -41,6 +46,10 @@ export default function App() {
           <Route path="/track" element={<Track />} />
           <Route path="/signin" element={<SignIn />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
           <Route path="/verify" element={<Verify />} />
           <Route path="/account" element={<Account />} />
           <Route path="/rider" element={<Rider />} />
@@ -54,6 +63,8 @@ export default function App() {
             <Route path="customers" element={<AdminCustomers />} />
             <Route path="promos" element={<AdminPromos />} />
             <Route path="reports" element={<AdminReports />} />
+            <Route path="riders" element={<AdminRiders />} />
+            <Route path="audit" element={<AdminAudit />} />
             <Route path="settings" element={<AdminSettings />} />
           </Route>
         </Routes>

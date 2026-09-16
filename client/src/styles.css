@@ -559,3 +559,94 @@ a:hover { color: var(--pd); }
 @media (min-width: 640px) {
   .size-row { grid-template-columns: 1fr 90px 110px 36px; }
 }
+
+/* ============================================================================
+   Rider app (authenticated) — mobile-first
+   ========================================================================== */
+.rider-page { background: var(--cream); min-height: 100vh; }
+.rider-header { gap: 12px; flex-wrap: wrap; }
+.rider-header-sub { color: rgba(255,255,255,0.6); font-size: 12.5px; margin-top: 3px; }
+.rider-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.rider-header-actions .btn-ghost { color: #fff; border-color: rgba(255,255,255,0.35); }
+.rider-header-actions .btn-ghost:hover { background: rgba(255,255,255,0.12); }
+
+.rider-signin { display: flex; align-items: center; justify-content: center; padding: 32px 16px 56px; }
+.rider-signin-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 28px 22px; max-width: 420px; width: 100%; box-shadow: var(--shadow); }
+.rider-signin-logo { width: 68px; height: 68px; border-radius: 50%; background: var(--pl); color: var(--pd); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+.rider-signin-card h1 { font-size: 25px; text-align: center; margin-bottom: 10px; }
+.rider-signin-card > p { text-align: center; font-size: 13.5px; line-height: 1.65; margin-bottom: 20px; }
+.rider-signin-note { display: flex; align-items: center; justify-content: center; gap: 7px; margin-top: 16px; font-size: 12px; color: var(--muted); background: var(--cream); border-radius: 100px; padding: 8px 14px; }
+
+.rider-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 8px; }
+.rider-stat { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 14px; display: flex; align-items: center; gap: 11px; }
+.rider-stat svg { color: var(--primary); flex-shrink: 0; }
+.rider-stat strong { display: block; font-size: 16px; line-height: 1.2; }
+.rider-stat span { font-size: 11.5px; color: var(--muted); }
+
+.rider-card-active { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(196, 118, 59, 0.12); }
+.rider-items { font-weight: 500; }
+.rider-detail { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; margin-bottom: 6px; color: var(--dark); }
+.rider-detail svg { color: var(--muted); flex-shrink: 0; margin-top: 3px; }
+.rider-detail a { color: var(--primary); text-decoration: none; font-weight: 500; }
+.rider-hint { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+.rider-completed { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+.rider-completed-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 11px 14px; font-size: 13px; }
+.rider-completed-row span:first-child { display: flex; align-items: center; gap: 7px; color: var(--green-t); font-weight: 500; }
+
+@media (min-width: 640px) {
+  .rider-stats { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* Password field with a show/hide button */
+.input-affix { position: relative; }
+.input-affix .form-input { padding-right: 46px; }
+.input-affix-btn {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer; color: var(--muted);
+  padding: 8px; display: flex; align-items: center; border-radius: 8px;
+}
+.input-affix-btn:hover { color: var(--pd); background: var(--cream); }
+
+/* Inline error banner */
+.alert { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px; border-radius: 10px; font-size: 13.5px; margin-bottom: 16px; line-height: 1.5; }
+.alert svg { flex-shrink: 0; margin-top: 2px; }
+.alert-error { background: var(--red); color: var(--red-t); }
+.alert-success { background: var(--green); color: var(--green-t); }
+
+/* ============================================================================
+   Admin page headers, count pills and legal pages
+   ========================================================================== */
+.admin-page-head {
+  display: flex; flex-direction: column; gap: 12px;
+  justify-content: space-between; align-items: flex-start; margin-bottom: 18px;
+}
+.admin-page-head .admin-title { margin-bottom: 4px; }
+.admin-page-head p { max-width: 62ch; }
+
+.pill-count {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--pl); color: var(--pd); border-radius: 100px;
+  padding: 3px 10px; font-size: 11.5px; font-weight: 500; white-space: nowrap;
+}
+
+/* Legal pages (privacy / terms) */
+.legal { max-width: 760px; margin-inline: auto; }
+.legal-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+.legal-icon {
+  width: 52px; height: 52px; border-radius: 14px; flex-shrink: 0;
+  background: var(--pl); color: var(--pd);
+  display: flex; align-items: center; justify-content: center;
+}
+.legal h2 { font-size: 18px; margin: 26px 0 10px; }
+.legal p { color: var(--muted); font-size: 14px; line-height: 1.75; margin-bottom: 12px; }
+.legal ul { margin: 0 0 14px 20px; }
+.legal li { color: var(--muted); font-size: 14px; line-height: 1.75; margin-bottom: 6px; }
+.legal strong { color: var(--dark); }
+.legal-foot {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--border);
+}
+
+@media (min-width: 720px) {
+  .admin-page-head { flex-direction: row; align-items: center; }
+}

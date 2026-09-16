@@ -41,6 +41,12 @@ export default function Footer() {
             <li><Link to="/track">Track Order</Link></li>
             <li><Link to="/signin">Sign In</Link></li>
           </ul>
+
+          <h4>Legal</h4>
+          <ul>
+            <li><Link to="/privacy">Privacy Policy</Link></li>
+            <li><Link to="/terms">Terms of Service</Link></li>
+          </ul>
         </div>
         <div className="footer-section">
           <h3>Contact</h3>

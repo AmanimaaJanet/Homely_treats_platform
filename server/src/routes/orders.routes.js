@@ -4,8 +4,9 @@ import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import { nextOrderId, round2 } from '../utils.js';
 import { getSettings } from '../services/settings.js';
 import { initializeTransaction } from '../services/paystack.js';
-import { recordEvent, notifyCustomer } from '../services/orderEvents.js';
+import { recordEvent, notifyCustomer, applyStatus } from '../services/orderEvents.js';
 import { earnPoints, maxRedeemablePoints, discountForPoints } from '../services/loyalty.js';
+import { reserveStock, StockError } from '../services/stock.js';
 import { sendEmail } from '../services/email.js';
 import { config } from '../config.js';
 
@@ -183,6 +184,11 @@ router.post('/', optionalAuth, async (req, res) => {
       if (!product) return res.status(400).json({ error: 'One or more products no longer exist' });
       if (!product.inStock) return res.status(400).json({ error: `"${product.name}" is currently out of stock` });
       const qty = Math.max(1, parseInt(it.quantity || 1, 10));
+      if (qty > product.stock) {
+        return res.status(409).json({
+          error: `Only ${product.stock} × "${product.name}" left in stock`,
+        });
+      }
       const price = await resolveUnitPrice(product, it.size || null);
       subtotal += price * qty;
       orderItems.push({
@@ -199,17 +205,52 @@ router.post('/', optionalAuth, async (req, res) => {
     }
     subtotal = round2(subtotal);
 
-    // ---- Promo ----
+    // ---- Promo ---- (with abuse controls: min spend, per-customer cap, first order)
     let discount = 0;
+    let appliedPromo = null;
+    // Identifies the customer for per-customer rules and the redemption ledger.
+    const customerKey = String(user?.id || guestEmail || guestPhone || '').toLowerCase().trim();
     if (promoCode) {
       const promo = await prisma.promo.findUnique({ where: { code: String(promoCode).toUpperCase().trim() } });
       if (!promo || !promo.active) return res.status(400).json({ error: 'Invalid promo code' });
       if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) return res.status(400).json({ error: 'Promo code has expired' });
       if (promo.usageLimit && promo.usageCount >= promo.usageLimit) return res.status(400).json({ error: 'Promo code limit reached' });
+      if (promo.minSpend > 0 && subtotal < promo.minSpend) {
+        return res.status(400).json({
+          error: `This code needs a minimum order of GH₵ ${Number(promo.minSpend).toFixed(2)}`,
+        });
+      }
+      if (promo.perCustomerLimit || promo.firstOrderOnly) {
+        if (!customerKey) {
+          return res.status(400).json({ error: 'Please add an email or phone number to use this code' });
+        }
+        const used = await prisma.promoRedemption.count({
+          where: { promoId: promo.id, customerKey },
+        });
+        if (promo.firstOrderOnly) {
+          // Any previous non-cancelled order disqualifies the customer.
+          const priorOrders = await prisma.order.count({
+            where: {
+              status: { not: 'CANCELLED' },
+              OR: [
+                user ? { userId: user.id } : { id: '__none__' },
+                guestEmail ? { guestEmail: String(guestEmail).toLowerCase().trim() } : { id: '__none__' },
+                guestPhone ? { guestPhone: String(guestPhone).trim() } : { id: '__none__' },
+              ],
+            },
+          });
+          if (priorOrders > 0) {
+            return res.status(400).json({ error: 'This code is for first orders only' });
+          }
+        }
+        if (promo.perCustomerLimit && used >= promo.perCustomerLimit) {
+          return res.status(400).json({ error: 'You have already used this code' });
+        }
+      }
       discount =
         promo.type === 'PERCENT' ? round2(subtotal * (promo.value / 100)) : Math.min(Number(promo.value), subtotal);
       discount = round2(discount);
-      await prisma.promo.update({ where: { id: promo.id }, data: { usageCount: { increment: 1 } } });
+      appliedPromo = promo;
     }
 
     // ---- Loyalty points redemption (signed-in users only) ----
@@ -236,36 +277,59 @@ router.post('/', optionalAuth, async (req, res) => {
     const isCod = paymentMethod === 'COD';
     const id = await nextOrderId(prisma);
 
-    const order = await prisma.order.create({
-      data: {
-        id,
-        userId: user?.id || null,
-        guestName,
-        guestEmail,
-        guestPhone,
-        status: 'PENDING',
-        paymentStatus: isCod ? 'COD' : 'PENDING',
-        paymentMethod,
-        subtotal,
-        discount,
-        loyaltyDiscount,
-        pointsRedeemed: redeemed,
-        deliveryFee,
-        deliveryZone: zoneName,
-        total,
-        deliveryMethod,
-        deliveryAddress: deliveryMethod === 'DELIVERY' ? deliveryAddress || null : null,
-        readyDate: readyDate ? new Date(readyDate) : null,
-        notes: notes || null,
-        promoCode: promoCode ? String(promoCode).toUpperCase().trim() : null,
-        items: { create: orderItems },
-        photos: {
-          create: (Array.isArray(photos) ? photos : [])
-            .filter((u) => typeof u === 'string' && u.length > 0)
-            .map((url) => ({ url })),
+    // Stock is reserved and the order written in ONE transaction: if any line
+    // can't be fulfilled, nothing is committed and no stock is lost. The
+    // conditional decrement in reserveStock() keeps concurrent checkouts safe.
+    const order = await prisma.$transaction(async (tx) => {
+      await reserveStock(tx, orderItems);
+
+      const created = await tx.order.create({
+        data: {
+          id,
+          userId: user?.id || null,
+          guestName,
+          guestEmail,
+          guestPhone,
+          status: 'PENDING',
+          paymentStatus: isCod ? 'COD' : 'PENDING',
+          paymentMethod,
+          subtotal,
+          discount,
+          loyaltyDiscount,
+          pointsRedeemed: redeemed,
+          deliveryFee,
+          deliveryZone: zoneName,
+          total,
+          deliveryMethod,
+          deliveryAddress: deliveryMethod === 'DELIVERY' ? deliveryAddress || null : null,
+          readyDate: readyDate ? new Date(readyDate) : null,
+          notes: notes || null,
+          promoCode: appliedPromo ? appliedPromo.code : null,
+          items: { create: orderItems },
+          photos: {
+            create: (Array.isArray(photos) ? photos : [])
+              .filter((u) => typeof u === 'string' && u.length > 0)
+              .map((url) => ({ url })),
+          },
         },
-      },
-      include: { items: true, user: true, photos: true },
+        include: { items: true, user: true, photos: true },
+      });
+
+      // Record promo usage and the per-customer redemption ledger together, so
+      // a code can only be counted once per successful order.
+      if (appliedPromo) {
+        await tx.promo.update({
+          where: { id: appliedPromo.id },
+          data: { usageCount: { increment: 1 } },
+        });
+        if (customerKey) {
+          await tx.promoRedemption.create({
+            data: { promoId: appliedPromo.id, customerKey, orderId: id },
+          });
+        }
+      }
+
+      return created;
     });
 
     await recordEvent(id, 'PENDING', 'Order placed');
@@ -304,6 +368,10 @@ router.post('/', optionalAuth, async (req, res) => {
 
     res.status(201).json({ order: { ...order }, authorizationUrl });
   } catch (err) {
+    // Stock conflicts are expected user-facing outcomes, not server errors.
+    if (err instanceof StockError || err.status === 409) {
+      return res.status(409).json({ error: err.message });
+    }
     console.error(err);
     res.status(500).json({ error: err.message || 'Failed to create order' });
   }
@@ -364,20 +432,9 @@ router.post('/:id/cancel', optionalAuth, async (req, res) => {
     if (['DELIVERED', 'CANCELLED'].includes(order.status)) {
       return res.status(400).json({ error: 'Order can no longer be cancelled' });
     }
-    const updated = await prisma.order.update({
-      where: { id: order.id },
-      data: { status: 'CANCELLED', updatedAt: new Date() },
-      include: { items: true, user: true },
-    });
-    // Refund redeemed loyalty points
-    if (order.pointsRedeemed > 0 && order.userId) {
-      await prisma.user.update({
-        where: { id: order.userId },
-        data: { loyaltyPoints: { increment: order.pointsRedeemed } },
-      });
-    }
-    await recordEvent(order.id, 'CANCELLED', 'Order cancelled');
-    await notifyCustomer(updated, 'CANCELLED');
+    // applyStatus() is the single cancellation path: it restores stock, refunds
+    // redeemed loyalty points, records the event and notifies the customer.
+    const updated = await applyStatus(order.id, 'CANCELLED', 'Order cancelled by customer');
     res.json({ order: updated });
   } catch (err) {
     console.error(err);
