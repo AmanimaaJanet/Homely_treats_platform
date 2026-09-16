@@ -3,6 +3,7 @@ import { Key, MessageCircle } from 'lucide-react';
 import { api } from '../../api.js';
 import { useApp } from '../../store.jsx';
 import WhatsAppTemplates from '../../components/WhatsAppTemplates.jsx';
+import AdminAccount from '../../components/AdminAccount.jsx';
 
 function Toggle({ label, checked, onChange }) {
   return (
@@ -224,6 +225,8 @@ export default function Settings() {
       </div>
 
       <WhatsAppTemplates />
+
+      <AdminAccount />
 
       <button className="btn btn-primary" disabled={saving} style={{ marginBottom: '2rem' }}>
         {saving ? 'Saving…' : 'Save All Settings'}

@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { prisma } from '../prisma.js';
 import { signToken, publicUser } from '../utils.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
+import { usesSeedPassword } from '../services/seededCredentials.js';
 import {
   loginLimiter,
   registerLimiter,
@@ -139,8 +140,12 @@ router.post('/login', loginLimiter, async (req, res) => {
 });
 
 // GET /api/auth/me
-router.get('/me', requireAuth, (req, res) => {
-  res.json({ user: publicUser(req.user) });
+router.get('/me', requireAuth, async (req, res) => {
+  // The admin portal shows a warning until the seeded password is changed. Comparing
+  // a hash is cheap, and it means the nag disappears on its own once it's done.
+  const stillDefault =
+    req.user.role === 'ADMIN' ? await usesSeedPassword(bcrypt, req.user.passwordHash) : false;
+  res.json({ user: { ...publicUser(req.user), usesDefaultPassword: stillDefault } });
 });
 
 // POST /api/auth/logout — clears the session cookies

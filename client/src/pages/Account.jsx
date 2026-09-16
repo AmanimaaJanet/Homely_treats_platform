@@ -238,11 +238,11 @@ export default function Account() {
                   </div>
                   <div className="form-group">
                     <label className="form-label">New Password</label>
-                    <input type="password" className="form-input" required minLength={6} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
+                    <input type="password" className="form-input" required minLength={8} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Confirm New Password</label>
-                    <input type="password" className="form-input" required minLength={6} value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} />
+                    <input type="password" className="form-input" required minLength={8} value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} />
                   </div>
                   <button className="btn btn-primary">Change Password</button>
                 </form>
