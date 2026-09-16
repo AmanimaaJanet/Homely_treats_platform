@@ -27,14 +27,17 @@ A full-stack bakery ordering platform built from your HTML mockup: **React** fro
 - 🛒 **Cart & Checkout** — quantity controls, **delivery zones with per-neighbourhood fees**, promo codes, **loyalty-point redemption**, guest or signed-in checkout
 - 🚚 **Track Order** — live **real-time updates over WebSockets** (auto-falls back to polling), full status timeline, rider info, design photos, and the notification log
 - 👤 **Accounts** — register, sign in, email verification, profile, password change, order history with **"Order again"**, **loyalty points** balance
-- ⭐ **Reviews & ratings** — rate delivered orders (earn +5 bonus points); shown on the homepage
+- ⭐ **Reviews & ratings** — rate delivered orders (earn +5 bonus points); published on the homepage once approved when moderation is on
 - 🛵 **Rider app** at `/rider` — riders accept deliveries and mark them delivered (updates the customer's tracker instantly)
 - 📱 **PWA** — installable to the home screen (manifest + service worker + icons)
 
 ### Admin portal (`/admin`)
 - 📊 **Dashboard** — revenue, orders, customers, 8-month revenue chart, category donut
-- 📋 **Orders** — filter/search, detail view with photos & status history, one-click status updates (auto-notifies customer via SMS + WhatsApp + email + WebSocket)
-- 🗂️ **Products** — full CRUD incl. **size-tier pricing** and **low-stock alerts**
+- 📋 **Orders** — filter/search, detail view with photos, design uploads & status history, one-click status updates (auto-notifies customer via SMS + WhatsApp + email + WebSocket), and **Print receipt / Print ticket** buttons
+- 🗂️ **Products** — full CRUD incl. **size-tier pricing**, up to 8 photos per product, and a **low-stock panel** that emails a daily restock digest
+- 🖨️ **Printing** — a branded **customer receipt** and a **kitchen ticket** for any order (A5, one click, amount written in words)
+- ⭐ **Reviews** — approval queue with Publish / Hide / Re-queue, plus a waiting-count badge in the sidebar
+- 💸 **Refunds** — refund a paid order through Paystack or record one settled offline; stock returns and the customer is notified
 - 👥 **Customers** — orders, spend, loyalty points
 - 🎟️ **Promo codes** — percentage/fixed discounts with usage limits
 - 📈 **Reports** — date-range sales report, top products, **CSV export**
