@@ -54,15 +54,15 @@ export function AppProvider({ children }) {
   // Restore session on load
   useEffect(() => {
     (async () => {
-      if (getToken()) {
-        try {
-          const { user } = await api.get('/auth/me', { auth: true });
-          setUser(user);
-        } catch {
-          setToken(null);
-        }
+      try {
+        const { user } = await api.get('/auth/me', { auth: true });
+        setUser(user);
+      } catch {
+        // No (or expired) session — that's fine, the visitor is a guest.
+        setToken(null);
+      } finally {
+        setAuthReady(true);
       }
-      setAuthReady(true);
     })();
   }, []);
 
@@ -71,6 +71,8 @@ export function AppProvider({ children }) {
     setUser(userData);
   };
   const logout = () => {
+    // Clear the server-side session cookie too, not just local state.
+    api.post('/auth/logout', {}).catch(() => {});
     setToken(null);
     setUser(null);
     dispatch({ type: 'CLEAR' });

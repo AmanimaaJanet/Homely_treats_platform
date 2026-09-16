@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { config } from '../config.js';
 import { prisma } from '../prisma.js';
+import { readToken } from './session.js';
 
 // JWT verification options — algorithm is pinned (never allow alg:none or RS256),
 // and issuer/audience must match what signToken() sets.
@@ -12,8 +13,8 @@ const VERIFY_OPTS = {
 
 export async function requireAuth(req, res, next) {
   try {
-    const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+    // Session cookie (browser) or Bearer token (API clients) — either is fine.
+    const token = readToken(req);
     if (!token) return res.status(401).json({ error: 'Authentication required' });
 
     const payload = jwt.verify(token, config.jwtSecret, VERIFY_OPTS);
@@ -58,8 +59,7 @@ export const requireRider = [requireAuth, requireRole('RIDER')];
 /** Optional auth — populates req.user if a valid token exists, else continues. */
 export async function optionalAuth(req, _res, next) {
   try {
-    const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+    const token = readToken(req);
     if (token) {
       const payload = jwt.verify(token, config.jwtSecret, VERIFY_OPTS);
       const user = await prisma.user.findUnique({ where: { id: payload.id } });

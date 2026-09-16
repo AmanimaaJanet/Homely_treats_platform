@@ -2,10 +2,11 @@
 
 _Audited 16 September 2026 against the running codebase._
 
-> **Status update — P0 build in progress.** Items **1 (rider auth)**, **2 (stock)**,
-> **3 (password reset)**, **5 (review limits)**, **6 (audit log)**, **7 (promo controls)**
-> and **8 (legal pages)** are now **built, tested and committed**. See
-> "P0 progress" at the bottom for exactly what shipped and what is still open.
+> **Status update — P0 complete.** All ten P0 items are now **built, tested and
+> committed**: rider auth, stock control, password reset, email-verification policy,
+> review limits, audit log, promo controls, legal pages, httpOnly cookie sessions
+> with CSRF protection, and opt-in Turnstile bot protection. See "P0 progress" at
+> the bottom for exactly what shipped.
 
 ## Where the app stands today
 
@@ -195,8 +196,9 @@ past guest orders by email. _Effort: S._
 
 ## Recommended sequence
 
-- **Phase 1 — launch blockers (P0):** 1 rider auth, 2 stock, 3 password reset,
-  4 verification, 8 legal pages. Without these, real orders are risky.
+- **Phase 1 — launch blockers (P0): ✅ complete.** Rider auth, stock control,
+  password reset, verification policy, review limits, audit log, promo controls,
+  legal pages, cookie sessions with CSRF, Turnstile.
 - **Phase 2 — selling properly:** 11 product photos, 14 receipts/tickets,
   13 stock alerts, 5 review moderation, 17 refunds.
 - **Phase 3 — growth:** 12 WhatsApp templates, 18 push notifications,
@@ -223,13 +225,18 @@ Every phase ends with the E2E suite green and a fresh zip.
 | 7 | **Promo abuse controls** | Minimum spend, per-customer limit, first-order-only and expiry, backed by a `PromoRedemption` ledger keyed on user id or guest email/phone. Cancelling an order releases the use so a customer isn't punished for a cancelled basket. Admin UI exposes every condition; percentage discounts above 100% are rejected. |
 | 8 | **Legal pages** | `/privacy` and `/terms` written for a Ghanaian bakery under the Data Protection Act 2012 (Act 843) — accurate to what this software actually collects, who it is shared with (Paystack, Resend, SMS/WhatsApp, riders) and for how long. Linked from the footer. **Action for you:** replace the bracketed placeholders (business name, contact details, publish date) before launch. |
 
+### Also shipped
+
+| # | Item | What was built |
+|---|---|---|
+| 4 | **Email verification policy** | Verification is now enforced at sign-in **as soon as email delivery is configured** (`RESEND_API_KEY` present), and skipped when it isn't — otherwise a customer could be locked out of an account they had no way to activate. Unverified sign-in returns a machine-readable `EMAIL_NOT_VERIFIED` code plus the address, and the sign-in screen offers to resend the link. Resending no longer requires a session (the person who needs it can't sign in), still answers identically for unknown addresses, and stays rate-limited. Guest checkout remains fully open. |
+| 9 | **httpOnly cookie sessions + CSRF** | The browser session moved out of `localStorage` into an **httpOnly, SameSite=Lax** cookie, so an XSS bug can no longer read the token. State-changing requests from a cookie session must also echo a double-submit `X-CSRF-Token` header; Bearer-token API clients (the E2E suite, rider tooling) are unaffected because they aren't CSRF-able. Logout clears both cookies. Rejected cookies fall back to the header, so existing integrations keep working. |
+| 10 | **Turnstile bot protection** | Opt-in Cloudflare Turnstile on register, sign-in, resend-verification and password reset. It is a pass-through until `TURNSTILE_SECRET_KEY` is set, then becomes mandatory — and **fails closed** if Cloudflare is unreachable. |
+
 ### Still open in P0
 
-| # | Item | Why it matters | Effort |
-|---|---|---|---|
-| 4 | **Enforce email verification at sign-in** | Verification emails are sent and can be confirmed, but nothing requires it, so throwaway addresses can still register and order. Needs a decision on whether guest checkout stays fully open (recommended: yes). | S |
-| 9 | **Move sessions to httpOnly cookies** | Tokens currently live in `localStorage`, readable by any injected script. The CSP reduces but does not remove XSS risk. Needs CSRF protection alongside. | M |
-| 10 | **Bot protection on register / forgot-password** | Cloudflare Turnstile (free). Rate limits help; they don't stop determined scripted signups burning Resend quota. | S |
+Nothing. Recommend moving to **Phase 2** (product photos, receipts and kitchen tickets,
+low-stock alerts, review moderation, refunds).
 
 ### Testing note
 

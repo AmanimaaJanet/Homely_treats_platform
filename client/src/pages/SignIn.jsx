@@ -16,19 +16,37 @@ export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [unverified, setUnverified] = useState(null);
+  const [resending, setResending] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
+    setUnverified(null);
     setBusy(true);
     try {
       const { token, user } = await api.post('/auth/login', { email, password });
       login(token, user);
       toast(`Welcome back, ${user.fullName.split(' ')[0]}!`, 'success');
-      navigate(user.role === 'ADMIN' ? '/admin' : '/account');
+      navigate(user.role === 'ADMIN' ? '/admin' : user.role === 'RIDER' ? '/rider' : '/account');
     } catch (err) {
+      // The address exists but hasn't been confirmed yet — offer to resend the
+      // link rather than leaving the customer stuck.
+      if (err.code === 'EMAIL_NOT_VERIFIED') setUnverified(err.email || email);
       toast(err.message, 'error');
     } finally {
       setBusy(false);
+    }
+  };
+
+  const resendVerification = async () => {
+    setResending(true);
+    try {
+      await api.post('/auth/resend-verification', { email: unverified });
+      toast('Verification email sent — please check your inbox', 'success');
+    } catch {
+      toast('Could not send the email. Please sign in again to retry.', 'error');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -62,6 +80,20 @@ export default function SignIn() {
               {busy ? 'Signing in…' : 'Sign In'}
             </button>
           </form>
+
+          {unverified && (
+            <div className="alert alert-error" style={{ marginTop: '1rem' }} role="alert">
+              <div>
+                <strong>Please confirm your email</strong>
+                <p className="small" style={{ margin: '4px 0 8px' }}>
+                  We sent a verification link to <strong>{unverified}</strong>.
+                </p>
+                <button className="btn-link" onClick={resendVerification} disabled={resending}>
+                  {resending ? 'Sending…' : 'Resend the link'}
+                </button>
+              </div>
+            </div>
+          )}
 
           <p className="centered" style={{ marginTop: '1.25rem' }}>
             <Link to="/forgot-password" className="link">Forgot your password?</Link>

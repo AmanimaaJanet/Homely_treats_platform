@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
 import http from 'http';
 import path from 'path';
 import fs from 'fs';
@@ -9,6 +10,7 @@ import { config } from './config.js';
 import { attachWebSocket } from './services/realtime.js';
 import { ensureUploadDir } from './services/storage.js';
 import { apiLimiter } from './middleware/security.js';
+import { csrfGuard } from './middleware/session.js';
 
 import authRoutes from './routes/auth.routes.js';
 import productRoutes from './routes/products.routes.js';
@@ -66,6 +68,10 @@ app.use(
 const allowedOrigins = new Set([config.clientUrl, 'http://localhost:5173', 'http://localhost:5000']);
 app.use(
   cors({
+    // Required for cookie-based sessions when the client is on another origin
+    // (the Vite dev server). Safe here because the allowlist is explicit and
+    // never `*` — the browser refuses to send credentials to a wildcard origin.
+    credentials: true,
     origin(origin, cb) {
       // Requests without an Origin header (curl, same-origin, server-to-server) are allowed.
       if (!origin) return cb(null, true);
@@ -74,6 +80,11 @@ app.use(
     },
   })
 );
+
+// Parse cookies so the session/CSRF middleware can read them.
+app.use(cookieParser());
+// Reject cross-site state-changing requests that carry a session cookie.
+app.use(csrfGuard);
 
 // IMPORTANT: the Paystack webhook must receive the raw request body so it can
 // verify Paystack's HMAC-SHA512 signature. This raw parser must run BEFORE the

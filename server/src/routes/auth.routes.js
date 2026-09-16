@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { prisma } from '../prisma.js';
 import { signToken, publicUser } from '../utils.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import {
   loginLimiter,
   registerLimiter,
@@ -13,6 +13,8 @@ import {
 } from '../middleware/security.js';
 import { sendEmail } from '../services/email.js';
 import { config } from '../config.js';
+import { setSessionCookies, clearSessionCookies } from '../middleware/session.js';
+import { verifyTurnstile } from '../services/turnstile.js';
 
 const router = Router();
 
@@ -42,6 +44,9 @@ router.post('/register', registerLimiter, async (req, res) => {
     const pwErr = passwordError(password);
     if (pwErr) return res.status(400).json({ error: pwErr });
 
+    const captchaOk = await verifyTurnstile(req);
+    if (!captchaOk) return res.status(400).json({ error: 'Verification failed. Please try again.' });
+
     const normalized = String(email).toLowerCase().trim();
     const existing = await prisma.user.findUnique({ where: { email: normalized } });
     if (existing) return res.status(409).json({ error: 'An account with this email already exists' });
@@ -49,19 +54,34 @@ router.post('/register', registerLimiter, async (req, res) => {
     const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
     const verificationToken = crypto.randomBytes(24).toString('hex');
 
+    // If we cannot deliver email (no Resend key), verification would lock the
+    // customer out of an account they can never activate — so they start verified
+    // and the console logs why. Once RESEND_API_KEY is set this flips to the
+    // stricter behaviour automatically.
+    const canSendEmail = config.resend.enabled;
+    const needsVerification = config.requireEmailVerification && canSendEmail;
+
     const user = await prisma.user.create({
       data: {
         fullName: clean(fullName, 80),
         email: normalized,
         phone: clean(phone, 30),
         passwordHash,
-        verificationToken,
+        emailVerified: !needsVerification,
+        verificationToken: needsVerification ? verificationToken : null,
       },
     });
 
+    if (!needsVerification) {
+      console.warn(
+        '[auth] RESEND_API_KEY is not set, so new accounts are marked verified automatically.\n' +
+          '       Set RESEND_API_KEY (and optionally REQUIRE_EMAIL_VERIFICATION=true) to require email verification.'
+      );
+    }
+
     // Send verification email (real via Resend, or simulated to console)
     const verifyUrl = `${config.clientUrl}/verify?token=${verificationToken}`;
-    await sendEmail({
+    if (needsVerification) await sendEmail({
       to: normalized,
       subject: 'Homely Treats — verify your email',
       html: `<h2>Welcome to Homely Treats</h2><p>Hi ${clean(fullName, 80)}, please confirm your email address:</p>
@@ -71,6 +91,8 @@ router.post('/register', registerLimiter, async (req, res) => {
     });
 
     const token = signToken(user);
+    setSessionCookies(res, token);
+    // `token` is still returned for API clients (the browser uses the cookie).
     res.status(201).json({ token, user: publicUser(user), verifyUrl });
   } catch (err) {
     console.error(err);
@@ -95,7 +117,20 @@ router.post('/login', loginLimiter, async (req, res) => {
       return res.status(403).json({ error: 'This account has been deactivated. Please contact us.' });
     }
 
+    const captchaOk = await verifyTurnstile(req);
+    if (!captchaOk) return res.status(400).json({ error: 'Verification failed. Please try again.' });
+
+    // Require a confirmed email address when verification is actually possible.
+    if (config.requireEmailVerification && config.resend.enabled && !user.emailVerified) {
+      return res.status(403).json({
+        error: 'Please confirm your email address before signing in. Check your inbox for the link.',
+        code: 'EMAIL_NOT_VERIFIED',
+        email: user.email,
+      });
+    }
+
     const token = signToken(user);
+    setSessionCookies(res, token);
     res.json({ token, user: publicUser(user) });
   } catch (err) {
     console.error(err);
@@ -108,7 +143,12 @@ router.get('/me', requireAuth, (req, res) => {
   res.json({ user: publicUser(req.user) });
 });
 
-// GET /api/auth/verify?token=...
+// POST /api/auth/logout — clears the session cookies
+router.post('/logout', (req, res) => {
+  clearSessionCookies(res);
+  res.json({ ok: true });
+});
+
 router.get('/verify', async (req, res) => {
   try {
     const { token } = req.query;
@@ -125,24 +165,41 @@ router.get('/verify', async (req, res) => {
   }
 });
 
-// POST /api/auth/resend-verification
-router.post('/resend-verification', verifyLimiter, requireAuth, async (req, res) => {
+// ---------------------------------------------------------------------------
+// POST /api/auth/resend-verification  { email? }
+//
+// Works for a signed-in user (no body needed) *and* for someone who cannot sign
+// in yet because their address is unconfirmed — which is the whole reason they
+// need it. The response never reveals whether the address has an account.
+// ---------------------------------------------------------------------------
+router.post('/resend-verification', verifyLimiter, optionalAuth, async (req, res) => {
+  const generic = { ok: true, message: 'If that address needs confirming, a new link is on its way.' };
   try {
-    const user = req.user;
-    if (user.emailVerified) return res.json({ ok: true, alreadyVerified: true });
+    const captchaOk = await verifyTurnstile(req);
+    if (!captchaOk) return res.status(400).json({ error: 'Verification failed. Please try again.' });
+
+    const email = req.user?.email || clean(req.body?.email, 160).toLowerCase();
+    if (!validEmail(email)) return res.json(generic);
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || user.active === false) return res.json(generic);
+    if (user.emailVerified) return res.json(generic);
+
     const verificationToken = crypto.randomBytes(24).toString('hex');
     await prisma.user.update({ where: { id: user.id }, data: { verificationToken } });
     const verifyUrl = `${config.clientUrl}/verify?token=${verificationToken}`;
     await sendEmail({
       to: user.email,
       subject: 'Homely Treats — verify your email',
-      html: `<h2>Homely Treats</h2><p>Confirm your email: <a href="${verifyUrl}">${verifyUrl}</a></p>`,
+      html: `<h2>Homely Treats</h2><p>Hi ${user.fullName}, please confirm your email address:</p>
+             <p><a href="${verifyUrl}" style="background:#C4763B;color:#fff;padding:12px 24px;border-radius:24px;text-decoration:none;">Verify my email</a></p>
+             <p>Or open this link: ${verifyUrl}</p>`,
       type: 'ORDER_CONFIRMED',
     });
-    res.json({ ok: true, verifyUrl });
+    res.json(generic);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to resend verification' });
+    res.json(generic);
   }
 });
 
@@ -179,6 +236,9 @@ const hashToken = (raw) => crypto.createHash('sha256').update(String(raw)).diges
 router.post('/forgot-password', forgotLimiter, async (req, res) => {
   const generic = { ok: true, message: 'If that email is registered, a reset link is on its way.' };
   try {
+    const captchaOk = await verifyTurnstile(req);
+    if (!captchaOk) return res.status(400).json({ error: 'Verification failed. Please try again.' });
+
     const email = clean(req.body?.email, 160).toLowerCase();
     if (!validEmail(email)) return res.json(generic);
 

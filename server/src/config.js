@@ -20,6 +20,21 @@ export const config = {
   port: PORT,
   clientUrl: CLIENT_URL,
   jwtSecret,
+  // Session cookies for the browser; Bearer tokens remain for API clients.
+  session: {
+    maxAgeMs: 24 * 60 * 60 * 1000, // matches the JWT lifetime
+    // Escape hatch for automated API testing. Ignored in production.
+    csrfEnabled: !(process.env.NODE_ENV !== 'production' && process.env.DISABLE_CSRF === 'true'),
+  },
+  // When email delivery is not configured we cannot verify anyone's address, so
+  // accounts are auto-verified rather than locking every new customer out.
+  // Set REQUIRE_EMAIL_VERIFICATION=true to force it once Resend is configured.
+  requireEmailVerification:
+    process.env.REQUIRE_EMAIL_VERIFICATION === 'true' || Boolean(process.env.RESEND_API_KEY),
+  turnstile: {
+    secretKey: process.env.TURNSTILE_SECRET_KEY || '',
+    enabled: Boolean(process.env.TURNSTILE_SECRET_KEY),
+  },
   databaseUrl:
     process.env.DATABASE_URL ||
     'postgresql://homely:homely@localhost:5432/homely?schema=public',

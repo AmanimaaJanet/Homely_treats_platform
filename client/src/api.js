@@ -1,24 +1,52 @@
 const BASE = '/api';
 
-let token = localStorage.getItem('ht_token') || null;
+/**
+ * The session lives in an httpOnly cookie set by the server, so JavaScript
+ * cannot read the token (that is the point — an XSS bug can't steal it).
+ *
+ * `auth` is kept on the call sites for clarity and to mean "this request expects
+ * a signed-in user"; the cookie travels automatically on same-origin requests.
+ * API clients that hold a Bearer token can still pass one, which is how the
+ * E2E suite and the rider tooling authenticate.
+ */
+let bearerToken = null;
 export function setToken(t) {
-  token = t;
-  if (t) localStorage.setItem('ht_token', t);
-  else localStorage.removeItem('ht_token');
+  bearerToken = t || null;
 }
 export function getToken() {
-  return token;
+  return bearerToken;
 }
+
+/** Read a cookie by name (only the non-httpOnly CSRF cookie is readable). */
+function readCookie(name) {
+  return document.cookie
+    .split('; ')
+    .find((row) => row.startsWith(`${name}=`))
+    ?.split('=')[1] || null;
+}
+
+const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 async function request(path, { method = 'GET', body, auth = false } = {}) {
   const headers = {};
   if (!(body instanceof FormData)) headers['Content-Type'] = 'application/json';
-  if (auth && token) headers.Authorization = `Bearer ${token}`;
+  if (auth && bearerToken) headers.Authorization = `Bearer ${bearerToken}`;
+
+  // Double-submit CSRF token: the server compares this header with the cookie.
+  if (MUTATING.has(method)) {
+    const csrf = readCookie('ht_csrf');
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
+
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
+    // Send cookies on same-origin (and cross-origin in dev, where the allowlist
+    // is explicit) so the session cookie reaches the API.
+    credentials: 'include',
     body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
   });
+
   let data = null;
   try {
     data = await res.json();
@@ -28,6 +56,8 @@ async function request(path, { method = 'GET', body, auth = false } = {}) {
   if (!res.ok) {
     const err = new Error(data?.error || `Request failed (${res.status})`);
     err.status = res.status;
+    err.code = data?.code;
+    err.email = data?.email;
     throw err;
   }
   return data;

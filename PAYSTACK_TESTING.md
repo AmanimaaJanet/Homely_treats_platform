@@ -119,6 +119,10 @@ The database is seeded with **one** admin account:
 | Email | `admin@homelytreats.gh` |
 | Password | `admin123` |
 
+Riders cannot sign themselves up — create an account for each rider in
+**Admin → Riders**, then the rider signs in at `/rider` with those details.
+Suspending a rider in that screen cuts their access immediately.
+
 **Steps:**
 
 1. Open the app and click **Sign In** (top right).
@@ -189,15 +193,23 @@ The backend was hardened for production. Summary:
 | Area | Measure |
 |---|---|
 | HTTP headers | **Helmet** — Content-Security-Policy (tuned to the app's own assets, Google Fonts, Cloudinary, WebSockets), `X-Frame-Options`, `nosniff`, HSTS, Referrer-Policy |
-| CORS | Pinned to the configured frontend origin only (no open `*`) |
-| Brute force | **Rate limiting** — 20 login attempts / 15 min per IP; 10 sign-ups / hour; 600 API calls / 15 min; 5 verification emails / 30 min |
+| CORS | Pinned to the configured frontend origin only (never `*`), with credentials allowed for the explicit allowlist |
+| Sessions | **httpOnly, SameSite=Lax session cookie** — an XSS bug cannot read the token. Bearer tokens remain for API clients |
+| CSRF | Double-submit token: any state-changing request from a cookie session must echo an `X-CSRF-Token` header. Bearer clients are exempt (they can't be CSRF'd) |
+| Brute force | **Rate limiting** — 20 sign-ins / 15 min per IP; 10 sign-ups / hour; 600 API calls / 15 min; 5 verification emails / 30 min; 5 password-reset requests / hour; 10 reviews / hour |
+| Bots | Optional **Cloudflare Turnstile** on register, sign-in, resend-verification and password reset — fails closed when enabled |
 | Passwords | **bcrypt cost 12**; minimum 8 chars with at least one letter and one number |
+| Password reset | Only a **SHA-256 hash** of the reset token is stored; single use; 30-minute expiry; no account enumeration |
 | Tokens | **JWT** pinned to `HS256` with `issuer` + `audience`; 24-hour expiry |
+| Roles | Riders and admins cannot self-register — riders are created by an admin, and every rider endpoint requires an active rider account |
+| Privacy of customer data | An unclaimed delivery shows a rider only the zone and value; the customer's address and phone appear after they accept. Riders see only their own jobs |
+| Accountability | Append-only **audit log** of admin actions (order status, products, promos, settings, rider accounts) |
+| Stock | Reserved atomically inside the order transaction — concurrent checkouts cannot oversell, and cancelling restores stock |
 | Secrets | Server **refuses to start in production without a real `JWT_SECRET`** |
 | Payments | Paystack webhook body verified with **HMAC-SHA512** before acting; amounts re-checked server-side |
 | Payloads | JSON body limited to **100 KB**; order fields length-capped; quantities bounded |
 | Data exposure | Auth responses strip password hashes/tokens; production error handler never leaks stack traces |
-| Roles | `ADMIN` role is database-assigned only; every admin route re-checks the role |
+| Deactivation | Suspending a rider or staff account revokes access immediately, even with a still-valid token |
 
 ### Things you must still do yourself (they depend on you, not the code)
 
