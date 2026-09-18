@@ -7,6 +7,7 @@ import { api } from '../api.js';
 import { useApp } from '../store.jsx';
 import { ghs, fmtDate } from '../lib/format.js';
 import ProductGallery from '../components/ProductGallery.jsx';
+import Seo from '../components/Seo.jsx';
 
 /**
  * Product page: the photos, what it costs in each size, what customers said about it,
@@ -67,6 +68,7 @@ export default function ProductDetail() {
   if (error) {
     return (
       <div className="page">
+        <Seo title="Menu" description="This item is no longer available." noindex />
         <div className="empty-state">
           <p>{error}</p>
           <Link className="btn btn-secondary" to="/menu">Back to the menu</Link>
@@ -82,8 +84,43 @@ export default function ProductDetail() {
   const soldOut = !product.inStock;
   const maxHist = Math.max(1, ...(product.histogram || []).map((h) => h.count));
 
+  // og:image and the JSON-LD image must be absolute — WhatsApp and Google will not
+  // resolve a path that starts with /.
+  const photo = product.images?.[0];
+  const absolutePhoto = photo ? new URL(photo, window.location.origin).href : undefined;
+
   return (
     <div className="page">
+      <Seo
+        title={product.name}
+        description={product.description || `${product.name} from Homely Treats, baked to order in Accra.`}
+        image={absolutePhoto}
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'Product',
+          name: product.name,
+          ...(product.description ? { description: product.description } : {}),
+          ...(absolutePhoto ? { image: absolutePhoto } : {}),
+          offers: {
+            '@type': 'Offer',
+            price: product.basePrice,
+            priceCurrency: 'GHS',
+            availability: soldOut ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
+            url: window.location.href,
+          },
+          // Only when real, approved reviews exist — an invented rating is penalised.
+          ...(rating.count > 0
+            ? {
+                aggregateRating: {
+                  '@type': 'AggregateRating',
+                  ratingValue: Number(rating.average).toFixed(1),
+                  reviewCount: rating.count,
+                  bestRating: 5,
+                },
+              }
+            : {}),
+        }}
+      />
       <button className="btn btn-ghost btn-sm" onClick={() => navigate(-1)}>
         <ArrowLeft size={15} /> Back
       </button>

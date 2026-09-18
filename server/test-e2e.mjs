@@ -2005,6 +2005,40 @@ E2E Imported ${rnd},CAKE,175,"Imported, with a comma",New,6,true,2,Vanilla|Choco
     check('Admin endpoints protected (401)', r.status === 401);
   }
 
+  // ---------------------------------------------------------------- 40. SEO: crawler files
+  {
+    const robots = await req('/robots.txt', { raw: true });
+    const robotsBody = await robots.text();
+    check(
+      'robots.txt served at the site root',
+      robots.status === 200 && robotsBody.includes('Disallow: /admin') && robotsBody.includes('Sitemap:'),
+      `status=${robots.status}`,
+    );
+
+    const sm = await req('/sitemap.xml', { raw: true });
+    const smBody = await sm.text();
+    const locs = (smBody.match(/<loc>/g) || []).length;
+    // The sitemap points at the storefront (CLIENT_URL), which is not necessarily the
+    // API's own origin — assert on the shape of the URLs, not on BASE.
+    check(
+      'sitemap lists the shop pages and the live menu',
+      sm.status === 200
+        && smBody.includes('</urlset>')
+        && /<loc>[^<]*\/menu<\/loc>/.test(smBody)
+        && /<loc>[^<]*\/menu\/[^<]+<\/loc>/.test(smBody)
+        && locs >= 7,
+      `${locs} urls`,
+    );
+
+    const sd = await req('/api/structured-data.json');
+    const bakery = sd.data?.['@graph']?.find((g) => g['@type'] === 'Bakery');
+    check(
+      'structured data describes the bakery with its real menu',
+      sd.status === 200 && Boolean(bakery) && Array.isArray(bakery.makesOffer) && bakery.makesOffer.length > 0,
+      `offers=${bakery?.makesOffer?.length ?? 0}`,
+    );
+  }
+
   // ---------------------------------------------------------------- summary
   console.log('\n──────────────────────────────────────────');
   results.forEach((r) => console.log(r));

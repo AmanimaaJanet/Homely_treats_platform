@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import ProductCard from '../components/ProductCard.jsx';
 import { ProductIcon } from '../components/ProductIcon.jsx';
 import VideoBlock from '../components/VideoBlock.jsx';
+import Seo from '../components/Seo.jsx';
 
 const CATEGORIES = [
   { id: 'ALL', label: 'All Items', icon: null },
@@ -35,6 +36,7 @@ export default function Menu() {
 
   return (
     <div className="page">
+    <Seo title="Menu" description="The full menu — cakes, pastries and confectioneries with prices in GH₵, baked to order and delivered across Greater Accra." />
       <div className="page-banner">
         <VideoBlock
           className="page-banner-media"

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Smartphone } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
+import Seo from '../components/Seo.jsx';
 
 /**
  * Demo payment screen — shown only when Paystack keys are NOT configured.
@@ -33,6 +34,7 @@ export default function PaySimulate() {
 
   return (
     <div className="page">
+    <Seo title="Complete Payment" description="Complete your order payment." noindex />
       <div className="container">
         <div className="auth-card section centered">
           <div className="auth-logo"><Smartphone size={44} strokeWidth={1.6} /></div>

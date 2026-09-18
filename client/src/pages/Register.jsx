@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Cake, Check } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
+import Seo from '../components/Seo.jsx';
 
 const PERKS = [
   'Track all your orders in real time',
@@ -56,6 +57,7 @@ export default function Register() {
 
   return (
     <div className="auth-wrap">
+    <Seo title="Create an Account" description="Create a Homely Treats account to order faster and earn loyalty points." noindex />
       <div className="auth-side">
         <Link to="/" className="logo">Homely Treats</Link>
         <div className="auth-logo"><Cake size={44} strokeWidth={1.6} /></div>

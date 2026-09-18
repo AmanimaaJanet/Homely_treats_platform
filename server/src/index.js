@@ -29,6 +29,7 @@ import settingsRoutes from './routes/settings.routes.js';
 import deliveryRoutes from './routes/delivery.routes.js';
 import wishlistRoutes from './routes/wishlist.routes.js';
 import pushRoutes from './routes/push.routes.js';
+import seoRoutes from './routes/seo.routes.js';
 
 // Production logs become one JSON object per line, including everything the rest of
 // the codebase reports through console.error.
@@ -147,6 +148,11 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/delivery', deliveryRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/push', pushRoutes);
+
+// Crawler files at the site root (/robots.txt, /sitemap.xml, /structured-data.json).
+// Mounted before the static handler so these are answered by the API, not the SPA
+// fallback — a crawler asking for the sitemap must never receive index.html.
+app.use(seoRoutes);
 
 // Serve the built React app in production
 const clientDist = path.resolve(__dirname, '../../client/dist');

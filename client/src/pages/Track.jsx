@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { useApp } from '../store.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import { ghs, fmtDate, fmtDateTime } from '../lib/format.js';
+import Seo from '../components/Seo.jsx';
 
 const CHANNEL_ICON = { SMS: MessageSquare, EMAIL: Mail, WHATSAPP: MessageCircle };
 
@@ -96,6 +97,7 @@ export default function Track() {
 
   return (
     <div className="page">
+    <Seo title="Track Your Order" description="Follow your order from the kitchen to your door in real time." />
       <div className="container">
         {showClaim && (
           <section className="claim-panel">

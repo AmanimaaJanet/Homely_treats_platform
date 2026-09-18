@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { api } from '../api.js';
+import Seo from '../components/Seo.jsx';
 
 /**
  * Landing page after Paystack redirects the customer back.
@@ -30,6 +31,7 @@ export default function PayCallback() {
 
   return (
     <div className="page">
+    <Seo title="Payment Status" description="Confirming your payment." noindex />
       <div className="container">
         <div className="auth-card section centered">
           <div className="auth-logo"><Loader2 size={44} strokeWidth={1.6} className="spin" /></div>

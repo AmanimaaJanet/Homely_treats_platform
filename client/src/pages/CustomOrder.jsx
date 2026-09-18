@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { useApp } from '../store.jsx';
 import { ghs, minDate } from '../lib/format.js';
 import ProductGallery from '../components/ProductGallery.jsx';
+import Seo from '../components/Seo.jsx';
 
 const DEFAULT_FLAVORS = ['Vanilla', 'French Vanilla', 'Chocolate', 'Red Velvet', 'Lemon', 'Matcha'];
 const ICINGS = ['Buttercream', 'Fondant', 'Whipped Cream', 'Ganache', 'Naked (No Icing)'];
@@ -112,6 +113,7 @@ export default function CustomOrder() {
 
   return (
     <div className="page">
+    <Seo title="Custom Orders" description="Tell us the occasion — pick your cake, size, flavour, icing and inscription, and it will be baked to order." />
       <div className="container">
         <div className="section">
           <h2 className="section-title">Build Your Perfect Order</h2>

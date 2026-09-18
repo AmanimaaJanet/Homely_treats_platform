@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Cake, Check, Mail, KeyRound } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
+import Seo from '../components/Seo.jsx';
 
 const PERKS = [
   'The reset link expires in 30 minutes',
@@ -33,6 +34,7 @@ export default function ForgotPassword() {
 
   return (
     <div className="auth-wrap">
+    <Seo title="Forgot Password" description="Reset your Homely Treats password." noindex />
       <div className="auth-side">
         <Link to="/" className="logo">Homely Treats</Link>
         <div className="auth-logo"><KeyRound size={44} strokeWidth={1.6} /></div>

@@ -269,7 +269,7 @@ so a returning customer is sent to sign in rather than asked to register twice.
 | 26 | **Backups + a rehearsed restore** (Render automated backups + documented restore drill) | One bad migration and the orders are gone | S |
 | 27 | **Performance budget** — route-level code-splitting (the admin bundle loads for shoppers), LCP/CLS measurement, keep media under budget (videos are at 2.3 MB — good) | Slow first paint on 3G loses orders | M |
 | 28 | **Accessibility pass (WCAG AA)** — focus states, form labels, contrast, keyboard-only ordering, screen-reader run-through | Also improves SEO and general usability | M |
-| 29 | **SEO** — `sitemap.xml`, `robots.txt`, per-product Open Graph images, LocalBusiness/Product structured data, Google Business profile | Free customer acquisition | S |
+| 29 | ✅ **SHIPPED** — **SEO** — `sitemap.xml`, `robots.txt`, per-product Open Graph images, LocalBusiness/Product structured data, Google Business profile | Free customer acquisition | S |
 | 30 | **Rider live GPS** on the tracking page + rider earnings/history | Nice-to-have; the tracker is status-based today | L |
 | 31 | **Multi-branch support** | Only when a second location opens | L |
 | 32 | **Bilingual UI (English / Twi)** | Wider local reach | L |

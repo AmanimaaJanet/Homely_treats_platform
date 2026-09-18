@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Cake, Check, ShieldCheck, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
+import Seo from '../components/Seo.jsx';
 
 const PERKS = [
   'At least 8 characters',
@@ -51,6 +52,7 @@ export default function ResetPassword() {
   if (!token) {
     return (
       <div className="auth-wrap">
+        <Seo title="Reset Password" description="Choose a new password for your account." noindex />
         <div className="auth-side">
           <Link to="/" className="logo">Homely Treats</Link>
           <div className="auth-logo warn"><AlertTriangle size={44} strokeWidth={1.6} /></div>
@@ -72,6 +74,7 @@ export default function ResetPassword() {
   if (done) {
     return (
       <div className="auth-wrap">
+        <Seo title="Reset Password" description="Choose a new password for your account." noindex />
         <div className="auth-side">
           <Link to="/" className="logo">Homely Treats</Link>
           <div className="auth-logo ok"><ShieldCheck size={44} strokeWidth={1.6} /></div>
@@ -92,6 +95,7 @@ export default function ResetPassword() {
 
   return (
     <div className="auth-wrap">
+      <Seo title="Reset Password" description="Choose a new password for your account." noindex />
       <div className="auth-side">
         <Link to="/" className="logo">Homely Treats</Link>
         <div className="auth-logo"><Cake size={44} strokeWidth={1.6} /></div>

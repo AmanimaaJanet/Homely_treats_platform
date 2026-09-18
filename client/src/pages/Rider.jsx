@@ -16,6 +16,7 @@ import {
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
 import { ghs, fmtDateTime } from '../lib/format.js';
+import Seo from '../components/Seo.jsx';
 
 /**
  * Rider app — /rider
@@ -174,6 +175,7 @@ export default function Rider() {
 
   return (
     <div className="page rider-page">
+    <Seo title="Rider Dashboard" description="Rider delivery dashboard." noindex />
       <div className="rider-header">
         <div>
           <h1><Bike size={22} /> Rider app</h1>

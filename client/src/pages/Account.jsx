@@ -8,6 +8,7 @@ import SavedItems from '../components/SavedItems.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import { ghs, fmtDate, initials } from '../lib/format.js';
 import { useEscape } from '../lib/a11y.js';
+import Seo from '../components/Seo.jsx';
 
 function Stars({ value, onChange }) {
   return (
@@ -143,6 +144,7 @@ export default function Account() {
 
   return (
     <div className="page">
+    <Seo title="Your Account" description="Your orders, loyalty points and saved items." noindex />
       <div className="container">
         <div className="account-layout">
           <div className="section account-side">

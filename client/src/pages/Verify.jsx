@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { MailCheck, CheckCircle2, TriangleAlert } from 'lucide-react';
 import { api } from '../api.js';
+import Seo from '../components/Seo.jsx';
 
 export default function Verify() {
   const [params] = useSearchParams();
@@ -21,6 +22,7 @@ export default function Verify() {
 
   return (
     <div className="page">
+    <Seo title="Verify Your Email" description="Confirming your email address." noindex />
       <div className="container">
         <div className="auth-card section centered">
           {state === 'verifying' && (

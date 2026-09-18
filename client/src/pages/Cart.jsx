@@ -5,6 +5,7 @@ import { useApp } from '../store.jsx';
 import { api, pointsValue, maxRedeemablePoints } from '../api.js';
 import { ghs } from '../lib/format.js';
 import ProductMonogram from '../components/ProductMonogram.jsx';
+import Seo from '../components/Seo.jsx';
 
 const PAYMENT_METHODS = [
   { id: 'MOMO', icon: Smartphone, label: 'MTN Mobile Money', note: 'Instant · Recommended' },
@@ -181,6 +182,7 @@ export default function Cart() {
   if (cart.length === 0) {
     return (
       <div className="page">
+        <Seo title="Your Cart" description="Your order so far." noindex />
         <div className="container">
           <div className="section empty-state">
             <div className="empty-state-icon"><ShoppingCart size={56} strokeWidth={1.2} /></div>
@@ -195,6 +197,7 @@ export default function Cart() {
 
   return (
     <div className="page">
+    <Seo title="Your Cart" description="Your order so far." noindex />
       <div className="container">
         <div className="section">
           <h2 className="section-title">Cart & Checkout</h2>

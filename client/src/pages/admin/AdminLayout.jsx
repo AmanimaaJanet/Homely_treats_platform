@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { Cake, BarChart3, ClipboardList, Package, Users, Ticket, TrendingUp, Settings, LogOut, Bike, ScrollText, MessageSquareQuote, Truck, Activity } from 'lucide-react';
 import { api } from '../../api.js';
 import { useApp } from '../../store.jsx';
+import Seo from '../../components/Seo.jsx';
 
 const MENU = [
   { to: '/admin', label: 'Dashboard', icon: BarChart3, end: true },
@@ -45,6 +46,7 @@ export default function AdminLayout() {
 
   return (
     <div className="admin-layout">
+    <Seo title="Admin" description="Store management." noindex />
       <div className="admin-sidebar">
         <div className="admin-brand">
           <h2><Cake size={18} /> Homely Treats</h2>

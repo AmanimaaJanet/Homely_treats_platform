@@ -1,6 +1,7 @@
 import React from 'react';
 import {Link } from 'react-router-dom';
 import { ShieldCheck, FileText } from 'lucide-react';
+import Seo from '../components/Seo.jsx';
 
 /**
  * Privacy Policy and Terms of Service.
@@ -16,9 +17,10 @@ const BUSINESS = 'Homely Treats Service Limited';
 const CONTACT = '[your email] · [your phone number]';
 const ADDRESS = 'Airport Residential, Accra, Ghana';
 
-function Shell({ title, icon: Icon, children }) {
+function Shell({ title, description, icon: Icon, children }) {
   return (
     <div className="page">
+      <Seo title={title} description={description} />
       <div className="container">
         <div className="section legal">
           <div className="legal-head">
@@ -42,7 +44,7 @@ function Shell({ title, icon: Icon, children }) {
 
 export function Privacy() {
   return (
-    <Shell title="Privacy Policy" icon={ShieldCheck}>
+    <Shell title="Privacy Policy" description="How Homely Treats collects, uses and protects your information." icon={ShieldCheck}>
       <p>
         {BUSINESS} ("we", "us") bakes and delivers custom cakes, pastries and confectioneries in
         Accra. This policy explains what personal information our website and app collect, why we
@@ -138,7 +140,7 @@ export function Privacy() {
 
 export function Terms() {
   return (
-    <Shell title="Terms of Service" icon={FileText}>
+    <Shell title="Terms of Service" description="The terms that apply to orders placed with Homely Treats." icon={FileText}>
       <p>
         These terms cover orders placed with {BUSINESS} through this website or app. By placing an
         order you agree to them.
