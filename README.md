@@ -133,6 +133,18 @@ cd server && npm start      # http://localhost:5000
 
 ## 🧪 Testing
 
+### Backups
+
+```bash
+./scripts/backup.sh                                     # dump the database, prune old copies
+./scripts/restore.sh FILE --target homely_drill         # rehearse a restore, safely
+./scripts/restore.sh --verify-only --target homely_drill # compare the copy against live
+./scripts/restore.sh FILE --confirm                     # restore for real
+```
+
+Full runbook — schedule, off-site copies, what a dump misses, and the rehearsed drill
+with its actual output — in **[BACKUP_AND_RESTORE.md](BACKUP_AND_RESTORE.md)**.
+
 `npm run verify` runs everything a push must pass (lint → unit tests → build); the two
 suites in detail:
 

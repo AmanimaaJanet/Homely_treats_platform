@@ -25,3 +25,6 @@ logs/
 
 # Test coverage output
 coverage/
+
+# Database dumps — contain customer data, never commit them
+backups/
