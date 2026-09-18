@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Cake, BarChart3, ClipboardList, Package, Users, Ticket, TrendingUp, Settings, LogOut, Bike, ScrollText, MessageSquareQuote, Truck } from 'lucide-react';
+import { Cake, BarChart3, ClipboardList, Package, Users, Ticket, TrendingUp, Settings, LogOut, Bike, ScrollText, MessageSquareQuote, Truck, Activity } from 'lucide-react';
 import { api } from '../../api.js';
 import { useApp } from '../../store.jsx';
 
@@ -15,6 +15,7 @@ const MENU = [
   { to: '/admin/deliveries', label: 'Deliveries', icon: Truck },
   { to: '/admin/riders', label: 'Riders', icon: Bike },
   { to: '/admin/audit', label: 'Activity log', icon: ScrollText },
+  { to: '/admin/diagnostics', label: 'Diagnostics', icon: Activity },
   { to: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 

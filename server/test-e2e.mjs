@@ -68,7 +68,8 @@ async function req(pathname, { method = 'GET', body, token, raw = false } = {}) 
   if (raw) return res;
   let data = null;
   try { data = await res.json(); } catch { /* empty */ }
-  return { status: res.status, data };
+  // Headers are returned alongside the body so tracing (X-Request-Id) can be asserted.
+  return { status: res.status, data, headers: Object.fromEntries(res.headers.entries()) };
 }
 
 async function teardown() {
@@ -1945,7 +1946,60 @@ E2E Imported ${rnd},CAKE,175,"Imported, with a comma",New,6,true,2,Vanilla|Choco
       !otherRow?.lockedUntil && otherGood.status === 200, `${otherGood.status}`);
   }
 
-  // ---------------------------------------------------------------- 38. Unauthorised guard
+  // ---------------------------------------------------------------- 38. Tracing, logging and diagnostics
+  {
+    // Every response is traceable: a customer quoting the reference in a 500 lets the
+    // exact request be pulled out of the logs.
+    const plain = await fetch(`${BASE}/api/products`);
+    const id = plain.headers.get('x-request-id');
+    check('Every response carries a request id', typeof id === 'string' && id.length >= 8, `${id}`);
+
+    const supplied = 'e2e-trace-123456';
+    const echoed = await fetch(`${BASE}/api/products`, { headers: { 'X-Request-Id': supplied } });
+    check('An upstream request id is preserved so traces line up', echoed.headers.get('x-request-id') === supplied,
+      echoed.headers.get('x-request-id'));
+
+    const bogus = await fetch(`${BASE}/api/products`, { headers: { 'X-Request-Id': '<script>x</script>' } });
+    check('A bogus request id is replaced, never echoed', bogus.headers.get('x-request-id') !== '<script>x</script>',
+      bogus.headers.get('x-request-id'));
+
+    const unauthorised = await req('/api/admin/diagnostics');
+    check('A refused request still reports its id', unauthorised.status === 401 && Boolean(unauthorised.headers?.['x-request-id']),
+      `${unauthorised.status}`);
+
+    // A 404 from the API is a clean JSON error, not the SPA's HTML.
+    const missing = await fetch(`${BASE}/api/definitely-not-a-route`);
+    const missingBody = await missing.json().catch(() => ({}));
+    check('An unknown API route answers with JSON, not HTML',
+      missing.status === 404 && typeof missingBody.error === 'string', `${missing.status} ${missingBody.error}`);
+
+    const diag = await req('/api/admin/diagnostics', { token: adminToken });
+    check('Diagnostics loads for an admin', diag.status === 200 && Boolean(diag.data?.integrations), `${diag.status}`);
+    check('Diagnostics reports each integration as on or off',
+      ['paystack', 'resend', 'whatsapp', 'push', 'cloudinary'].every((k) => typeof diag.data.integrations[k] === 'boolean'),
+      JSON.stringify(diag.data.integrations));
+    check('Diagnostics reports notification health', diag.data.notifications &&
+      typeof diag.data.notifications.failedLast7Days === 'number', `failed=${diag.data.notifications?.failedLast7Days}`);
+    check('Diagnostics lists the recent admin actions', Array.isArray(diag.data.recentAdminActions));
+    check('Diagnostics reports uptime and release',
+      typeof diag.data.uptimeSeconds === 'number' && Boolean(diag.data.release), `release=${diag.data.release}`);
+
+    const testAlert = await req('/api/admin/diagnostics/test-alert', { method: 'POST', token: adminToken });
+    check('A test alert is captured', testAlert.status === 200 && Boolean(testAlert.data?.captured?.message), testAlert.data?.captured?.message);
+    check('The captured error carries the request id', Boolean(testAlert.data?.captured?.requestId));
+
+    const withError = await req('/api/admin/diagnostics', { token: adminToken });
+    check('The captured error appears on the diagnostics screen',
+      (withError.data?.recentErrors || []).some((e) => e.message.includes('Test alert')),
+      `${withError.data?.recentErrors?.length} buffered`);
+
+    const clearedErrors = await req('/api/admin/diagnostics/errors', { method: 'DELETE', token: adminToken });
+    check('The error list can be cleared', clearedErrors.data?.cleared >= 1, `cleared=${clearedErrors.data?.cleared}`);
+    const afterClear = await req('/api/admin/diagnostics', { token: adminToken });
+    check('The error list is empty afterwards', (afterClear.data?.recentErrors || []).length === 0);
+  }
+
+  // ---------------------------------------------------------------- 39. Unauthorised guard
   {
     const r = await req('/api/admin/stats');
     check('Admin endpoints protected (401)', r.status === 401);

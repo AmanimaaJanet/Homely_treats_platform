@@ -31,6 +31,13 @@ export const config = {
   // Set REQUIRE_EMAIL_VERIFICATION=true to force it once Resend is configured.
   requireEmailVerification:
     process.env.REQUIRE_EMAIL_VERIFICATION === 'true' || Boolean(process.env.RESEND_API_KEY),
+  monitoring: {
+    // Optional Sentry DSN — the server posts events to it directly (no SDK). Blank =
+    // errors are logged and kept in the admin-visible buffer only.
+    sentryDsn: process.env.SENTRY_DSN || '',
+    release: process.env.APP_RELEASE || process.env.RENDER_GIT_COMMIT?.slice(0, 7) || 'dev',
+    persistErrors: process.env.LOG_TO_FILE !== 'false',
+  },
   // Per-account sign-in throttling (complements the per-IP limiter — see
   // services/loginGuard.js for why the account has to count its own failures).
   auth: {

@@ -4,6 +4,17 @@ This guide walks you through hosting the full app (React + Node API + PostgreSQL
 
 ---
 
+## Environment variables worth setting in production
+
+Beyond the keys in `.env.example`, two are worth adding on Render:
+
+| Variable | Why |
+|---|---|
+| `LOG_LEVEL=info` | Quiet logs in production (debug is the local default) |
+| `SENTRY_DSN` | Optional. Errors are always logged and listed in Admin → Diagnostics; a Sentry DSN also ships them to Sentry — useful once more than one person is on the shop |
+| `APP_RELEASE` | Optional tag shown in Diagnostics, so you can tell which deploy is live |
+| `ALERT_EMAIL` | Where sign-in lockout alerts go (blank = the business email in Settings) |
+
 ## 1. Push your code to GitHub
 
 1. Create a private GitHub repository.

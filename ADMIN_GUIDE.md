@@ -91,6 +91,7 @@ so with more than one admin you can always see who did what.
 | **Deliveries** | Your delivery rules in one place: zones with fees, **minimum basket**, **free delivery over**, ETA note, **pickup counters**, **collection windows with daily capacity**, **closed days**, and a 14-day calendar of what each day has promised. |
 | **Riders** | Create rider accounts, suspend them, and see who is carrying what. |
 | **Activity log** | Who changed what, when, from which IP — order changes, price edits, refunds, moderation, settings. |
+| **Diagnostics** | Is everything switched on (Paystack, email, WhatsApp, push, SMS), did any notification fail this week, and what errors has the server hit — each with the reference to quote. |
 | **Settings** | Business details, lead time, low-stock threshold, payment methods, loyalty/review toggles, notification toggles, **WhatsApp templates**, and **your admin account & password**. (Delivery zones now live under **Deliveries**.) |
 
 ---
@@ -148,6 +149,7 @@ A normal Accra bakery day, in the order the app expects it:
 | Anytime | **Reviews** | Clear the approval queue (if you've turned moderation on). |
 | Weekly | **Reports** | Check revenue, which zones and products carry it, whether customers come back, and refunds; export the CSV. |
 | Weekly | **Activity log** | Skim what changed, especially with more than one person using the portal. |
+| When something feels wrong | **Diagnostics** | Start here before phoning anyone: an integration showing *not set*, a notification that failed, or an error with an exact time. |
 
 ---
 
@@ -203,6 +205,10 @@ email attaches their past orders automatically.
 - The installer's password (`admin123`) is published in this repo. If **Settings → Your
   admin account** is showing the yellow warning banner, anyone who finds your site and
   guesses that password is you. Change it before the shop goes live.
+- **Every request has a reference.** The server attaches an id to each request, logs its
+  method, path, status and duration under that id, and returns it to the browser. If a
+  customer sees *"quote this reference"*, that string pins down the exact request in the
+  server log. **Diagnostics → Send a test alert** proves the pipeline works.
 - Admin actions are audited: price changes, refunds, status changes, bulk edits, CSV
   imports, review moderation and setting changes all land in **Activity log** with the
   actor, the time and the IP.

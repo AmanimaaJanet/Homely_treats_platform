@@ -1116,3 +1116,16 @@ a:hover { color: var(--pd); }
 .product-card.bulk-selected { outline: 2px solid #B4634B; outline-offset: 1px; }
 .bulk-check { position: absolute; top: 10px; right: 10px; z-index: 2; background: rgba(255,255,255,.92); border-radius: 6px; padding: 3px 5px; cursor: pointer; box-shadow: 0 1px 4px rgba(44,26,14,.12); }
 .bulk-check input { cursor: pointer; }
+
+/* Diagnostics (admin) */
+.diag-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+.diag-list { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.diag-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid #F0E2D3; padding-bottom: 7px; }
+.diag-list dt { margin: 0; font-size: 13.5px; }
+.diag-list dd { margin: 0; font-size: 13px; }
+.danger-text { color: #9B2C2C; }
+.error-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; max-height: 420px; overflow-y: auto; }
+.error-item { border: 1px solid #EADFD2; border-left: 3px solid #B4634B; border-radius: 8px; padding: 10px 12px; background: #FFFDFA; }
+.error-item-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; }
+.error-badge { background: #9B2C2C; color: #fff; font-size: 11px; font-weight: 700; border-radius: 4px; padding: 1px 6px; }
+.error-stack { font-size: 11px; color: #6B5544; white-space: pre-wrap; margin: 6px 0 0; }

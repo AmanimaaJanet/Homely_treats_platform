@@ -52,6 +52,7 @@ A full-stack bakery ordering platform built from your HTML mockup: **React** fro
 | **Paystack** | MTN MoMo, AirtelTigo, Vodafone Cash, Visa/MC | Test keys need **no business docs** — free signup |
 | **Resend** | Order confirmations, receipts, status updates, email verification | Free 100/day, 3,000/month |
 | **Web push (VAPID)** | Instant free alerts on the customer's phone, from the PWA — no credits, no phone number |
+| **Monitoring** | Structured JSON logs, a request id on every response, error capture shown in **Admin → Diagnostics** (Sentry optional via `SENTRY_DSN`) |
 | **Per-account lockout** | An account pauses briefly after repeated wrong passwords (`AUTH_MAX_FAILED_ATTEMPTS`); the bakery is alerted, and a password reset gets the owner straight back in |
 | **WhatsApp Cloud API** | WhatsApp notifications using **Meta-approved templates** (required outside the 24-hour window), with automatic plain-text fallback and a test-send button | Free test number, 1,000 conversations/month — setup: [WHATSAPP_TEMPLATES.md](WHATSAPP_TEMPLATES.md) |
 | **Textbelt** | SMS (free 1/day) | ⚠️ free tier blocked for Ghana numbers |
@@ -159,6 +160,13 @@ PAYSTACK_PUBLIC_KEY=
 # Resend (blank = emails printed to console)
 RESEND_API_KEY=
 EMAIL_FROM=Homely Treats <onboarding@resend.dev>
+
+# Logging + error monitoring. Logs are JSON per line in production; errors are kept in
+# a buffer shown in Admin -> Diagnostics (and logs/errors.jsonl), with Sentry optional.
+LOG_LEVEL=                # debug | info | warn | error | silent
+LOG_FORMAT=               # json | pretty
+SENTRY_DSN=               # blank = no Sentry, everything else still works
+APP_RELEASE=              # shown in diagnostics + Sentry releases
 
 # Per-account sign-in lockout (on top of the per-IP limiter). The lock lifts by
 # itself; a password reset clears it immediately.

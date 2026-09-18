@@ -11,6 +11,7 @@ import { notifyBackInStock } from '../services/stockNotifications.js';
 import { buildAnalytics, monthlyTrend } from '../services/analytics.js';
 import { customerKey } from '../services/analytics.js';
 import { currentlyLocked, clearLock } from '../services/loginGuard.js';
+import { monitoringStatus, recentErrors, clearErrors, captureError } from '../services/monitoring.js';
 import { sendTemplateTest } from '../services/whatsapp.js';
 import { config, ORDER_STATUSES } from '../config.js';
 
@@ -556,6 +557,102 @@ router.post('/alerts/low-stock/send', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to send the stock digest' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Diagnostics — what is configured, and what has been failing
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/admin/diagnostics
+ *
+ * One screen that answers the two questions a shop owner actually asks when something
+ * feels wrong: "is everything switched on?" and "what broke lately?" — with the request
+ * ids needed to find the full story in the logs.
+ */
+router.get('/diagnostics', async (req, res) => {
+  try {
+    const settings = await getSettings();
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+    const [failedNotifications, recentAudit, outbox] = await Promise.all([
+      // Notification rows that failed: a customer who never got their SMS usually shows
+      // up here long before they phone.
+      prisma.notification.groupBy({
+        by: ['channel', 'status'],
+        where: { createdAt: { gte: since } },
+        _count: { _all: true },
+      }),
+      prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 5, select: { action: true, detail: true, createdAt: true } }),
+      prisma.notification.count({ where: { status: 'FAILED', createdAt: { gte: since } } }),
+    ]);
+
+    const channels = {};
+    for (const row of failedNotifications) {
+      channels[row.channel] = channels[row.channel] || { sent: 0, failed: 0, simulated: 0 };
+      if (row.status === 'FAILED') channels[row.channel].failed += row._count._all;
+      else if (row.status === 'SIMULATED') channels[row.channel].simulated += row._count._all;
+      else channels[row.channel].sent += row._count._all;
+    }
+
+    res.json({
+      monitoring: monitoringStatus(),
+      release: config.monitoring.release,
+      environment: process.env.NODE_ENV || 'development',
+      uptimeSeconds: Math.round(process.uptime()),
+      integrations: {
+        paystack: config.paystack.enabled,
+        resend: config.resend.enabled,
+        whatsapp: config.whatsapp.enabled,
+        push: config.push.enabled,
+        cloudinary: config.storage.useCloudinary,
+        sms: { provider: config.sms.provider, configured: Boolean(config.sms.apiKey || config.sms.arkeselKey) },
+        turnstile: Boolean(config.turnstile.secretKey),
+      },
+      lockout: { maxFailedAttempts: config.auth.maxFailedAttempts, lockoutMinutes: config.auth.lockoutMinutes },
+      leadDays: settings.minLeadDays,
+      notifications: { channels, failedLast7Days: outbox },
+      recentErrors: recentErrors(),
+      recentAdminActions: recentAudit,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to build the diagnostics report' });
+  }
+});
+
+// POST /api/admin/diagnostics/test-alert — prove the error pipeline end to end
+router.post('/diagnostics/test-alert', async (req, res) => {
+  try {
+    const captured = captureError(new Error('Test alert from the admin portal — nothing is broken'), {
+      route: '/api/admin/diagnostics/test-alert',
+      method: 'POST',
+      userId: req.user?.id || null,
+      requestId: req.id,
+      test: true,
+    });
+    await audit(req, {
+      action: 'DIAGNOSTICS_TEST_ALERT',
+      entity: 'System',
+      detail: `Test error captured (request ${req.id})`,
+    });
+    res.json({ ok: true, captured, sentryConfigured: Boolean(config.monitoring.sentryDsn) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to send the test alert' });
+  }
+});
+
+// DELETE /api/admin/diagnostics/errors — clear the local error buffer
+router.delete('/diagnostics/errors', async (req, res) => {
+  try {
+    const cleared = clearErrors();
+    await audit(req, { action: 'DIAGNOSTICS_CLEARED', entity: 'System', detail: `Cleared ${cleared} buffered error(s)` });
+    res.json({ ok: true, cleared });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to clear the error list' });
   }
 });
 

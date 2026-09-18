@@ -19,3 +19,6 @@ source-video/
 *.log
 .DS_Store
 Thumbs.db
+
+# Runtime logs (created by the error monitor)
+logs/

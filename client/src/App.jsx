@@ -32,6 +32,7 @@ import AdminRiders from './pages/admin/Riders.jsx';
 import AdminAudit from './pages/admin/Audit.jsx';
 import AdminReviews from './pages/admin/Reviews.jsx';
 import AdminDeliveries from './pages/admin/Deliveries.jsx';
+import AdminDiagnostics from './pages/admin/Diagnostics.jsx';
 
 export default function App() {
   const location = useLocation();
@@ -73,6 +74,7 @@ export default function App() {
             <Route path="reports" element={<AdminReports />} />
             <Route path="riders" element={<AdminRiders />} />
             <Route path="audit" element={<AdminAudit />} />
+            <Route path="diagnostics" element={<AdminDiagnostics />} />
             <Route path="settings" element={<AdminSettings />} />
           </Route>
         </Routes>
