@@ -16,17 +16,26 @@ export function amountInWords(amount) {
     return `${ones[Math.floor(n / 100)]} hundred${n % 100 ? ` and ${under1000(n % 100)}` : ''}`;
   };
 
-  const value = Math.abs(Number(amount) || 0);
+  /** 0–999,999 said properly: the "thousand" group, then the hundreds group. */
+  const underMillion = (n) => {
+    if (n < 1000) return under1000(n);
+    const thousands = Math.floor(n / 1000);
+    const rest = n % 1000;
+    return `${under1000(thousands)} thousand${rest ? `, ${under1000(rest)}` : ''}`;
+  };
+
+  const parsed = Math.abs(Number(amount));
+  const value = Number.isFinite(parsed) ? parsed : 0;
   const whole = Math.floor(value);
   const pesewas = Math.round((value - whole) * 100);
 
   let words;
   if (whole === 0) words = 'zero';
-  else if (whole < 1000) words = under1000(whole);
-  else if (whole < 1000000) {
-    words = `${under1000(Math.floor(whole / 1000))} thousand${whole % 1000 ? `, ${under1000(whole % 1000)}` : ''}`;
-  } else {
-    words = `${under1000(Math.floor(whole / 1000000))} million${whole % 1000000 ? `, ${under1000(whole % 1000000)}` : ''}`;
+  else if (whole < 1000000) words = underMillion(whole);
+  else {
+    const millions = Math.floor(whole / 1000000);
+    const rest = whole % 1000000;
+    words = `${underMillion(millions)} million${rest ? `, ${underMillion(rest)}` : ''}`;
   }
 
   const cap = words.charAt(0).toUpperCase() + words.slice(1);

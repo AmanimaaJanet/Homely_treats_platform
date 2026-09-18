@@ -22,3 +22,6 @@ Thumbs.db
 
 # Runtime logs (created by the error monitor)
 logs/
+
+# Test coverage output
+coverage/

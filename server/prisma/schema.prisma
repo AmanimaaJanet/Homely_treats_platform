@@ -10,60 +10,60 @@ datasource db {
 }
 
 model User {
-  id                String   @id @default(cuid())
-  fullName          String
-  email             String   @unique
-  phone             String
-  passwordHash      String
-  role              String   @default("CUSTOMER") // CUSTOMER | ADMIN | RIDER
-  emailVerified     Boolean  @default(false)
-  verificationToken String?
+  id                  String             @id @default(cuid())
+  fullName            String
+  email               String             @unique
+  phone               String
+  passwordHash        String
+  role                String             @default("CUSTOMER") // CUSTOMER | ADMIN | RIDER
+  emailVerified       Boolean            @default(false)
+  verificationToken   String?
   // Password reset — only the SHA-256 hash of the emailed token is stored, so a
   // database leak cannot be used to take over accounts. Single use (cleared on
   // success) and short-lived (see RESET_TOKEN_TTL_MINUTES).
-  resetTokenHash    String?
-  resetTokenExpires DateTime?
-  active            Boolean  @default(true)
-  loyaltyPoints     Int      @default(0)
+  resetTokenHash      String?
+  resetTokenExpires   DateTime?
+  active              Boolean            @default(true)
+  loyaltyPoints       Int                @default(0)
   // Per-account sign-in throttling. The per-IP limiter cannot tell one customer from a
   // whole mobile network behind carrier-grade NAT, so the account itself counts its own
   // failures and locks briefly. A successful sign-in or a password reset clears it.
-  failedLoginAttempts Int    @default(0)
+  failedLoginAttempts Int                @default(0)
   lastFailedLoginAt   DateTime?
   lockedUntil         DateTime?
   lockoutNoticeSentAt DateTime?
   lastLoginAt         DateTime?
-  createdAt         DateTime @default(now())
-  orders            Order[]
-  reviews           Review[]
-  deliveries        Order[]           @relation("OrderRider")
-  wishlist          WishlistItem[]
-  pushSubscriptions PushSubscription[]
+  createdAt           DateTime           @default(now())
+  orders              Order[]
+  reviews             Review[]
+  deliveries          Order[]            @relation("OrderRider")
+  wishlist            WishlistItem[]
+  pushSubscriptions   PushSubscription[]
 }
 
 model Product {
-  id          String        @id @default(cuid())
+  id          String         @id @default(cuid())
   name        String
   description String?
-  category    String        // CAKE | CUPCAKE | PASTRY | CONFECTIONERY
-  basePrice   Float         // default price in GHS (used when no size tier selected)
-  emoji       String        @default("Cake") // legacy field: stores a Lucide icon name
-  icon        String        @default("Cake") // Lucide icon name for the product
+  category    String // CAKE | CUPCAKE | PASTRY | CONFECTIONERY
+  basePrice   Float // default price in GHS (used when no size tier selected)
+  emoji       String         @default("Cake") // legacy field: stores a Lucide icon name
+  icon        String         @default("Cake") // Lucide icon name for the product
   badge       String?
   // Product photos. Order matters: images[0] is the cover shown on cards and in
   // listings. Empty means the product falls back to its Lucide icon.
-  images      String[]      @default([])
-  imageAlt    String?       // optional alt text; falls back to the product name
-  flavors     String[]      @default([])
-  sizes       String[]      @default([])
+  images      String[]       @default([])
+  imageAlt    String? // optional alt text; falls back to the product name
+  flavors     String[]       @default([])
+  sizes       String[]       @default([])
   // Minimum notice for this product, in days. NULL falls back to the shop-wide
   // setting — a celebration cake may need 4 days where a tray of cookies needs 1.
   leadDays    Int?
-  stock       Int           @default(0)
-  inStock     Boolean       @default(true)
-  featured    Boolean       @default(false)
-  isActive    Boolean       @default(true)
-  createdAt   DateTime      @default(now())
+  stock       Int            @default(0)
+  inStock     Boolean        @default(true)
+  featured    Boolean        @default(false)
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
   orderItems  OrderItem[]
   sizeOptions ProductSize[]
   wishlisted  WishlistItem[]
@@ -73,9 +73,9 @@ model ProductSize {
   id        String  @id @default(cuid())
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  label     String  // e.g. "8 inch (serves 14)"
+  label     String // e.g. "8 inch (serves 14)"
   serves    Int     @default(1)
-  price     Float   // absolute price (GHS) for this size
+  price     Float // absolute price (GHS) for this size
 }
 
 /// Products a customer is waiting for. When stock comes back, they hear about it —
@@ -88,6 +88,7 @@ model WishlistItem {
   product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
   createdAt  DateTime  @default(now())
   notifiedAt DateTime? // last back-in-stock alert for this item
+
   @@unique([userId, productId])
   @@index([productId])
 }
@@ -109,10 +110,10 @@ model PushSubscription {
 }
 
 model DeliveryZone {
-  id     String  @id @default(cuid())
-  name   String  @unique // e.g. "East Legon"
-  fee    Float   @default(0)
-  active Boolean @default(true)
+  id       String  @id @default(cuid())
+  name     String  @unique // e.g. "East Legon"
+  fee      Float   @default(0)
+  active   Boolean @default(true)
   // Trading rules per neighbourhood: the smallest basket you'll drive out for, and
   // the basket size at which delivery becomes free. NULL means "no rule".
   minOrder Float? // refuse delivery to this zone below this subtotal
@@ -137,11 +138,11 @@ model PickupLocation {
 /// fill a window, checkout stops offering it, so the kitchen is never promised more
 /// cakes than it can finish.
 model TimeSlot {
-  id        String   @id @default(cuid())
-  label     String   @unique // e.g. "9:00 – 11:00"
-  sortOrder Int      @default(0)
-  capacity  Int      @default(6)
-  active    Boolean  @default(true)
+  id        String  @id @default(cuid())
+  label     String  @unique // e.g. "9:00 – 11:00"
+  sortOrder Int     @default(0)
+  capacity  Int     @default(6)
+  active    Boolean @default(true)
 }
 
 /// Days the bakery is closed (public holidays, maintenance). Checkout refuses them.
@@ -152,45 +153,45 @@ model BlackoutDate {
 }
 
 model Order {
-  id              String          @id // e.g. HT-20260830-0001
+  id              String         @id // e.g. HT-20260830-0001
   userId          String?
-  user            User?           @relation(fields: [userId], references: [id])
+  user            User?          @relation(fields: [userId], references: [id])
   guestName       String?
   guestEmail      String?
   guestPhone      String?
-  status          String          @default("PENDING") // PENDING | CONFIRMED | IN_PROGRESS | READY | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
-  paymentStatus   String          @default("PENDING") // PENDING | PAID | FAILED | COD | SIMULATED | REFUNDED
-  paymentMethod   String          @default("MOMO") // MOMO | ATL | CARD | COD
+  status          String         @default("PENDING") // PENDING | CONFIRMED | IN_PROGRESS | READY | OUT_FOR_DELIVERY | DELIVERED | CANCELLED
+  paymentStatus   String         @default("PENDING") // PENDING | PAID | FAILED | COD | SIMULATED | REFUNDED
+  paymentMethod   String         @default("MOMO") // MOMO | ATL | CARD | COD
   paymentRef      String?
   // Refunds. A refunded order flips paymentStatus to REFUNDED, which every revenue
   // figure already excludes — so reports stay honest with no extra sums to maintain.
-  refundStatus    String?         // PAYSTACK_REFUNDED | OFFLINE | FAILED
+  refundStatus    String? // PAYSTACK_REFUNDED | OFFLINE | FAILED
   refundAmount    Float?
   refundReason    String?
-  refundRef       String?         // Paystack refund reference, or "offline" when settled by hand
+  refundRef       String? // Paystack refund reference, or "offline" when settled by hand
   refundedAt      DateTime?
   subtotal        Float
-  discount        Float           @default(0)
-  loyaltyDiscount Float           @default(0)
-  pointsRedeemed  Int             @default(0)
-  pointsEarned    Int             @default(0)
-  deliveryFee     Float           @default(0)
+  discount        Float          @default(0)
+  loyaltyDiscount Float          @default(0)
+  pointsRedeemed  Int            @default(0)
+  pointsEarned    Int            @default(0)
+  deliveryFee     Float          @default(0)
   deliveryZone    String?
   total           Float
-  deliveryMethod  String          @default("PICKUP") // DELIVERY | PICKUP
+  deliveryMethod  String         @default("PICKUP") // DELIVERY | PICKUP
   deliveryAddress String?
   riderName       String?
   riderPhone      String?
   riderId         String?
-  rider           User?           @relation("OrderRider", fields: [riderId], references: [id])
+  rider           User?          @relation("OrderRider", fields: [riderId], references: [id])
   riderAcceptedAt DateTime?
   readyDate       DateTime?
   timeSlot        String? // collection/delivery window label, e.g. "9:00 – 11:00"
   pickupLocation  String? // which counter, when the bakery has more than one
   notes           String?
   promoCode       String?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
   items           OrderItem[]
   events          OrderEvent[]
   notifications   Notification[]
@@ -234,8 +235,8 @@ model Notification {
   id        String   @id @default(cuid())
   orderId   String
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  channel   String   // SMS | EMAIL | WHATSAPP
-  type      String   // ORDER_CONFIRMED | PAYMENT_VERIFIED | STATUS_UPDATE | READY | DELIVERED | CANCELLED
+  channel   String // SMS | EMAIL | WHATSAPP
+  type      String // ORDER_CONFIRMED | PAYMENT_VERIFIED | STATUS_UPDATE | READY | DELIVERED | CANCELLED
   status    String   @default("SENT") // SENT | FAILED | SIMULATED
   detail    String?
   createdAt DateTime @default(now())
@@ -247,7 +248,7 @@ model Review {
   order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   userId      String
   user        User      @relation(fields: [userId], references: [id])
-  rating      Int       // 1-5
+  rating      Int // 1-5
   comment     String?
   // Moderation: PENDING (awaiting the bakery) | APPROVED (shown publicly) | HIDDEN (kept, not shown).
   // Defaults to APPROVED so rows created before moderation existed stay visible.
@@ -258,31 +259,31 @@ model Review {
 }
 
 model Promo {
-  id              String    @id @default(cuid())
-  code            String    @unique
-  type            String    @default("PERCENT") // PERCENT | FIXED
-  value           Float
-  active          Boolean   @default(true)
-  expiresAt       DateTime?
-  usageLimit      Int?
-  usageCount      Int       @default(0)
+  id               String            @id @default(cuid())
+  code             String            @unique
+  type             String            @default("PERCENT") // PERCENT | FIXED
+  value            Float
+  active           Boolean           @default(true)
+  expiresAt        DateTime?
+  usageLimit       Int?
+  usageCount       Int               @default(0)
   // Abuse controls: minimum basket, per-customer cap, and first-order-only codes.
-  minSpend        Float     @default(0)
+  minSpend         Float             @default(0)
   perCustomerLimit Int?
-  firstOrderOnly  Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  redemptions     PromoRedemption[]
+  firstOrderOnly   Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  redemptions      PromoRedemption[]
 }
 
 model PromoRedemption {
-  id        String   @id @default(cuid())
-  promoId   String
-  promo     Promo    @relation(fields: [promoId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  promoId     String
+  promo       Promo    @relation(fields: [promoId], references: [id], onDelete: Cascade)
   // Identifies the customer: the user id when signed in, otherwise the email or
   // phone used at checkout, so guests can't loop a per-customer code either.
   customerKey String
-  orderId   String?
-  createdAt DateTime @default(now())
+  orderId     String?
+  createdAt   DateTime @default(now())
 
   @@index([promoId, customerKey])
 }
@@ -290,15 +291,15 @@ model PromoRedemption {
 // Append-only record of who did what in the admin portal (price changes, status
 // changes, refunds, settings, staff accounts) — needed to investigate disputes.
 model AuditLog {
-  id        String   @id @default(cuid())
-  actorId   String?
+  id         String   @id @default(cuid())
+  actorId    String?
   actorEmail String?
-  action    String   // e.g. ORDER_STATUS, PRODUCT_UPDATE, SETTINGS_UPDATE, RIDER_CREATE
-  entity    String?  // e.g. Order, Product
-  entityId  String?
-  detail    String?  // human-readable summary
-  ip        String?
-  createdAt DateTime @default(now())
+  action     String // e.g. ORDER_STATUS, PRODUCT_UPDATE, SETTINGS_UPDATE, RIDER_CREATE
+  entity     String? // e.g. Order, Product
+  entityId   String?
+  detail     String? // human-readable summary
+  ip         String?
+  createdAt  DateTime @default(now())
 
   @@index([createdAt])
   @@index([action])

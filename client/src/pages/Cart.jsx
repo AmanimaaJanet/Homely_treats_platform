@@ -32,7 +32,6 @@ export default function Cart() {
   const [slots, setSlots] = useState([]);
   const [timeSlot, setTimeSlot] = useState('');
   const [blackout, setBlackout] = useState(null);
-  const [zoneRuleError, setZoneRuleError] = useState('');
   const [promoCode, setPromoCode] = useState('');
   const [promo, setPromo] = useState(null);
   const [promoError, setPromoError] = useState('');
@@ -65,7 +64,8 @@ export default function Cart() {
         setBlackout(d.blackout || null);
       })
       .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Re-runs when the customer changes the date so the remaining capacity per window
+    // is the live one; the loader is defined inline for that reason.
   }, [readyDate]);
 
   useEffect(() => {
@@ -85,7 +85,7 @@ export default function Cart() {
       if (s.allowPickup === false && deliveryMethod === 'PICKUP') setDeliveryMethod('DELIVERY');
       setPaymentMethod((pm) => (opts.some((o) => o.id === pm) ? pm : opts[0]?.id || 'COD'));
     }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Deliberately once, on mount: the shop's own settings do not change mid-checkout.
   }, []);
 
   const zone = zones.find((z) => z.id === deliveryZone) || zones.find((z) => z.name === deliveryZone);

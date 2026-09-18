@@ -63,6 +63,9 @@ export default function Reports() {
       .finally(() => setLoading(false));
   };
 
+  // The first report is generated for the default range; after that the Generate button
+  // (and the range presets) drive it, so the effect stays mount-only on purpose.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(load, []);
 
   const exportCsv = async () => {

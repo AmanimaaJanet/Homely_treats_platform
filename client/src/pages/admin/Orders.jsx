@@ -16,9 +16,6 @@ export default function Orders() {
   const [status, setStatus] = useState('ALL');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
-  // Printing is a link, not a modal: /admin/print/:id opens a clean page the browser
-  // can send straight to the kitchen printer.
-  const printUrl = (orderId, doc = 'receipt') => `#/admin/print/${orderId}?doc=${doc}`;
   const [refunding, setRefunding] = useState(false);
   const [refundReason, setRefundReason] = useState('');
 

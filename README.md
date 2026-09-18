@@ -133,6 +133,21 @@ cd server && npm start      # http://localhost:5000
 
 ## 🧪 Testing
 
+`npm run verify` runs everything a push must pass (lint → unit tests → build); the two
+suites in detail:
+
+| Command | What it checks | Where |
+|---|---|---|
+| `npm run lint` | ESLint over the React app — unused code, undefined variables, hook dependencies | `client/` |
+| `npm test` | 57 unit/component tests (Vitest + Testing Library): money and date formatting, amount-in-words, loyalty caps, the API wrapper's CSRF/error handling, chart maths, status badges | `client/` |
+| `npm run test:e2e` | 378 end-to-end assertions against a running API and a real PostgreSQL | `server/` |
+
+GitHub Actions (`.github/workflows/ci.yml`) runs all three on every push and pull
+request, plus a **schema-drift check** (the Prisma schema and the migration history must
+agree) and a **syntax check over every server file** — that last one exists because a
+bad edit once deleted four admin routes and only the E2E suite caught it.
+
+
 A self-contained end-to-end test (348 assertions) covers every feature. It builds its own fixtures through the admin API and cleans up afterwards, so it runs against a clean database:
 
 ```bash
@@ -141,7 +156,12 @@ npm start                 # (or npm run dev) in one terminal
 node test-e2e.mjs         # in another — prints ✅/❌ for each check
 ```
 
-Covers: products & size pricing, zones, reviews, PWA assets, photo upload, order math (promo + zone + size), loyalty earn/redeem/refund, review rules, WebSocket broadcasts, rider accept/deliver flow, sales reports + CSV export, and auth guards.
+Covers: products & size pricing, zones and delivery rules, collection windows and
+blackouts, reviews & moderation, PWA assets, photo upload, order maths (promo + zone +
+size + loyalty), refunds, printing documents, bulk catalogue actions and CSV import,
+push/wishlist plumbing, guest-to-account conversion, analytics, per-account lockout,
+tracing/diagnostics, WebSocket broadcasts, the rider flow, reports + CSV export, and the
+auth guards on every admin route.
 
 ---
 

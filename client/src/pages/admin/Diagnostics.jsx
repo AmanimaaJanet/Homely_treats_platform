@@ -47,6 +47,8 @@ export default function Diagnostics() {
       .then(setData)
       .catch((err) => toast(err.message, 'error'));
 
+  // Fetched once on mount, then on demand via Refresh (and after each action).
+  // The loader is stable for the life of the screen, so the effect stays mount-only.
   useEffect(() => {
     load();
   }, []);

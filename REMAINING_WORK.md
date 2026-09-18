@@ -264,8 +264,8 @@ so a returning customer is sent to sign in rather than asked to register twice.
 
 | # | Item | Why | Effort |
 |---|---|---|---|
-| 24 | **Automated tests + CI** — frontend component tests (Vitest + Testing Library), API contract tests, ESLint, GitHub Actions running lint/build/test on every push | Nothing catches a regression before you push | M |
-| 25 | **Error monitoring + structured logging** (e.g. Sentry, request IDs) | You currently find out about errors only if a customer calls | S |
+| 24 | **Automated tests + CI** — ✅ **SHIPPED**: ESLint (React + hooks rules), 57 Vitest/Testing Library unit tests, the 378-assertion API suite against real PostgreSQL, a Prisma schema-drift check and a syntax check over every server file, all wired into GitHub Actions on every push and PR | Nothing catches a regression before you push | M |
+| 25 | **Error monitoring + structured logging** — ✅ **SHIPPED**: JSON logs with a request id on every response, a hand-rolled Sentry hook (no SDK), and an **Admin → Diagnostics** screen showing integrations, failed notifications this week and recent errors | You currently find out about errors only if a customer calls | S |
 | 26 | **Backups + a rehearsed restore** (Render automated backups + documented restore drill) | One bad migration and the orders are gone | S |
 | 27 | **Performance budget** — route-level code-splitting (the admin bundle loads for shoppers), LCP/CLS measurement, keep media under budget (videos are at 2.3 MB — good) | Slow first paint on 3G loses orders | M |
 | 28 | **Accessibility pass (WCAG AA)** — focus states, form labels, contrast, keyboard-only ordering, screen-reader run-through | Also improves SEO and general usability | M |
@@ -351,7 +351,8 @@ verified separately: 5 forgot-password requests then 429.
 
 > Docs: **[ADMIN_GUIDE.md](ADMIN_GUIDE.md)** covers signing in and running the portal.
 
-> Running total: **348 end-to-end assertions passing** (`node test-e2e.mjs` from `server/`).
+> Running total: **378 end-to-end assertions** plus **57 frontend unit tests** and a
+> green lint — all enforced by CI on every push (`.github/workflows/ci.yml`).
 
 | # | Item | Status |
 |---|---|---|

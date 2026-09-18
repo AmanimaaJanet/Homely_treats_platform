@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Bell, BellOff, BellRing, Send } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
-import { pushSupported, pushState, enablePush, disablePush } from '../lib/push.js';
+import { pushState, enablePush, disablePush } from '../lib/push.js';
 
 /**
  * "Turn on order alerts" switch (customer account page).
