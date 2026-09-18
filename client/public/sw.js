@@ -34,7 +34,6 @@ self.addEventListener('fetch', (event) => {
   const isCacheableAsset =
     url.pathname.startsWith('/assets/') ||
     url.pathname.startsWith('/icons/') ||
-    url.pathname.startsWith('/catalogue/') ||
     url.pathname.startsWith('/media/') ||
     url.pathname === '/manifest.webmanifest' ||
     /\.(png|jpe?g|webp|avif|svg|gif|woff2?)$/i.test(url.pathname);

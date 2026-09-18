@@ -11,6 +11,9 @@ const prisma = new PrismaClient();
  *            on purpose so the live site never shows demo/fake content; the
  *            admin builds the real catalog from Admin → Products.
  * --demo   → additionally creates a small *sample* catalogue, Accra delivery
+ *            (sample products carry no photos — the owner's real photography is
+ *            uploaded through the admin panel; until then the storefront shows the
+ *            typographic monogram placeholder)
  *            zones and one promo code, so you can click through every screen
  *            (and screenshot/preview the design) before entering real products.
  *            These sample rows are ordinary records — edit or delete them in
@@ -57,8 +60,6 @@ const SAMPLE_PRODUCTS = [
     description: 'Laminated overnight and baked each morning for a flaky, buttery finish.',
     basePrice: 70,
     icon: 'Croissant',
-    images: ['/catalogue/croissants-1.jpg', '/catalogue/croissants-2.jpg'],
-    imageAlt: 'Freshly baked butter croissants on a slate board',
     badge: 'Baked daily',
     flavors: ['Plain', 'Chocolate', 'Almond'],
     featured: true,
@@ -74,8 +75,6 @@ const SAMPLE_PRODUCTS = [
     description: 'Crisp pastry shells filled with vanilla crème and topped with fresh seasonal fruit.',
     basePrice: 120,
     icon: 'Citrus',
-    images: ['/catalogue/fruit-tarts-1.jpg', '/catalogue/fruit-tarts-2.jpg', '/catalogue/fruit-tarts-3.jpg'],
-    imageAlt: 'Fruit tarts topped with fresh berries and kiwi',
     flavors: ['Seasonal fruit', 'Berry'],
     featured: true,
     stock: 18,

@@ -1,11 +1,11 @@
 import React from 'react';
-import { ProductIcon } from './ProductIcon.jsx';
+import ProductMonogram from './ProductMonogram.jsx';
 import { onActivate } from '../lib/a11y.js';
 
 /**
- * Displays a product photo, falling back to its Lucide icon when no photo has
- * been uploaded yet — so the menu looks intentional before real photography
- * exists rather than showing broken images.
+ * Displays a product photo, falling back to a typographic monogram of the
+ * product's initial when no photo has been uploaded yet — so the menu looks
+ * intentional before real photography exists rather than showing broken images.
  *
  * Loading is lazy by default (a menu of photos should not block first paint) and
  * images are decoded asynchronously so scrolling stays smooth on phones.
@@ -31,7 +31,7 @@ export default function ProductPhoto({
         aria-label={clickable ? `View ${product?.name || 'this product'}` : undefined}
         onKeyDown={clickable ? onActivate(onClick) : undefined}
       >
-        <ProductIcon name={product?.icon || product?.emoji} size={iconSize} />
+        <ProductMonogram name={product?.name} size={Math.round(iconSize * 1.5)} />
       </div>
     );
   }

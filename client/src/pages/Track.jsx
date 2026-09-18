@@ -4,7 +4,6 @@ import { MessageSquare, Mail, MessageCircle, Bike, Copy, Check, Circle, UserPlus
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
-import { ProductIcon } from '../components/ProductIcon.jsx';
 import { ghs, fmtDate, fmtDateTime } from '../lib/format.js';
 
 const CHANNEL_ICON = { SMS: MessageSquare, EMAIL: Mail, WHATSAPP: MessageCircle };
@@ -199,7 +198,7 @@ export default function Track() {
                   <h3 className="form-heading">Items Ordered</h3>
                   {order.items.map((i) => (
                     <div className="info-card" key={i.id}>
-                      <p className="item-line"><ProductIcon name={i.emoji} size={18} /> <strong>{i.name}</strong> × {i.quantity}</p>
+                      <p className="item-line"><strong>{i.name}</strong> × {i.quantity}</p>
                       <p className="muted small">{[i.size, i.flavor, i.icing].filter(Boolean).join(' · ')}</p>
                       {i.inscription && <p className="italic">"{i.inscription}"</p>}
                       <p className="small">{ghs(i.price * i.quantity)}</p>

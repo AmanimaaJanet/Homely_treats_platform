@@ -3,7 +3,6 @@ import { TriangleAlert, Image as ImageIcon, Trash2, ArrowLeftCircle, Upload, Sta
 import { api } from '../../api.js';
 import { useApp } from '../../store.jsx';
 import { ghs } from '../../lib/format.js';
-import { ProductIcon, PRODUCT_ICON_NAMES } from '../../components/ProductIcon.jsx';
 import ProductPhoto from '../../components/ProductPhoto.jsx';
 import { useEscape } from '../../lib/a11y.js';
 
@@ -395,15 +394,11 @@ export default function Products() {
                 </div>
                 <div className="form-group">
                   <label className="form-label">
-                    <span className="form-label-text">Icon</span>
-                    <select className="form-select" value={editing.icon} onChange={(e) => setEditing({ ...editing, icon: e.target.value })}>
-
-                      {PRODUCT_ICON_NAMES.map((name) => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
-                </select>
-                    </label>
-                  <div className="icon-preview"><ProductIcon name={editing.icon} size={22} /></div>
+                    <span className="form-label-text">Category *</span>
+                    <select className="form-select" required value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })}>
+                      {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                    </select>
+                  </label>
                 </div>
               </div>
               <div className="form-group">
@@ -418,15 +413,6 @@ export default function Products() {
                     <span className="form-label-text">Base Price (GH₵) *</span>
                     <input type="number" step="0.01" className="form-input" required value={editing.basePrice} onChange={(e) => setEditing({ ...editing, basePrice: e.target.value })} />
                   </label>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">
-                    <span className="form-label-text">Category *</span>
-                    <select className="form-select" required value={editing.category} onChange={(e) => setEditing({ ...editing, category: e.target.value })}>
-
-                      {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-                </select>
-                    </label>
                 </div>
               </div>
 

@@ -4,7 +4,7 @@ import { Truck, Store, Smartphone, CreditCard, Banknote, Gem, Lock, User, Shoppi
 import { useApp } from '../store.jsx';
 import { api, pointsValue, maxRedeemablePoints } from '../api.js';
 import { ghs } from '../lib/format.js';
-import { ProductIcon } from '../components/ProductIcon.jsx';
+import ProductMonogram from '../components/ProductMonogram.jsx';
 
 const PAYMENT_METHODS = [
   { id: 'MOMO', icon: Smartphone, label: 'MTN Mobile Money', note: 'Instant · Recommended' },
@@ -234,7 +234,7 @@ export default function Cart() {
               <div className="cart-items">
                 {cart.map((item) => (
                   <div className="cart-item" key={item.key}>
-                    <div className="cart-item-icon"><ProductIcon name={item.icon || item.emoji} size={30} /></div>
+                    <div className="cart-item-icon"><ProductMonogram name={item.name} size={40} ring={false} /></div>
                     <div className="cart-item-body">
                       <strong>{item.name}</strong>
                       <p className="muted small">

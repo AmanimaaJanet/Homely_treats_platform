@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Printer, ChefHat, RotateCcw } from 'lucide-react';
 import { api } from '../../api.js';
 import StatusBadge from '../../components/StatusBadge.jsx';
-import { ProductIcon } from '../../components/ProductIcon.jsx';
 import { useApp } from '../../store.jsx';
 import { ghs, fmtDate, fmtDateTime } from '../../lib/format.js';
 import { useEscape } from '../../lib/a11y.js';
@@ -114,7 +113,7 @@ export default function Orders() {
               </td>
               <td>
                 {o.items.map((i) => (
-                  <span key={i.id} className="item-chip"><ProductIcon name={i.emoji} size={14} /> {i.name}</span>
+                  <span key={i.id} className="item-chip">{i.name}</span>
                 ))}
               </td>
               <td>{ghs(o.total)}</td>
@@ -188,7 +187,7 @@ export default function Orders() {
                 <p><strong>Items</strong></p>
                 {detail.items.map((i) => (
                   <p key={i.id} className="small">
-                    <span className="item-chip"><ProductIcon name={i.emoji} size={14} /> {i.name} × {i.quantity} — {ghs(i.price * i.quantity)}</span>
+                    <span className="item-chip">{i.name} × {i.quantity} — {ghs(i.price * i.quantity)}</span>
                     <span className="muted"> ({[i.size, i.flavor, i.icing].filter(Boolean).join(' · ') || 'standard'})</span>
                     {i.inscription && <> — "{i.inscription}"</>}
                   </p>
