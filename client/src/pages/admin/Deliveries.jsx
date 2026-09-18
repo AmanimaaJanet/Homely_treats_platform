@@ -14,6 +14,14 @@ import { ghs } from '../../lib/format.js';
  * are enforced at checkout — these screens are the single source of truth, not a
  * description of one.
  */
+/** Readable names for the editable zone fields, used for the inputs' accessible names. */
+const ZONE_FIELD_LABELS = {
+  fee: 'Delivery fee',
+  minOrder: 'Minimum basket',
+  freeOver: 'Free delivery over',
+  etaNote: 'Delivery note',
+};
+
 export default function Deliveries() {
   const { toast } = useApp();
   const [zones, setZones] = useState([]);
@@ -140,7 +148,7 @@ export default function Deliveries() {
           <table className="table">
             <thead>
               <tr>
-                <th>Zone</th><th>Fee (GH₵)</th><th>Min basket</th><th>Free over</th><th>Note to customers</th><th>Active</th><th />
+                <th scope="col">Zone</th><th scope="col">Fee (GH₵)</th><th scope="col">Min basket</th><th scope="col">Free over</th><th scope="col">Note to customers</th><th scope="col">Active</th><th scope="col" />
               </tr>
             </thead>
             <tbody>
@@ -153,6 +161,8 @@ export default function Deliveries() {
                         className="form-input input-compact"
                         type={field === 'etaNote' ? 'text' : 'number'}
                         min={field === 'etaNote' ? undefined : 0}
+                        // One row per zone: the name has to come from the row, not an id.
+                        aria-label={`${ZONE_FIELD_LABELS[field]} — ${z.name}`}
                         placeholder={field === 'etaNote' ? 'e.g. Same-day before 4pm' : '—'}
                         value={drafts[z.id]?.[field] ?? ''}
                         onChange={(e) => setDrafts({ ...drafts, [z.id]: { ...drafts[z.id], [field]: e.target.value } })}
@@ -182,11 +192,11 @@ export default function Deliveries() {
         </div>
 
         <div className="inline-form">
-          <input className="form-input" placeholder="New zone, e.g. Tema Community 25" value={newZone.name} onChange={(e) => setNewZone({ ...newZone, name: e.target.value })} />
-          <input className="form-input input-compact" type="number" min="0" placeholder="Fee" value={newZone.fee} onChange={(e) => setNewZone({ ...newZone, fee: e.target.value })} />
-          <input className="form-input input-compact" type="number" min="0" placeholder="Min basket" value={newZone.minOrder} onChange={(e) => setNewZone({ ...newZone, minOrder: e.target.value })} />
-          <input className="form-input input-compact" type="number" min="0" placeholder="Free over" value={newZone.freeOver} onChange={(e) => setNewZone({ ...newZone, freeOver: e.target.value })} />
-          <input className="form-input" placeholder="Note (optional)" value={newZone.etaNote} onChange={(e) => setNewZone({ ...newZone, etaNote: e.target.value })} />
+          <input className="form-input" aria-label="New zone name" placeholder="New zone, e.g. Tema Community 25" value={newZone.name} onChange={(e) => setNewZone({ ...newZone, name: e.target.value })} />
+          <input aria-label="Delivery fee for this zone" className="form-input input-compact" type="number" min="0" placeholder="Fee" value={newZone.fee} onChange={(e) => setNewZone({ ...newZone, fee: e.target.value })} />
+          <input aria-label="Minimum basket for this zone" className="form-input input-compact" type="number" min="0" placeholder="Min basket" value={newZone.minOrder} onChange={(e) => setNewZone({ ...newZone, minOrder: e.target.value })} />
+          <input aria-label="Free delivery over this amount" className="form-input input-compact" type="number" min="0" placeholder="Free over" value={newZone.freeOver} onChange={(e) => setNewZone({ ...newZone, freeOver: e.target.value })} />
+          <input aria-label="Delivery note for this zone" className="form-input" placeholder="Note (optional)" value={newZone.etaNote} onChange={(e) => setNewZone({ ...newZone, etaNote: e.target.value })} />
           <button className="btn btn-primary btn-sm" onClick={addZone} disabled={!newZone.name}>
             <Plus size={14} /> Add zone
           </button>
@@ -228,10 +238,10 @@ export default function Deliveries() {
         )}
 
         <div className="inline-form">
-          <input className="form-input" placeholder="Counter name, e.g. Osu pop-up" value={newLocation.name} onChange={(e) => setNewLocation({ ...newLocation, name: e.target.value })} />
-          <input className="form-input" placeholder="Full address" value={newLocation.address} onChange={(e) => setNewLocation({ ...newLocation, address: e.target.value })} />
-          <input className="form-input input-compact" placeholder="Phone" value={newLocation.phone} onChange={(e) => setNewLocation({ ...newLocation, phone: e.target.value })} />
-          <input className="form-input input-compact" placeholder="Hours" value={newLocation.hours} onChange={(e) => setNewLocation({ ...newLocation, hours: e.target.value })} />
+          <input aria-label="Counter name" className="form-input" placeholder="Counter name, e.g. Osu pop-up" value={newLocation.name} onChange={(e) => setNewLocation({ ...newLocation, name: e.target.value })} />
+          <input aria-label="Counter address" className="form-input" placeholder="Full address" value={newLocation.address} onChange={(e) => setNewLocation({ ...newLocation, address: e.target.value })} />
+          <input aria-label="Counter phone" className="form-input input-compact" placeholder="Phone" value={newLocation.phone} onChange={(e) => setNewLocation({ ...newLocation, phone: e.target.value })} />
+          <input aria-label="Counter opening hours" className="form-input input-compact" placeholder="Hours" value={newLocation.hours} onChange={(e) => setNewLocation({ ...newLocation, hours: e.target.value })} />
           <button className="btn btn-primary btn-sm" onClick={addLocation} disabled={!newLocation.name || !newLocation.address}>
             <Plus size={14} /> Add counter
           </button>
@@ -260,6 +270,7 @@ export default function Deliveries() {
                   type="number"
                   min="1"
                   max="200"
+                  aria-label={`Orders per day for the ${s.label} window`}
                   defaultValue={s.capacity}
                   onBlur={(e) => Number(e.target.value) !== s.capacity && updateSlot(s, { capacity: e.target.value })}
                 />
@@ -280,8 +291,8 @@ export default function Deliveries() {
         </div>
 
         <div className="inline-form">
-          <input className="form-input" placeholder="Window label, e.g. 9:00 – 11:00" value={newSlot.label} onChange={(e) => setNewSlot({ ...newSlot, label: e.target.value })} />
-          <input className="form-input input-compact" type="number" min="1" max="200" value={newSlot.capacity} onChange={(e) => setNewSlot({ ...newSlot, capacity: e.target.value })} />
+          <input aria-label="Collection window label" className="form-input" placeholder="Window label, e.g. 9:00 – 11:00" value={newSlot.label} onChange={(e) => setNewSlot({ ...newSlot, label: e.target.value })} />
+          <input aria-label="Orders per day for this window" className="form-input input-compact" type="number" min="1" max="200" value={newSlot.capacity} onChange={(e) => setNewSlot({ ...newSlot, capacity: e.target.value })} />
           <span className="muted small" style={{ alignSelf: 'center' }}>orders/day</span>
           <button className="btn btn-primary btn-sm" onClick={addSlot} disabled={!newSlot.label}>
             <Plus size={14} /> Add window
@@ -317,8 +328,8 @@ export default function Deliveries() {
           </div>
 
           <div className="inline-form">
-            <input className="form-input" type="date" value={newBlackout.date} onChange={(e) => setNewBlackout({ ...newBlackout, date: e.target.value })} />
-            <input className="form-input" placeholder="Reason (optional)" value={newBlackout.reason} onChange={(e) => setNewBlackout({ ...newBlackout, reason: e.target.value })} />
+            <input aria-label="Closed date" className="form-input" type="date" value={newBlackout.date} onChange={(e) => setNewBlackout({ ...newBlackout, date: e.target.value })} />
+            <input aria-label="Reason the bakery is closed" className="form-input" placeholder="Reason (optional)" value={newBlackout.reason} onChange={(e) => setNewBlackout({ ...newBlackout, reason: e.target.value })} />
             <button className="btn btn-primary btn-sm" onClick={addBlackout} disabled={!newBlackout.date}>
               <Plus size={14} /> Close that day
             </button>

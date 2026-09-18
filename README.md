@@ -133,6 +133,14 @@ cd server && npm start      # http://localhost:5000
 
 ## 🧪 Testing
 
+### Accessibility
+
+Built and audited to **WCAG 2.1 AA**: every form field has a programmatically attached
+label (109/109), every control is keyboard-operable, focus is always visible, the colour
+palette was corrected where it failed contrast, and dialogs close with Escape. The audit,
+the measured contrast table, and how to re-check any of it are in
+**[ACCESSIBILITY.md](ACCESSIBILITY.md)**.
+
 ### Performance
 
 Routing is split, so a visitor on the homepage downloads the shop — not the admin panel,

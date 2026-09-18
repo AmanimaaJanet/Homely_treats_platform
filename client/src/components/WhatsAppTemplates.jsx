@@ -106,7 +106,7 @@ export default function WhatsAppTemplates() {
             onChange={(e) => setPhone(e.target.value)}
             style={{ maxWidth: '200px' }}
           />
-          <select className="form-select" value={type} onChange={(e) => setType(e.target.value)} style={{ maxWidth: '240px' }}>
+          <select aria-label="Message template to send" className="form-select" value={type} onChange={(e) => setType(e.target.value)} style={{ maxWidth: '240px' }}>
             {data.templates.map((t) => (
               <option key={t.type} value={t.type}>{t.type.replace(/_/g, ' ')}</option>
             ))}

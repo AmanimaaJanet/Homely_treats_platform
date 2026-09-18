@@ -22,7 +22,7 @@ export default function Navbar() {
           <span>Homely Treats</span>
         </Link>
 
-        <ul className="nav-links">
+        <ul className="nav-links" id="primary-navigation">
           <li><NavLink to="/" end>Home</NavLink></li>
           <li><NavLink to="/menu">Menu</NavLink></li>
           <li><NavLink to="/custom-order">Custom Orders</NavLink></li>
@@ -44,18 +44,21 @@ export default function Navbar() {
                 navigate('/');
               }}
               title="Sign out"
+              aria-label="Sign out"
             >
               <LogOut size={18} />
             </button>
           )}
-          <div className="cart-icon" onClick={() => go('/cart')} role="button" aria-label="Cart">
-            <ShoppingCart size={24} strokeWidth={2} />
-            {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
-          </div>
+          <button type="button" className="cart-icon" onClick={() => go('/cart')} aria-label={`Cart, ${cartCount} item${cartCount === 1 ? '' : 's'}`}>
+            <ShoppingCart size={24} strokeWidth={2} aria-hidden="true" />
+            {cartCount > 0 && <span className="cart-badge" aria-hidden="true">{cartCount}</span>}
+          </button>
           <button
             className="nav-burger"
             onClick={() => setOpen((v) => !v)}
             aria-label="Toggle menu"
+            aria-expanded={open}
+            aria-controls="primary-navigation"
           >
             {open ? <X size={24} /> : <Menu size={24} />}
           </button>

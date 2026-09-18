@@ -56,7 +56,7 @@ export default function AdminAudit() {
         <div className="menu-controls">
           <div className="search-box">
             <Search size={17} className="search-icon" />
-            <input
+            <input aria-label="Search activity log"
               className="form-input"
               placeholder="Search by email, order or detail…"
               value={search}
@@ -64,7 +64,7 @@ export default function AdminAudit() {
               onKeyDown={(e) => e.key === 'Enter' && load()}
             />
           </div>
-          <select className="form-input" value={action} onChange={(e) => setAction(e.target.value)}>
+          <select aria-label="Filter by action type" className="form-input" value={action} onChange={(e) => setAction(e.target.value)}>
             <option value="">All actions</option>
             {Object.entries(ACTION_LABELS).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
@@ -86,10 +86,10 @@ export default function AdminAudit() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>When</th>
-                  <th>Who</th>
-                  <th>Action</th>
-                  <th>Detail</th>
+                  <th scope="col">When</th>
+                  <th scope="col">Who</th>
+                  <th scope="col">Action</th>
+                  <th scope="col">Detail</th>
                 </tr>
               </thead>
               <tbody>

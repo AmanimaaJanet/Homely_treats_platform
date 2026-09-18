@@ -120,7 +120,7 @@ export default function ResetPassword() {
             <div className="form-group">
               <label className="form-label">New password</label>
               <div className="input-affix">
-                <input
+                <input aria-label="New password"
                   type={show ? 'text' : 'password'}
                   className="form-input"
                   value={password}
@@ -141,16 +141,18 @@ export default function ResetPassword() {
               </div>
             </div>
             <div className="form-group">
-              <label className="form-label">Confirm new password</label>
-              <input
-                type={show ? 'text' : 'password'}
-                className="form-input"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                autoComplete="new-password"
-                minLength={8}
-                required
-              />
+              <label className="form-label">
+                <span className="form-label-text">Confirm new password</span>
+                <input
+                  type={show ? 'text' : 'password'}
+                  className="form-input"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                />
+              </label>
             </div>
             <button className="btn btn-primary btn-block" disabled={busy || !password || !confirm}>
               {busy ? 'Saving…' : 'Save new password'}

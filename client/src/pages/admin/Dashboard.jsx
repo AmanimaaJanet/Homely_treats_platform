@@ -116,7 +116,7 @@ export default function Dashboard() {
         </div>
         <table className="table">
           <thead>
-            <tr><th>Order ID</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Date</th></tr>
+            <tr><th scope="col">Order ID</th><th scope="col">Customer</th><th scope="col">Items</th><th scope="col">Total</th><th scope="col">Status</th><th scope="col">Date</th></tr>
           </thead>
           <tbody>
             {recent.map((o) => (

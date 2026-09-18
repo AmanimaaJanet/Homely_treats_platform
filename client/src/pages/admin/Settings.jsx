@@ -57,22 +57,30 @@ export default function Settings() {
         <h3 className="form-heading">Business Information</h3>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Business Name</label>
-            <input className="form-input" value={s.businessName} onChange={(e) => set('businessName', e.target.value)} />
+            <label className="form-label">
+              <span className="form-label-text">Business Name</span>
+              <input className="form-input" value={s.businessName} onChange={(e) => set('businessName', e.target.value)} />
+            </label>
           </div>
           <div className="form-group">
-            <label className="form-label">Email Address</label>
-            <input className="form-input" value={s.businessEmail} onChange={(e) => set('businessEmail', e.target.value)} />
+            <label className="form-label">
+              <span className="form-label-text">Email Address</span>
+              <input className="form-input" value={s.businessEmail} onChange={(e) => set('businessEmail', e.target.value)} />
+            </label>
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Phone Number</label>
-            <input className="form-input" value={s.businessPhone} onChange={(e) => set('businessPhone', e.target.value)} />
+            <label className="form-label">
+              <span className="form-label-text">Phone Number</span>
+              <input className="form-input" value={s.businessPhone} onChange={(e) => set('businessPhone', e.target.value)} />
+            </label>
           </div>
           <div className="form-group">
-            <label className="form-label">Business Address</label>
-            <input className="form-input" value={s.businessAddress} onChange={(e) => set('businessAddress', e.target.value)} />
+            <label className="form-label">
+              <span className="form-label-text">Business Address</span>
+              <input className="form-input" value={s.businessAddress} onChange={(e) => set('businessAddress', e.target.value)} />
+            </label>
           </div>
         </div>
       </div>
@@ -81,12 +89,16 @@ export default function Settings() {
         <h3 className="form-heading">Order & Delivery Settings</h3>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Min. Lead Time (days)</label>
-            <input type="number" className="form-input" value={s.minLeadDays} onChange={(e) => set('minLeadDays', parseInt(e.target.value || '2', 10))} />
+            <label className="form-label">
+              <span className="form-label-text">Min. Lead Time (days)</span>
+              <input type="number" className="form-input" value={s.minLeadDays} onChange={(e) => set('minLeadDays', parseInt(e.target.value || '2', 10))} />
+            </label>
           </div>
           <div className="form-group">
-            <label className="form-label">Default Delivery Fee (GH₵)</label>
-            <input type="number" className="form-input" value={s.deliveryFee} onChange={(e) => set('deliveryFee', parseInt(e.target.value || '0', 10))} />
+            <label className="form-label">
+              <span className="form-label-text">Default Delivery Fee (GH₵)</span>
+              <input type="number" className="form-input" value={s.deliveryFee} onChange={(e) => set('deliveryFee', parseInt(e.target.value || '0', 10))} />
+            </label>
           </div>
         </div>
         <Toggle label="Accept Online Orders" checked={!!s.acceptOrders} onChange={(v) => set('acceptOrders', v)} />
@@ -166,6 +178,7 @@ export default function Settings() {
           type="number"
           min="0"
           max="999"
+          aria-label="Reorder threshold (stock level)"
           style={{ maxWidth: '160px' }}
           value={s.lowStockThreshold ?? 5}
           onChange={(e) => set('lowStockThreshold', Math.max(0, Number(e.target.value) || 0))}

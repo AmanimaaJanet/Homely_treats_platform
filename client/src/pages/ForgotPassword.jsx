@@ -70,16 +70,18 @@ export default function ForgotPassword() {
 
               <form onSubmit={submit}>
                 <div className="form-group">
-                  <label className="form-label">Email Address</label>
-                  <input
-                    type="email"
-                    className="form-input"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    autoComplete="email"
-                    required
-                    autoFocus
-                  />
+                  <label className="form-label">
+                    <span className="form-label-text">Email Address</span>
+                    <input
+                      type="email"
+                      className="form-input"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
+                      required
+                      autoFocus
+                    />
+                  </label>
                 </div>
                 <button className="btn btn-primary btn-block" disabled={busy || !email}>
                   {busy ? 'Sending…' : 'Send reset link'}

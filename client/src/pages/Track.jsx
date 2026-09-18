@@ -124,7 +124,7 @@ export default function Track() {
 
           <div className="track-search">
             <form onSubmit={submit} className="track-form">
-              <input
+              <input aria-label="Order number"
                 className="form-input"
                 placeholder="HT-YYYYMMDD-0001"
                 value={ref}

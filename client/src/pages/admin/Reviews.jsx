@@ -80,7 +80,7 @@ export default function Reviews() {
             </button>
           ))}
         </div>
-        <input
+        <input aria-label="Search reviews"
           className="form-input"
           placeholder="Search review, customer or order…"
           value={search}

@@ -73,24 +73,34 @@ export default function Register() {
 
           <form onSubmit={submit}>
             <div className="form-group">
-              <label className="form-label">Full Name</label>
-              <input className="form-input" required value={form.fullName} onChange={set('fullName')} />
+              <label className="form-label">
+                <span className="form-label-text">Full Name</span>
+                <input className="form-input" required value={form.fullName} onChange={set('fullName')} />
+              </label>
             </div>
             <div className="form-group">
-              <label className="form-label">Email Address</label>
-              <input type="email" className="form-input" required value={form.email} onChange={set('email')} />
+              <label className="form-label">
+                <span className="form-label-text">Email Address</span>
+                <input type="email" className="form-input" required value={form.email} onChange={set('email')} />
+              </label>
             </div>
             <div className="form-group">
-              <label className="form-label">Phone Number</label>
-              <input type="tel" className="form-input" required value={form.phone} onChange={set('phone')} placeholder="055 123 4567" />
+              <label className="form-label">
+                <span className="form-label-text">Phone Number</span>
+                <input type="tel" className="form-input" required value={form.phone} onChange={set('phone')} placeholder="055 123 4567" />
+              </label>
             </div>
             <div className="form-group">
-              <label className="form-label">Password</label>
-              <input type="password" className="form-input" required minLength={8} value={form.password} onChange={set('password')} placeholder="At least 8 characters" />
+              <label className="form-label">
+                <span className="form-label-text">Password</span>
+                <input type="password" className="form-input" required minLength={8} value={form.password} onChange={set('password')} placeholder="At least 8 characters" />
+              </label>
             </div>
             <div className="form-group">
-              <label className="form-label">Confirm Password</label>
-              <input type="password" className="form-input" required minLength={8} value={form.confirm} onChange={set('confirm')} />
+              <label className="form-label">
+                <span className="form-label-text">Confirm Password</span>
+                <input type="password" className="form-input" required minLength={8} value={form.confirm} onChange={set('confirm')} />
+              </label>
             </div>
             <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
               {busy ? 'Creating…' : 'Create Account'}

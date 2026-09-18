@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Heart, Star } from 'lucide-react';
 import { ghs } from '../lib/format.js';
 import { api } from '../api.js';
@@ -73,7 +73,11 @@ export default function ProductCard({ product }) {
       <ProductPhoto product={product} iconSize={52} onClick={() => navigate(`/menu/${product.id}`)} />
 
       <div className="product-info">
-        <div className="product-name" onClick={() => navigate(`/menu/${product.id}`)}>{product.name}</div>
+        {/* A real link, not a clickable div: keyboard users can Tab to it, and it can be
+            opened in a new tab like any other link on the web. */}
+        <Link className="product-name product-name-link" to={`/menu/${product.id}`}>
+          {product.name}
+        </Link>
 
         {rating.count > 0 ? (
           <div className="product-rating">

@@ -123,8 +123,8 @@ export default function PrintDoc() {
             <table className="print-table kitchen">
               <thead>
                 <tr>
-                  <th style={{ width: '58px' }}>Qty</th>
-                  <th>Bake this</th>
+                  <th scope="col" style={{ width: '58px' }}>Qty</th>
+                  <th scope="col">Bake this</th>
                 </tr>
               </thead>
               <tbody>
@@ -188,10 +188,10 @@ export default function PrintDoc() {
             <table className="print-table">
               <thead>
                 <tr>
-                  <th>Item</th>
-                  <th style={{ width: '52px' }} className="right">Qty</th>
-                  <th style={{ width: '96px' }} className="right">Unit</th>
-                  <th style={{ width: '104px' }} className="right">Amount</th>
+                  <th scope="col">Item</th>
+                  <th scope="col" style={{ width: '52px' }} className="right">Qty</th>
+                  <th scope="col" style={{ width: '96px' }} className="right">Unit</th>
+                  <th scope="col" style={{ width: '104px' }} className="right">Amount</th>
                 </tr>
               </thead>
               <tbody>

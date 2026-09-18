@@ -6,6 +6,11 @@
 
 :root {
   --primary: #C4763B;
+  /* The brand orange is a decorative colour: at 3.3:1 on cream it fails WCAG AA for body
+     text, and white on it fails too. --primary-ink is the same hue, darkened just far
+     enough to be legible (4.8:1 on cream, 5.0:1 on white), and is what carries text and
+     solid buttons. --primary stays for borders, fills and display-size headings. */
+  --primary-ink: #A65C24;
   --pd: #7B3F1A;
   --pl: #F5E6D0;
   --cream: #FDF8F3;
@@ -30,6 +35,45 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Keyboard focus must always be visible. :focus-visible means a mouse click does not
+   draw a ring, but tabbing does — and it is drawn *outside* the element so it is not
+   hidden by overflow or by a border of its own colour. */
+:focus-visible {
+  outline: 3px solid var(--primary-ink);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.btn:focus-visible, .cart-icon:focus-visible, .pill:focus-visible { outline-offset: 3px; }
+/* On the dark sidebar and the dark hero, the orange ring would disappear — use gold. */
+.admin-sidebar :focus-visible, .sidebar-link:focus-visible { outline-color: var(--gold); }
+
+/* Skip link: the first thing a keyboard or screen-reader user meets, invisible until it
+   is focused, then a real button to jump past the navigation. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 1000;
+  background: var(--primary-ink);
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: 0 0 10px 0;
+  font-weight: 600;
+  text-decoration: underline;
+}
+.skip-link:focus { left: 0; }
+
+/* Visually hidden, still read aloud (used for captions and live-region text). */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 html { -webkit-text-size-adjust: 100%; }
 
 body {
@@ -43,7 +87,7 @@ body {
 
 h1, h2, h3, h4 { font-family: 'Playfair Display', Georgia, serif; font-weight: 700; line-height: 1.2; color: var(--dark); }
 
-a { color: var(--primary); text-decoration: none; }
+a { color: var(--primary-ink); text-decoration: none; }
 a:hover { color: var(--pd); }
 
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
@@ -58,28 +102,28 @@ a:hover { color: var(--pd); }
   text-decoration: none; line-height: 1.2;
 }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
-.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary { background: var(--primary-ink); color: #fff; }
 .btn-primary:hover:not(:disabled) { background: var(--pd); }
-.btn-secondary { background: #fff; color: var(--primary); border: 1.5px solid var(--primary); }
+.btn-secondary { background: #fff; color: var(--primary-ink); border: 1.5px solid var(--primary-ink); }
 .btn-secondary:hover:not(:disabled) { background: var(--pl); }
-.btn-outline { background: transparent; border: 1.5px solid var(--primary); color: var(--primary); }
+.btn-outline { background: transparent; border: 1.5px solid var(--primary-ink); color: var(--primary-ink); }
 .btn-outline:hover:not(:disabled) { background: var(--pl); }
 .btn-ghost { background: transparent; color: var(--pd); padding-left: 0; padding-right: 0; }
-.btn-ghost:hover:not(:disabled) { color: var(--primary); }
+.btn-ghost:hover:not(:disabled) { color: var(--primary-ink); }
 .btn-light { background: var(--pl); color: var(--pd); }
-.btn-light:hover:not(:disabled) { background: var(--primary); color: #fff; }
+.btn-light:hover:not(:disabled) { background: var(--primary-ink); color: #fff; }
 .btn-dark { background: var(--dark); color: #fff; }
 .btn-dark:hover:not(:disabled) { opacity: 0.85; }
 .btn-sm { padding: 6px 14px; font-size: 12.5px; }
 .btn-block { width: 100%; }
-.btn-link { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 13px; font-family: inherit; padding: 0; }
+.btn-link { background: none; border: none; color: var(--primary-ink); cursor: pointer; font-size: 13px; font-family: inherit; padding: 0; }
 .btn-link:hover { text-decoration: underline; }
 .btn-link.danger { color: var(--red-t); }
-.link { color: var(--primary); font-weight: 500; cursor: pointer; }
+.link { color: var(--primary-ink); font-weight: 500; cursor: pointer; }
 
 /* ------------------------------------------------ Typography helpers ---- */
 .muted { color: var(--muted); }
-.accent { color: var(--primary); }
+.accent { color: var(--primary-ink); }
 .small { font-size: 12.5px; }
 .centered { text-align: center; }
 .block { display: block; }
@@ -97,12 +141,12 @@ a:hover { color: var(--pd); }
 .logo-img { height: 30px; width: 30px; object-fit: cover; border-radius: 8px; }
 .nav-links { display: none; list-style: none; }
 .nav-links a { font-size: 13px; color: var(--muted); font-weight: 500; cursor: pointer; text-decoration: none; }
-.nav-links a:hover { color: var(--primary); }
-.nav-links a.active { color: var(--primary); font-weight: 600; }
+.nav-links a:hover { color: var(--primary-ink); }
+.nav-links a.active { color: var(--primary-ink); font-weight: 600; }
 .nav-right { display: flex; align-items: center; gap: 8px; }
 .nav-signout { background: none; border: none; color: var(--muted); cursor: pointer; display: flex; padding: 6px; border-radius: 8px; }
 .nav-signout:hover { color: var(--red-t); background: var(--red); }
-.cart-icon { position: relative; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; background: var(--primary); color: #fff; padding: 8px 14px; border-radius: 100px; font-size: 13px; font-weight: 500; }
+.cart-icon { position: relative; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; background: var(--primary-ink); color: #fff; padding: 8px 14px; border-radius: 100px; font-size: 13px; font-weight: 500; }
 .cart-badge { position: absolute; top: -7px; right: -7px; background: #EF4444; color: #fff; font-size: 10px; border-radius: 50%; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
 .nav-burger { background: none; border: none; color: var(--pd); cursor: pointer; display: inline-flex; padding: 6px; }
 .mobile-menu { position: fixed; inset: 60px 0 auto 0; background: #fff; border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; z-index: 150; }
@@ -175,7 +219,7 @@ a:hover { color: var(--pd); }
 .band-dark { background: var(--dark); color: #fff; }
 .band-dark .section-title { color: #fff; }
 .band-light { background: var(--pl); }
-.cta-band { text-align: center; background: var(--primary); color: #fff; border: none; }
+.cta-band { text-align: center; background: var(--primary-ink); color: #fff; border: none; }
 .cta-band h2 { color: #fff; }
 .cta-band p { color: rgba(255,255,255,0.75); }
 
@@ -184,18 +228,24 @@ a:hover { color: var(--pd); }
 .product-card { background: #fff; border-radius: var(--radius); border: 1px solid var(--border); overflow: hidden; transition: box-shadow 0.2s; cursor: pointer; display: flex; flex-direction: column; }
 .product-card:hover { box-shadow: 0 4px 20px rgba(196,118,59,0.18); }
 .product-image { background: var(--cream); height: 150px; display: flex; align-items: center; justify-content: center; color: var(--primary); position: relative; }
-.product-badge { position: absolute; top: 10px; left: 10px; background: var(--primary); color: #fff; font-size: 10px; padding: 3px 10px; border-radius: 100px; font-weight: 600; }
+/* A photo that opens the product is a control, so it must show it is focusable. */
+.product-image.clickable { cursor: pointer; }
+.product-badge { position: absolute; top: 10px; left: 10px; background: var(--primary-ink); color: #fff; font-size: 10px; padding: 3px 10px; border-radius: 100px; font-weight: 600; }
 .product-info { padding: 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
 .product-tag { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
 .product-name { font-family: 'Playfair Display', serif; font-size: 16px; line-height: 1.3; }
-.product-price { color: var(--primary); font-weight: 600; font-size: 15px; }
+/* The product name is a link; it keeps the display styling but is underlined on hover so
+   it reads as something you can open. */
+.product-name-link { color: var(--dark); display: inline-block; }
+.product-name-link:hover { color: var(--primary-ink); text-decoration: underline; }
+.product-price { color: var(--primary-ink); font-weight: 600; font-size: 15px; }
 .product-desc { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .product-info .btn { margin-top: auto; }
 
 /* ------------------------------------------------ Steps ------------------ */
 .steps { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 20px; }
 .step { text-align: center; padding: 18px 12px; }
-.step-number { width: 46px; height: 46px; background: var(--primary); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Playfair Display', serif; font-size: 19px; font-weight: 700; margin: 0 auto 12px; }
+.step-number { width: 46px; height: 46px; background: var(--primary-ink); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Playfair Display', serif; font-size: 19px; font-weight: 700; margin: 0 auto 12px; }
 .band-dark .step h3 { color: #fff; }
 .band-dark .step p { color: rgba(255,255,255,0.45); }
 .step h3 { font-size: 15px; margin-bottom: 5px; }
@@ -213,12 +263,23 @@ a:hover { color: var(--pd); }
 
 /* ------------------------------------------------ Forms ------------------ */
 .form-group { margin-bottom: 16px; }
-.form-label { font-size: 11px; font-weight: 600; color: var(--muted); display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.6px; }
+/* A field's label *contains* its input, so the two are associated without needing an id
+   on every field (impossible to get wrong, and safe when a form repeats in a list).
+   The visible text lives in its own span so the small-caps styling cannot leak into what
+   the customer types — an input inheriting text-transform: uppercase is a real bug. */
+.form-label { display: block; margin-bottom: 5px; }
+.form-label-text { font-size: 11px; font-weight: 600; color: var(--muted); display: block; text-transform: uppercase; letter-spacing: 0.6px; }
+.form-label > .form-input, .form-label > .form-select, .form-label > .form-textarea { margin-top: 5px; }
+/* The gap now sits above the field, so the old space below the label would double up. */
+.form-label:has(> .form-input), .form-label:has(> .form-select), .form-label:has(> .form-textarea) { margin-bottom: 0; }
 .form-input, .form-select, .form-textarea {
   width: 100%; padding: 11px 14px; border: 1.5px solid var(--border); border-radius: 8px;
   font-size: 14px; background: var(--cream); outline: none; font-family: inherit; color: var(--dark); transition: border 0.2s;
+  /* Belt and braces: even if a field ends up inside a styled wrapper, what the customer
+     types is never transformed or letterspaced. */
+  text-transform: none; letter-spacing: normal; font-weight: 400;
 }
-.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--primary); background: #fff; }
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--primary-ink); background: #fff; }
 .form-textarea { resize: vertical; min-height: 90px; }
 .form-row { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .form-heading { font-size: 16px; margin: 22px 0 10px; }
@@ -232,7 +293,7 @@ a:hover { color: var(--pd); }
 .category-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .pill { background: var(--cream); color: var(--muted); border: 1px solid var(--border); border-radius: 100px; padding: 7px 16px; font-size: 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-family: inherit; }
 .pill:hover { border-color: var(--primary); color: var(--pd); }
-.pill-active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.pill-active { background: var(--primary-ink); color: #fff; border-color: var(--primary-ink); }
 
 /* ------------------------------------------------ Custom order ------------ */
 .order-layout { display: grid; grid-template-columns: 1fr; gap: 0; }
@@ -240,7 +301,7 @@ a:hover { color: var(--pd); }
 .order-guide h2 { color: #fff; font-size: 22px; }
 .order-guide p { color: rgba(255,255,255,0.45); font-size: 13px; line-height: 1.6; }
 .guide-step { display: flex; gap: 12px; align-items: flex-start; }
-.guide-num { width: 26px; height: 26px; background: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.guide-num { width: 26px; height: 26px; background: var(--primary-ink); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 700; flex-shrink: 0; }
 .guide-step strong { color: #fff; font-size: 13px; font-weight: 500; display: block; }
 .guide-step span { color: rgba(255,255,255,0.35); font-size: 12px; }
 .order-form-wrap { background: var(--cream); padding: 24px 16px; }
@@ -269,6 +330,14 @@ a:hover { color: var(--pd); }
 .promo-row { display: flex; gap: 8px; }
 .delivery-options { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .delivery-option { border: 1.5px solid var(--border); border-radius: 10px; padding: 14px; cursor: pointer; }
+/* These are <button>s now, so remove the browser's default button chrome while keeping
+   the card look. */
+.delivery-option, .payment-method, .account-menu button, .cart-icon {
+  font: inherit; text-align: left; color: inherit; background: transparent; width: 100%;
+}
+.cart-icon { width: auto; background: var(--primary-ink); color: #fff; }
+.delivery-option p { margin: 0; }
+.pay-icon { flex-shrink: 0; display: flex; align-items: center; }
 .delivery-option.selected { border: 2px solid var(--primary); background: var(--pl); }
 .delivery-option strong { display: flex; align-items: center; gap: 7px; font-size: 13.5px; }
 .delivery-option p { font-size: 12px; color: var(--muted); margin-top: 3px; }
@@ -276,7 +345,8 @@ a:hover { color: var(--pd); }
 .loyalty-box { background: var(--cream); border-radius: 10px; padding: 14px; margin: 12px 0; }
 .payment-methods { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 10px 0 16px; }
 .payment-method { border: 1.5px solid var(--border); border-radius: 10px; padding: 11px 12px; cursor: pointer; display: flex; align-items: center; gap: 10px; }
-.payment-method:hover { border-color: var(--primary); }
+.payment-method strong, .payment-method p { text-align: left; }
+.payment-method:hover { border-color: var(--primary-ink); }
 .payment-method.selected { border: 2px solid var(--primary); background: var(--pl); }
 .pay-icon { color: var(--primary); display: flex; }
 .payment-method strong { font-size: 12.5px; display: block; }
@@ -292,7 +362,7 @@ a:hover { color: var(--pd); }
 .track-form { display: flex; gap: 10px; }
 .track-form .form-input { flex: 1; text-align: center; font-family: monospace; font-size: 14px; }
 .track-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 16px; }
-.track-card-head { background: var(--primary); padding: 18px 20px; color: #fff; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.track-card-head { background: var(--primary-ink); padding: 18px 20px; color: #fff; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
 .track-card-head h3 { color: #fff; font-size: 18px; }
 .track-card-head .muted { color: rgba(255,255,255,0.7); }
 .track-body { padding: 20px; }
@@ -301,7 +371,7 @@ a:hover { color: var(--pd); }
 .timeline-item::before { content: ''; position: absolute; left: 15px; top: 32px; bottom: 4px; width: 2px; background: var(--border); }
 .timeline-item:last-child::before { display: none; }
 .timeline-icon { width: 32px; height: 32px; border-radius: 50%; background: #F3F4F6; color: #9CA3AF; display: flex; align-items: center; justify-content: center; flex-shrink: 0; z-index: 1; }
-.timeline-item.completed .timeline-icon { background: var(--primary); color: #fff; }
+.timeline-item.completed .timeline-icon { background: var(--primary-ink); color: #fff; }
 .timeline-item.completed::before { background: var(--primary); }
 .timeline-item h4 { font-size: 14px; }
 .timeline-item.completed h4 { color: var(--dark); }
@@ -336,12 +406,15 @@ a:hover { color: var(--pd); }
 .account-head { background: var(--pd); padding: 24px; text-align: center; color: #fff; }
 .account-head h3 { color: #fff; }
 .account-head p { color: rgba(255,255,255,0.55); font-size: 12px; }
-.avatar { width: 60px; height: 60px; background: var(--primary); border-radius: 50%; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; }
+.avatar { width: 60px; height: 60px; background: var(--primary-ink); border-radius: 50%; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; }
 .account-menu { list-style: none; padding: 8px; }
-.account-menu li { padding: 11px 14px; border-radius: 8px; font-size: 13.5px; cursor: pointer; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+.account-menu li { border-radius: 8px; font-size: 13.5px; color: var(--muted); }
+.account-menu button { padding: 11px 14px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 10px; border: 0; }
 .account-menu li:hover { background: var(--cream); }
 .account-menu li.active { background: var(--pl); color: var(--pd); font-weight: 500; }
+.account-menu li.active button { color: var(--pd); font-weight: 500; }
 .account-menu li.danger { color: var(--red-t); }
+.account-menu li.danger button { color: var(--red-t); }
 .points-pill { display: inline-flex; align-items: center; gap: 5px; background: rgba(255,255,255,0.14); color: var(--gold); border-radius: 100px; padding: 4px 12px; font-size: 12px; margin-top: 8px; }
 .mini-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0; }
 .mini-stat { background: var(--cream); border-radius: 10px; padding: 12px; text-align: center; }

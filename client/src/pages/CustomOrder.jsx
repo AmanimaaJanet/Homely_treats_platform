@@ -132,20 +132,22 @@ export default function CustomOrder() {
             <h3 className="form-heading">Configure Your Order</h3>
 
             <div className="form-group">
-              <label className="form-label">Product Type *</label>
-              <select
-                className="form-select"
-                required
-                value={productId}
-                onChange={(e) => { setProductId(e.target.value); setSize(''); }}
-              >
-                <option value="">Select a product…</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} — from {ghs(p.basePrice)}
-                  </option>
-                ))}
-              </select>
+              <label className="form-label">
+                <span className="form-label-text">Product Type *</span>
+                <select
+                  className="form-select"
+                  required
+                  value={productId}
+                  onChange={(e) => { setProductId(e.target.value); setSize(''); }}
+                >
+                  <option value="">Select a product…</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} — from {ghs(p.basePrice)}
+                    </option>
+                  ))}
+                </select>
+                </label>
             </div>
 
             {product && (
@@ -163,56 +165,66 @@ export default function CustomOrder() {
 
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Quantity</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  min="1"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  required
-                />
+                <label className="form-label">
+                  <span className="form-label-text">Quantity</span>
+                  <input
+                    type="number"
+                    className="form-input"
+                    min="1"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    required
+                  />
+                </label>
               </div>
               <div className="form-group">
-                <label className="form-label">Size *</label>
-                <select className="form-select" value={size} onChange={(e) => setSize(e.target.value)} required>
-                  <option value="">— choose size —</option>
-                  {sizeOptions.map((s) => (
-                    <option key={s.id} value={s.label}>
-                      {s.label} {s.serves > 1 ? `· serves ${s.serves}` : ''} — {ghs(s.price)}
-                    </option>
-                  ))}
+                <label className="form-label">
+                  <span className="form-label-text">Size *</span>
+                  <select className="form-select" value={size} onChange={(e) => setSize(e.target.value)} required>
+                    <option value="">— choose size —</option>
+                    {sizeOptions.map((s) => (
+                      <option key={s.id} value={s.label}>
+                        {s.label} {s.serves > 1 ? `· serves ${s.serves}` : ''} — {ghs(s.price)}
+                      </option>
+                    ))}
                 </select>
+                  </label>
               </div>
             </div>
 
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Flavour</label>
-                <select className="form-select" value={flavor} onChange={(e) => setFlavor(e.target.value)}>
-                  <option value="">— choose —</option>
-                  {flavors.map((f) => <option key={f}>{f}</option>)}
+                <label className="form-label">
+                  <span className="form-label-text">Flavour</span>
+                  <select className="form-select" value={flavor} onChange={(e) => setFlavor(e.target.value)}>
+                    <option value="">— choose —</option>
+                    {flavors.map((f) => <option key={f}>{f}</option>)}
                 </select>
+                  </label>
               </div>
               <div className="form-group">
-                <label className="form-label">Icing Type</label>
-                <select className="form-select" value={icing} onChange={(e) => setIcing(e.target.value)}>
-                  <option value="">— choose —</option>
-                  {ICINGS.map((i) => <option key={i}>{i}</option>)}
+                <label className="form-label">
+                  <span className="form-label-text">Icing Type</span>
+                  <select className="form-select" value={icing} onChange={(e) => setIcing(e.target.value)}>
+                    <option value="">— choose —</option>
+                    {ICINGS.map((i) => <option key={i}>{i}</option>)}
                 </select>
+                  </label>
               </div>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Delivery / Pickup Date *</label>
-              <input
-                type="date"
-                className="form-input"
-                min={minDate(minLead)}
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-              />
+              <label className="form-label">
+                <span className="form-label-text">Delivery / Pickup Date *</span>
+                <input
+                  type="date"
+                  className="form-input"
+                  min={minDate(minLead)}
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                />
+              </label>
               <p className="muted small">
                 Minimum {minLead} days advance notice required
                 {product?.leadDays ? ` for ${product.name}` : ''}.
@@ -229,14 +241,16 @@ export default function CustomOrder() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Inscription / Message (optional)</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="e.g., Happy Birthday, Kwame!"
-                value={inscription}
-                onChange={(e) => setInscription(e.target.value)}
-              />
+              <label className="form-label">
+                <span className="form-label-text">Inscription / Message (optional)</span>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g., Happy Birthday, Kwame!"
+                  value={inscription}
+                  onChange={(e) => setInscription(e.target.value)}
+                />
+              </label>
             </div>
 
             <div className="form-group">
@@ -261,13 +275,15 @@ export default function CustomOrder() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Special Notes / Allergies (optional)</label>
-              <textarea
-                className="form-textarea"
-                placeholder="Any special requests or dietary requirements…"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
+              <label className="form-label">
+                <span className="form-label-text">Special Notes / Allergies (optional)</span>
+                <textarea
+                  className="form-textarea"
+                  placeholder="Any special requests or dietary requirements…"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </label>
             </div>
 
             <div className="price-box">

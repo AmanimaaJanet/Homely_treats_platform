@@ -73,8 +73,12 @@ export default function App() {
   return (
     <div className="app-shell">
       <ScrollToTop />
+      {/* First focusable thing on the page, invisible until tabbed to. */}
+      <a className="skip-link" href="#main">
+        Skip to main content
+      </a>
       {!isAdmin && !isRider && <Navbar />}
-      <main className={isAdmin ? 'admin-root' : ''}>
+      <main id="main" className={isAdmin ? 'admin-root' : ''}>
         <ErrorBoundary>
           <Suspense
             fallback={<RouteFallback label={isAdmin ? 'Loading the admin panel' : 'Loading'} variant={isAdmin ? 'admin' : 'page'} />}

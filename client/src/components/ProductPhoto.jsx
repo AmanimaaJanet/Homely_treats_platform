@@ -1,5 +1,6 @@
 import React from 'react';
 import { ProductIcon } from './ProductIcon.jsx';
+import { onActivate } from '../lib/a11y.js';
 
 /**
  * Displays a product photo, falling back to its Lucide icon when no photo has
@@ -23,7 +24,12 @@ export default function ProductPhoto({
       <div
         className={`product-image ${className} ${clickable ? 'clickable' : ''}`}
         onClick={onClick}
+        // A photo that opens the product must be reachable and pressable from a keyboard,
+        // and must say what it does — the image alone would be announced as "button".
         role={clickable ? 'button' : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        aria-label={clickable ? `View ${product?.name || 'this product'}` : undefined}
+        onKeyDown={clickable ? onActivate(onClick) : undefined}
       >
         <ProductIcon name={product?.icon || product?.emoji} size={iconSize} />
       </div>
@@ -34,6 +40,9 @@ export default function ProductPhoto({
       className={`product-image has-photo ${className} ${clickable ? 'clickable' : ''}`}
       onClick={onClick}
       role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      aria-label={clickable ? `View ${product?.name || 'this product'}` : undefined}
+      onKeyDown={clickable ? onActivate(onClick) : undefined}
     >
       <img
         src={photo}

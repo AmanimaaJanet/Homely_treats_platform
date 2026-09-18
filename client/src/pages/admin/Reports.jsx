@@ -102,9 +102,9 @@ export default function Reports() {
 
       <div className="admin-toolbar">
         <label className="muted small">From</label>
-        <input type="date" className="form-input" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <input aria-label="Report from date" type="date" className="form-input" value={from} onChange={(e) => setFrom(e.target.value)} />
         <label className="muted small">To</label>
-        <input type="date" className="form-input" value={to} onChange={(e) => setTo(e.target.value)} />
+        <input aria-label="Report to date" type="date" className="form-input" value={to} onChange={(e) => setTo(e.target.value)} />
         <button className="btn btn-secondary" onClick={load}>Generate</button>
         <button className="btn btn-primary" onClick={exportCsv} disabled={exporting}>
           {exporting ? 'Exporting…' : <><Download size={16} /> Export CSV</>}
@@ -253,7 +253,7 @@ export default function Reports() {
             <h3 className="form-heading">Top Products</h3>
             <table className="table">
               <thead>
-                <tr><th>Product</th><th>Qty Sold</th><th>Revenue</th><th>Share of sales</th><th>Orders</th></tr>
+                <tr><th scope="col">Product</th><th scope="col">Qty Sold</th><th scope="col">Revenue</th><th scope="col">Share of sales</th><th scope="col">Orders</th></tr>
               </thead>
               <tbody>
                 {(data.analytics?.products || data.topProducts).map((p) => (
@@ -276,7 +276,7 @@ export default function Reports() {
             <h3 className="form-heading">Orders in period ({data.orders.length})</h3>
             <table className="table">
               <thead>
-                <tr><th>Order</th><th>Date</th><th>Customer</th><th>Zone</th><th>Total</th><th>Status</th></tr>
+                <tr><th scope="col">Order</th><th scope="col">Date</th><th scope="col">Customer</th><th scope="col">Zone</th><th scope="col">Total</th><th scope="col">Status</th></tr>
               </thead>
               <tbody>
                 {data.orders.map((o) => (

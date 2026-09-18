@@ -85,7 +85,7 @@ export default function Customers() {
 
       <table className="table">
         <thead>
-          <tr><th>Customer</th><th>Email</th><th>Phone</th><th>Orders</th><th>Total Spent</th><th>Member Since</th><th>Sign-in</th></tr>
+          <tr><th scope="col">Customer</th><th scope="col">Email</th><th scope="col">Phone</th><th scope="col">Orders</th><th scope="col">Total Spent</th><th scope="col">Member Since</th><th scope="col">Sign-in</th></tr>
         </thead>
         <tbody>
           {customers.map((c) => (

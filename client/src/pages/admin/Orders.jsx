@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Printer, ChefHat, RotateCcw } from 'lucide-react';
 import { api } from '../../api.js';
@@ -6,6 +6,7 @@ import StatusBadge from '../../components/StatusBadge.jsx';
 import { ProductIcon } from '../../components/ProductIcon.jsx';
 import { useApp } from '../../store.jsx';
 import { ghs, fmtDate, fmtDateTime } from '../../lib/format.js';
+import { useEscape } from '../../lib/a11y.js';
 
 const STATUSES = ['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'READY', 'DELIVERED', 'CANCELLED'];
 
@@ -69,16 +70,24 @@ export default function Orders() {
     }
   };
 
+
+  // Escape closes the dialog (a keyboard user's only way back out), and focus is moved
+  // into it so the next Tab goes to the dialog's own controls rather than the page behind.
+  const dialogRef = useRef(null);
+  useEscape(!!detail, () => setDetail(null));
+  useEffect(() => {
+    if (detail) dialogRef.current?.focus();
+  }, [detail]);
   return (
     <div>
       <h2 className="admin-title">Order Management</h2>
 
       <div className="admin-toolbar">
-        <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select aria-label="Filter by order status" className="form-select" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="ALL">All Statuses</option>
           {STATUSES.map((s) => <option key={s}>{s.replace(/_/g, ' ')}</option>)}
         </select>
-        <input
+        <input aria-label="Search orders"
           className="form-input"
           placeholder="Search order / customer…"
           value={search}
@@ -91,8 +100,8 @@ export default function Orders() {
       <table className="table">
         <thead>
           <tr>
-            <th>Order ID</th><th>Customer</th><th>Items</th><th>Amount</th>
-            <th>Payment</th><th>Status</th><th>Date</th><th>Action</th>
+            <th scope="col">Order ID</th><th scope="col">Customer</th><th scope="col">Items</th><th scope="col">Amount</th>
+            <th scope="col">Payment</th><th scope="col">Status</th><th scope="col">Date</th><th scope="col">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -111,7 +120,7 @@ export default function Orders() {
               <td>{ghs(o.total)}</td>
               <td><StatusBadge status={o.paymentStatus} /></td>
               <td>
-                <select
+                <select aria-label="Change order status"
                   className="form-select status-select"
                   value={o.status}
                   onChange={(e) => updateStatus(o.id, e.target.value)}
@@ -145,9 +154,9 @@ export default function Orders() {
 
       {detail && (
         <div className="modal active" onClick={(e) => e.target === e.currentTarget && setDetail(null)}>
-          <div className="modal-content modal-wide">
+          <div ref={dialogRef} tabIndex={-1} className="modal-content modal-wide" role="dialog" aria-modal="true" aria-labelledby="order-dialog-title">
             <div className="modal-header">
-              <h3>Order {detail.id}</h3>
+              <h3 id="order-dialog-title">Order {detail.id}</h3>
               <div className="modal-header-actions">
                 <button
                   className="btn btn-secondary btn-sm"

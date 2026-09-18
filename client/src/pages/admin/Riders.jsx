@@ -68,47 +68,55 @@ export default function AdminRiders() {
           <h2 className="section-title" style={{ fontSize: 20, textAlign: 'left' }}>Add a rider</h2>
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Full name</label>
-              <input
-                className="form-input"
-                value={form.fullName}
-                onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                required
-              />
+              <label className="form-label">
+                <span className="form-label-text">Full name</span>
+                <input
+                  className="form-input"
+                  value={form.fullName}
+                  onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                  required
+                />
+              </label>
             </div>
             <div className="form-group">
-              <label className="form-label">Phone</label>
-              <input
-                className="form-input"
-                placeholder="024 000 0000"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                required
-              />
+              <label className="form-label">
+                <span className="form-label-text">Phone</span>
+                <input
+                  className="form-input"
+                  placeholder="024 000 0000"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  required
+                />
+              </label>
             </div>
           </div>
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Email</label>
-              <input
-                type="email"
-                className="form-input"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                required
-              />
+              <label className="form-label">
+                <span className="form-label-text">Email</span>
+                <input
+                  type="email"
+                  className="form-input"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  required
+                />
+              </label>
             </div>
             <div className="form-group">
-              <label className="form-label">Temporary password</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Min 8 chars, letters + numbers"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                minLength={8}
-                required
-              />
+              <label className="form-label">
+                <span className="form-label-text">Temporary password</span>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Min 8 chars, letters + numbers"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  minLength={8}
+                  required
+                />
+              </label>
             </div>
           </div>
           <p className="muted small" style={{ marginBottom: 14 }}>
@@ -135,11 +143,11 @@ export default function AdminRiders() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Rider</th>
-                  <th>Contact</th>
-                  <th>On the road</th>
-                  <th>Status</th>
-                  <th />
+                  <th scope="col">Rider</th>
+                  <th scope="col">Contact</th>
+                  <th scope="col">On the road</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" />
                 </tr>
               </thead>
               <tbody>

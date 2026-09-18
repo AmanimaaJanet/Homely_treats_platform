@@ -209,17 +209,23 @@ export default function Cart() {
                   </p>
                   <div className="form-row">
                     <div className="form-group">
-                      <label className="form-label">Full Name *</label>
-                      <input className="form-input" value={guest.name} onChange={(e) => setGuest({ ...guest, name: e.target.value })} placeholder="Your name" />
+                      <label className="form-label">
+                        <span className="form-label-text">Full Name *</span>
+                        <input className="form-input" value={guest.name} onChange={(e) => setGuest({ ...guest, name: e.target.value })} placeholder="Your name" />
+                      </label>
                     </div>
                     <div className="form-group">
-                      <label className="form-label">Phone *</label>
-                      <input className="form-input" value={guest.phone} onChange={(e) => setGuest({ ...guest, phone: e.target.value })} placeholder="055 123 4567" />
+                      <label className="form-label">
+                        <span className="form-label-text">Phone *</span>
+                        <input className="form-input" value={guest.phone} onChange={(e) => setGuest({ ...guest, phone: e.target.value })} placeholder="055 123 4567" />
+                      </label>
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Email *</label>
-                    <input className="form-input" type="email" value={guest.email} onChange={(e) => setGuest({ ...guest, email: e.target.value })} placeholder="you@example.com" />
+                    <label className="form-label">
+                      <span className="form-label-text">Email *</span>
+                      <input className="form-input" type="email" value={guest.email} onChange={(e) => setGuest({ ...guest, email: e.target.value })} placeholder="you@example.com" />
+                    </label>
                   </div>
                 </div>
               )}
@@ -258,21 +264,25 @@ export default function Cart() {
 
               <h3 className="form-heading">Delivery Method</h3>
               <div className="delivery-options">
-                <div
+                <button
+                  type="button"
                   className={`delivery-option ${deliveryMethod === 'DELIVERY' ? 'selected' : ''}`}
                   onClick={() => setDeliveryMethod('DELIVERY')}
+                  aria-pressed={deliveryMethod === 'DELIVERY'}
                 >
-                  <strong><Truck size={18} /> Home Delivery</strong>
+                  <strong><Truck size={18} aria-hidden="true" /> Home Delivery</strong>
                   <p>Fee by zone · Greater Accra</p>
-                </div>
+                </button>
                 {allowPickup && (
-                  <div
+                  <button
+                    type="button"
                     className={`delivery-option ${deliveryMethod === 'PICKUP' ? 'selected' : ''}`}
                     onClick={() => setDeliveryMethod('PICKUP')}
+                    aria-pressed={deliveryMethod === 'PICKUP'}
                   >
-                    <strong><Store size={18} /> Pickup</strong>
+                    <strong><Store size={18} aria-hidden="true" /> Pickup</strong>
                     <p>Free · {pickupLocations.find((l) => l.id === pickupLocationId)?.address || pickupAddress}</p>
-                  </div>
+                  </button>
                 )}
               </div>
 
@@ -286,13 +296,15 @@ export default function Cart() {
               {deliveryMethod === 'DELIVERY' && (
                 <>
                   <div className="form-group" style={{ marginTop: '1.25rem' }}>
-                    <label className="form-label">Delivery Zone *</label>
-                    <select className="form-select" value={deliveryZone} onChange={(e) => setDeliveryZone(e.target.value)}>
-                      <option value="">Select your neighbourhood…</option>
-                      {zones.map((z) => (
-                        <option key={z.id} value={z.id}>{z.name} — {ghs(z.fee)}</option>
-                      ))}
-                    </select>
+                    <label className="form-label">
+                      <span className="form-label-text">Delivery Zone *</span>
+                      <select className="form-select" value={deliveryZone} onChange={(e) => setDeliveryZone(e.target.value)}>
+                        <option value="">Select your neighbourhood…</option>
+                        {zones.map((z) => (
+                          <option key={z.id} value={z.id}>{z.name} — {ghs(z.fee)}</option>
+                        ))}
+                </select>
+                      </label>
                   </div>
                   {zone?.etaNote && <p className="muted small">{zone.etaNote}</p>}
                   {zone?.minOrder ? (
@@ -302,26 +314,31 @@ export default function Cart() {
                     </p>
                   ) : null}
                   <div className="form-group">
-                    <label className="form-label">Street Address / Landmark</label>
-                    <textarea className="form-textarea" placeholder="House no, street, landmark…" value={address} onChange={(e) => setAddress(e.target.value)} />
+                    <label className="form-label">
+                      <span className="form-label-text">Street Address / Landmark</span>
+                      <textarea className="form-textarea" placeholder="House no, street, landmark…" value={address} onChange={(e) => setAddress(e.target.value)} />
+                    </label>
                   </div>
                 </>
               )}
 
               {deliveryMethod === 'PICKUP' && pickupLocations.length > 1 && (
                 <div className="form-group">
-                  <label className="form-label">Collect from *</label>
-                  <select
-                    className="form-select"
-                    value={pickupLocationId}
-                    onChange={(e) => setPickupLocationId(e.target.value)}
-                  >
-                    {pickupLocations.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.name} — {l.address}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="form-label">
+                    <span className="form-label-text">Collect from *</span>
+                    <select
+                      className="form-select"
+                      value={pickupLocationId}
+                      onChange={(e) => setPickupLocationId(e.target.value)}
+                    >
+
+                      {pickupLocations.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.name} — {l.address}
+                        </option>
+                      ))}
+                </select>
+                    </label>
                 </div>
               )}
 
@@ -393,7 +410,7 @@ export default function Cart() {
                 <div className="form-group" style={{ marginTop: '1.5rem' }}>
                   <label className="form-label">Promo Code</label>
                   <div className="promo-row">
-                    <input className="form-input" placeholder="e.g. HOMELY10" value={promoCode} onChange={(e) => setPromoCode(e.target.value)} />
+                    <input aria-label="Promo code" className="form-input" placeholder="e.g. HOMELY10" value={promoCode} onChange={(e) => setPromoCode(e.target.value)} />
                     <button type="button" className="btn btn-secondary" onClick={applyPromo}>Apply</button>
                   </div>
                   {promo && <p className="small success"><Check size={13} /> {promo.promo.code} — {promo.promo.type === 'PERCENT' ? `${promo.promo.value}% off` : `${ghs(promo.promo.value)} off`}</p>}
@@ -429,15 +446,17 @@ export default function Cart() {
                 <h4 className="form-heading">Payment Method</h4>
                 <div className="payment-methods">
                   {payOptions.map((m) => (
-                    <div
+                    <button
+                      type="button"
                       key={m.id}
                       className={`payment-method ${paymentMethod === m.id ? 'selected' : ''}`}
                       onClick={() => setPaymentMethod(m.id)}
+                      aria-pressed={paymentMethod === m.id}
                     >
-                      <div className="pay-icon"><m.icon size={22} /></div>
+                      <div className="pay-icon"><m.icon size={22} aria-hidden="true" /></div>
                       <strong>{m.label}</strong>
                       <p className="small">{m.note}</p>
-                    </div>
+                    </button>
                   ))}
                 </div>
 

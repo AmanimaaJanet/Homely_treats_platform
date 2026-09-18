@@ -102,89 +102,103 @@ export default function Promos() {
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Code</label>
-              <input
-                className="form-input"
-                required
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-                placeholder="WELCOME10"
-              />
+              <label className="form-label">
+                <span className="form-label-text">Code</span>
+                <input
+                  className="form-input"
+                  required
+                  value={form.code}
+                  onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                  placeholder="WELCOME10"
+                />
+              </label>
             </div>
             <div className="form-group">
-              <label className="form-label">Type</label>
-              <select
-                className="form-select"
-                value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value })}
-              >
-                <option value="PERCENT">Percentage (%)</option>
-                <option value="FIXED">Fixed amount (GH₵)</option>
-              </select>
+              <label className="form-label">
+                <span className="form-label-text">Type</span>
+                <select
+                  className="form-select"
+                  value={form.type}
+                  onChange={(e) => setForm({ ...form, type: e.target.value })}
+                >
+                  <option value="PERCENT">Percentage (%)</option>
+                  <option value="FIXED">Fixed amount (GH₵)</option>
+                </select>
+                </label>
             </div>
           </div>
 
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">
+                <span className="form-label-text">
                 Value {form.type === 'PERCENT' ? '(%)' : '(GH₵)'}
+              </span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  max={form.type === 'PERCENT' ? 100 : undefined}
+                  className="form-input"
+                  required
+                  value={form.value}
+                  onChange={(e) => setForm({ ...form, value: e.target.value })}
+                />
               </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                max={form.type === 'PERCENT' ? 100 : undefined}
-                className="form-input"
-                required
-                value={form.value}
-                onChange={(e) => setForm({ ...form, value: e.target.value })}
-              />
             </div>
             <div className="form-group">
-              <label className="form-label">Total uses allowed (blank = unlimited)</label>
-              <input
-                type="number"
-                min="1"
-                className="form-input"
-                value={form.usageLimit}
-                onChange={(e) => setForm({ ...form, usageLimit: e.target.value })}
-              />
+              <label className="form-label">
+                <span className="form-label-text">Total uses allowed (blank = unlimited)</span>
+                <input
+                  type="number"
+                  min="1"
+                  className="form-input"
+                  value={form.usageLimit}
+                  onChange={(e) => setForm({ ...form, usageLimit: e.target.value })}
+                />
+              </label>
             </div>
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Minimum order value (GH₵, blank = none)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                className="form-input"
-                value={form.minSpend}
-                onChange={(e) => setForm({ ...form, minSpend: e.target.value })}
-              />
+              <label className="form-label">
+                <span className="form-label-text">Minimum order value (GH₵, blank = none)</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="form-input"
+                  value={form.minSpend}
+                  onChange={(e) => setForm({ ...form, minSpend: e.target.value })}
+                />
+              </label>
             </div>
             <div className="form-group">
-              <label className="form-label">Uses per customer (blank = unlimited)</label>
-              <input
-                type="number"
-                min="1"
-                className="form-input"
-                value={form.perCustomerLimit}
-                onChange={(e) => setForm({ ...form, perCustomerLimit: e.target.value })}
-              />
+              <label className="form-label">
+                <span className="form-label-text">Uses per customer (blank = unlimited)</span>
+                <input
+                  type="number"
+                  min="1"
+                  className="form-input"
+                  value={form.perCustomerLimit}
+                  onChange={(e) => setForm({ ...form, perCustomerLimit: e.target.value })}
+                />
+              </label>
             </div>
           </div>
 
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Expiry date (blank = never)</label>
-              <input
-                type="date"
-                className="form-input"
-                value={form.expiresAt}
-                onChange={(e) => setForm({ ...form, expiresAt: e.target.value })}
-              />
+              <label className="form-label">
+                <span className="form-label-text">Expiry date (blank = never)</span>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={form.expiresAt}
+                  onChange={(e) => setForm({ ...form, expiresAt: e.target.value })}
+                />
+              </label>
             </div>
             <div className="form-group" style={{ justifyContent: 'flex-end' }}>
               <label className="check-row toggle">
@@ -231,12 +245,12 @@ export default function Promos() {
             <table className="table">
               <thead>
                 <tr>
-                  <th>Code</th>
-                  <th>Discount</th>
-                  <th>Conditions</th>
-                  <th>Used</th>
-                  <th>Status</th>
-                  <th />
+                  <th scope="col">Code</th>
+                  <th scope="col">Discount</th>
+                  <th scope="col">Conditions</th>
+                  <th scope="col">Used</th>
+                  <th scope="col">Status</th>
+                  <th scope="col" />
                 </tr>
               </thead>
               <tbody>

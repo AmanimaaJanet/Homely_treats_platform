@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ClipboardList, UserCircle, Lock, LogOut, Gem, Star, Cake, ShoppingBag, Heart, Bell } from 'lucide-react';
 import { api } from '../api.js';
@@ -7,6 +7,7 @@ import PushToggle from '../components/PushToggle.jsx';
 import SavedItems from '../components/SavedItems.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import { ghs, fmtDate, initials } from '../lib/format.js';
+import { useEscape } from '../lib/a11y.js';
 
 function Stars({ value, onChange }) {
   return (
@@ -32,6 +33,14 @@ export default function Account() {
   const [profile, setProfile] = useState({ fullName: '', phone: '' });
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
   const [reviewing, setReviewing] = useState(null);
+
+  // Escape closes the review dialog (a keyboard user's only way back out), and focus is
+  // moved into it so the next Tab goes to the dialog's own controls, not the page behind.
+  const dialogRef = useRef(null);
+  useEscape(!!reviewing, () => setReviewing(null));
+  useEffect(() => {
+    if (reviewing) dialogRef.current?.focus();
+  }, [reviewing]);
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
 
   useEffect(() => {
@@ -143,12 +152,34 @@ export default function Account() {
               <p className="muted small">{user.email}</p>
               <span className="points-pill"><Gem size={13} /> {user.loyaltyPoints} pts</span>
             </div>
+            {/* Real buttons inside the list items: focusable, announced as buttons, and
+                the current tab is marked with aria-current so it is not colour-only. */}
             <ul className="account-menu">
-              <li className={tab === 'orders' ? 'active' : ''} onClick={() => setTab('orders')}><ClipboardList size={16} /> My Orders</li>
-              <li className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}><UserCircle size={16} /> Edit Profile</li>
-              <li className={tab === 'saved' ? 'active' : ''} onClick={() => setTab('saved')}><Heart size={16} /> Saved & Alerts</li>
-              <li className={tab === 'password' ? 'active' : ''} onClick={() => setTab('password')}><Lock size={16} /> Change Password</li>
-              <li className="danger" onClick={() => { logout(); navigate('/'); }}><LogOut size={16} /> Sign Out</li>
+              <li className={tab === 'orders' ? 'active' : ''}>
+                <button type="button" onClick={() => setTab('orders')} aria-current={tab === 'orders' ? 'true' : undefined}>
+                  <ClipboardList size={16} aria-hidden="true" /> My Orders
+                </button>
+              </li>
+              <li className={tab === 'profile' ? 'active' : ''}>
+                <button type="button" onClick={() => setTab('profile')} aria-current={tab === 'profile' ? 'true' : undefined}>
+                  <UserCircle size={16} aria-hidden="true" /> Edit Profile
+                </button>
+              </li>
+              <li className={tab === 'saved' ? 'active' : ''}>
+                <button type="button" onClick={() => setTab('saved')} aria-current={tab === 'saved' ? 'true' : undefined}>
+                  <Heart size={16} aria-hidden="true" /> Saved &amp; Alerts
+                </button>
+              </li>
+              <li className={tab === 'password' ? 'active' : ''}>
+                <button type="button" onClick={() => setTab('password')} aria-current={tab === 'password' ? 'true' : undefined}>
+                  <Lock size={16} aria-hidden="true" /> Change Password
+                </button>
+              </li>
+              <li className="danger">
+                <button type="button" onClick={() => { logout(); navigate('/'); }}>
+                  <LogOut size={16} aria-hidden="true" /> Sign Out
+                </button>
+              </li>
             </ul>
           </div>
 
@@ -177,7 +208,7 @@ export default function Account() {
                 ) : (
                   <table className="table">
                     <thead>
-                      <tr><th>Order ID</th><th>Date</th><th>Items</th><th>Total</th><th>Status</th><th></th></tr>
+                      <tr><th scope="col">Order ID</th><th scope="col">Date</th><th scope="col">Items</th><th scope="col">Total</th><th scope="col">Status</th><th scope="col"></th></tr>
                     </thead>
                     <tbody>
                       {orders.map((o) => (
@@ -214,16 +245,22 @@ export default function Account() {
                 <h2 className="form-heading">Edit Profile</h2>
                 <form onSubmit={saveProfile}>
                   <div className="form-group">
-                    <label className="form-label">Full Name</label>
-                    <input className="form-input" value={profile.fullName} onChange={(e) => setProfile({ ...profile, fullName: e.target.value })} required />
+                    <label className="form-label">
+                      <span className="form-label-text">Full Name</span>
+                      <input className="form-input" value={profile.fullName} onChange={(e) => setProfile({ ...profile, fullName: e.target.value })} required />
+                    </label>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Phone Number</label>
-                    <input className="form-input" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} required />
+                    <label className="form-label">
+                      <span className="form-label-text">Phone Number</span>
+                      <input className="form-input" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} required />
+                    </label>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Email Address</label>
-                    <input className="form-input" value={user.email} disabled />
+                    <label className="form-label">
+                      <span className="form-label-text">Email Address</span>
+                      <input className="form-input" value={user.email} disabled />
+                    </label>
                     <p className="muted small">Email cannot be changed</p>
                   </div>
                   <button className="btn btn-primary">Save Changes</button>
@@ -247,16 +284,22 @@ export default function Account() {
                 <h2 className="form-heading">Change Password</h2>
                 <form onSubmit={changePassword}>
                   <div className="form-group">
-                    <label className="form-label">Current Password</label>
-                    <input type="password" className="form-input" required value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
+                    <label className="form-label">
+                      <span className="form-label-text">Current Password</span>
+                      <input type="password" className="form-input" required value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
+                    </label>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">New Password</label>
-                    <input type="password" className="form-input" required minLength={8} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
+                    <label className="form-label">
+                      <span className="form-label-text">New Password</span>
+                      <input type="password" className="form-input" required minLength={8} value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
+                    </label>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Confirm New Password</label>
-                    <input type="password" className="form-input" required minLength={8} value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} />
+                    <label className="form-label">
+                      <span className="form-label-text">Confirm New Password</span>
+                      <input type="password" className="form-input" required minLength={8} value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} />
+                    </label>
                   </div>
                   <button className="btn btn-primary">Change Password</button>
                 </form>
@@ -268,9 +311,9 @@ export default function Account() {
 
       {reviewing && (
         <div className="modal active" onClick={(e) => e.target === e.currentTarget && setReviewing(null)}>
-          <div className="modal-content">
+          <div ref={dialogRef} tabIndex={-1} className="modal-content" role="dialog" aria-modal="true" aria-labelledby="review-dialog-title">
             <div className="modal-header">
-              <h3>Review order {reviewing.id}</h3>
+              <h3 id="review-dialog-title">Review order {reviewing.id}</h3>
               <button className="close-btn" onClick={() => setReviewing(null)}>×</button>
             </div>
             <form onSubmit={submitReview}>
@@ -279,8 +322,10 @@ export default function Account() {
                 <Stars value={reviewForm.rating} onChange={(r) => setReviewForm({ ...reviewForm, rating: r })} />
               </div>
               <div className="form-group">
-                <label className="form-label">Comment</label>
-                <textarea className="form-textarea" value={reviewForm.comment} onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })} placeholder="How was your order?" />
+                <label className="form-label">
+                  <span className="form-label-text">Comment</span>
+                  <textarea className="form-textarea" value={reviewForm.comment} onChange={(e) => setReviewForm({ ...reviewForm, comment: e.target.value })} placeholder="How was your order?" />
+                </label>
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => setReviewing(null)}>Cancel</button>

@@ -154,7 +154,7 @@ export default function Diagnostics() {
           ) : (
             <table className="table">
               <thead>
-                <tr><th>Channel</th><th>Sent</th><th>Simulated</th><th>Failed</th></tr>
+                <tr><th scope="col">Channel</th><th scope="col">Sent</th><th scope="col">Simulated</th><th scope="col">Failed</th></tr>
               </thead>
               <tbody>
                 {Object.entries(data.notifications.channels).map(([channel, counts]) => (
