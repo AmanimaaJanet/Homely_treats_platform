@@ -60,6 +60,20 @@ export default [
     },
   },
 
+  // Build scripts (Node): bundle checker run by `npm run check:bundle` and CI.
+  {
+    files: ['scripts/**/*.mjs', 'scripts/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2023,
+      sourceType: 'module',
+      globals: { ...globals.node },
+    },
+    rules: {
+      // Build tooling talks to whoever is running the build; that is its job.
+      'no-console': 'off',
+    },
+  },
+
   // Service worker + test setup (browser + serviceworker globals)
   {
     files: ['public/**/*.js', 'vitest.setup.js', 'vite.config.js'],

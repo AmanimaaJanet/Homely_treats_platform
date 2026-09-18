@@ -17,6 +17,7 @@
     "lint": "npm --prefix client run lint",
     "test": "npm --prefix client run test",
     "test:e2e": "npm --prefix server run test:e2e",
-    "verify": "npm --prefix client run lint && npm --prefix client run test && npm --prefix client run build"
+    "verify": "npm --prefix client run lint && npm --prefix client run test && npm --prefix client run build && npm --prefix client run check:bundle",
+    "check:bundle": "npm --prefix client run check:bundle"
   }
 }

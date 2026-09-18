@@ -133,6 +133,26 @@ cd server && npm start      # http://localhost:5000
 
 ## 🧪 Testing
 
+### Performance
+
+Routing is split, so a visitor on the homepage downloads the shop — not the admin panel,
+the rider app or the print templates. `npm run check:bundle` measures the first load and
+fails the build if it creeps past its budget or if the built HTML points at a chunk that
+is not there.
+
+| | Before | After |
+|---|---|---|
+| JavaScript on first load | 416.4 kB (114.7 kB gzipped) | **230.1 kB (71.2 kB gzipped)** |
+| Files on first load | 1 | 4 (framework cached separately from app code) |
+| Route pages | all in the one file | 31 chunks, fetched when opened |
+| Heaviest on-demand page | — | 15.2 kB (Account) |
+
+Also in place: the hero video waits for the page to settle before downloading (the still
+poster paints first, which matters on mobile data), the menu is prefetched at idle on the
+homepage so the most likely next tap is instant, framework code is chunked separately so
+a redeploy only invalidates the app code, uploaded photos load lazily, and a failed page
+chunk shows a usable screen with a reload button rather than a blank page.
+
 ### Backups
 
 ```bash

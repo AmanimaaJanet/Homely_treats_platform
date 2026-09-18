@@ -11,7 +11,9 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "build:check": "npm run build && npm run check:bundle"
   },
   "dependencies": {
     "lucide-react": "^1.37.0",

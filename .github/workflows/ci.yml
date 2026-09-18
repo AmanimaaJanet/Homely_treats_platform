@@ -53,6 +53,13 @@ jobs:
         working-directory: client
         run: npm run build
 
+      # Splitting routes into on-demand files introduces one new way to break a deploy:
+      # the HTML referencing a chunk that was never uploaded. This checks the built
+      # import graph is complete, and that the first load stays inside its size budget.
+      - name: Check the bundle is complete and within budget
+        working-directory: client
+        run: npm run check:bundle
+
       - name: Install server dependencies
         working-directory: server
         run: npm ci

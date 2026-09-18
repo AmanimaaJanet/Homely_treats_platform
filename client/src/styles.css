@@ -1129,3 +1129,73 @@ a:hover { color: var(--pd); }
 .error-item-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13.5px; }
 .error-badge { background: #9B2C2C; color: #fff; font-size: 11px; font-weight: 700; border-radius: 4px; padding: 1px 6px; }
 .error-stack { font-size: 11px; color: #6B5544; white-space: pre-wrap; margin: 6px 0 0; }
+
+/* ---------------------------------------------------------------------------
+   Route loading skeleton and the error screen
+   ---------------------------------------------------------------------------
+   Pages are fetched on demand, so a route change may need a moment. These styles
+   keep that moment calm (a shimmer where content will appear) and keep a failed
+   page from looking like a broken shop. */
+
+.route-fallback { max-width: 1100px; margin: 0 auto; }
+.skeleton-stack { display: flex; flex-direction: column; gap: 14px; padding: 32px 20px; }
+.skeleton {
+  display: block;
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(196, 118, 59, 0.08) 25%, rgba(196, 118, 59, 0.16) 37%, rgba(196, 118, 59, 0.08) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-title { height: 34px; width: 46%; max-width: 320px; }
+.skeleton-line { height: 14px; width: 78%; }
+.skeleton-line.short { width: 52%; }
+.skeleton-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; margin-top: 10px; }
+.skeleton-card { height: 190px; border-radius: 16px; }
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+.route-fallback-admin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 80px 20px;
+  min-height: 40vh;
+}
+.route-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid rgba(196, 118, 59, 0.2);
+  border-top-color: #c4763b;
+  animation: route-spin 0.9s linear infinite;
+}
+@keyframes route-spin { to { transform: rotate(360deg); } }
+
+.error-page { display: flex; justify-content: center; padding: 60px 20px; }
+.error-card {
+  max-width: 560px;
+  background: var(--card, #fff);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  padding: 28px 26px;
+  box-shadow: 0 12px 34px rgba(60, 40, 20, 0.08);
+}
+.error-card h1 { font-size: 1.4rem; margin: 0 0 10px; }
+.error-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.error-detail { margin-top: 18px; font-size: 0.82rem; }
+.error-detail summary { cursor: pointer; color: var(--muted, #777); }
+.error-detail pre {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 10px;
+  overflow-x: auto;
+  font-size: 0.78rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+  .route-spinner { animation-duration: 1.8s; }
+}
