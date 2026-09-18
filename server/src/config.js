@@ -31,6 +31,12 @@ export const config = {
   // Set REQUIRE_EMAIL_VERIFICATION=true to force it once Resend is configured.
   requireEmailVerification:
     process.env.REQUIRE_EMAIL_VERIFICATION === 'true' || Boolean(process.env.RESEND_API_KEY),
+  // Per-account sign-in throttling (complements the per-IP limiter — see
+  // services/loginGuard.js for why the account has to count its own failures).
+  auth: {
+    maxFailedAttempts: Number(process.env.AUTH_MAX_FAILED_ATTEMPTS) || 10,
+    lockoutMinutes: Number(process.env.AUTH_LOCKOUT_MINUTES) || 15,
+  },
   turnstile: {
     secretKey: process.env.TURNSTILE_SECRET_KEY || '',
     enabled: Boolean(process.env.TURNSTILE_SECRET_KEY),

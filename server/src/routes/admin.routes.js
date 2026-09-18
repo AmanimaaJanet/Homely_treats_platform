@@ -10,6 +10,7 @@ import { describeTemplates } from '../services/whatsappTemplates.js';
 import { notifyBackInStock } from '../services/stockNotifications.js';
 import { buildAnalytics, monthlyTrend } from '../services/analytics.js';
 import { customerKey } from '../services/analytics.js';
+import { currentlyLocked, clearLock } from '../services/loginGuard.js';
 import { sendTemplateTest } from '../services/whatsapp.js';
 import { config, ORDER_STATUSES } from '../config.js';
 
@@ -555,6 +556,46 @@ router.post('/alerts/low-stock/send', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to send the stock digest' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Sign-in lockouts (per-account throttling — see services/loginGuard.js)
+// ---------------------------------------------------------------------------
+
+// GET /api/admin/security/lockouts — accounts currently paused after failed sign-ins
+router.get('/security/lockouts', async (req, res) => {
+  try {
+    const locked = await currentlyLocked();
+    res.json({
+      lockouts: locked,
+      settings: {
+        maxFailedAttempts: config.auth.maxFailedAttempts,
+        lockoutMinutes: config.auth.lockoutMinutes,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to check lockouts' });
+  }
+});
+
+// POST /api/admin/security/lockouts/:id/clear — let a customer back in now
+router.post('/security/lockouts/:id/clear', async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) return res.status(404).json({ error: 'Account not found' });
+    const cleared = await clearLock(user.id);
+    await audit(req, {
+      action: 'LOCKOUT_CLEARED',
+      entity: 'User',
+      entityId: user.id,
+      detail: `Sign-in lock cleared by admin for ${user.email}`,
+    });
+    res.json({ ok: true, user: { id: cleared.id, email: cleared.email, lockedUntil: cleared.lockedUntil } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to clear the lockout' });
   }
 });
 

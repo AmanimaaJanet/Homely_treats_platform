@@ -26,7 +26,7 @@ A full-stack bakery ordering platform built from your HTML mockup: **React** fro
 - 🧁 **Custom Order** — product, quantity, flavour, icing, inscription, required date + **size-based pricing** + **design-photo upload** (show our decorators a cake you love)
 - 🛒 **Cart & Checkout** — quantity controls, **delivery zones with per-neighbourhood fees**, promo codes, **loyalty-point redemption**, guest or signed-in checkout
 - 🚚 **Track Order** — live **real-time updates over WebSockets** (auto-falls back to polling), full status timeline, rider info, design photos, and the notification log
-- 👤 **Accounts** — register, sign in, email verification, profile, password change, order history with **"Order again"**, **loyalty points** balance
+- 👤 **Accounts** — register, sign in, email verification, profile, password change, order history with **"Order again"**, **loyalty points** balance, and per-account sign-in protection (a brief pause after repeated wrong passwords, with a reset link to get straight back in)
 - ⭐ **Reviews & ratings** — rate delivered orders (earn +5 bonus points); published on the homepage once approved when moderation is on
 - 🛵 **Rider app** at `/rider` — riders accept deliveries and mark them delivered (updates the customer's tracker instantly)
 - 📱 **PWA** — installable to the home screen, with free **web push alerts** ("your cake is ready") alongside SMS, WhatsApp and email
@@ -52,6 +52,7 @@ A full-stack bakery ordering platform built from your HTML mockup: **React** fro
 | **Paystack** | MTN MoMo, AirtelTigo, Vodafone Cash, Visa/MC | Test keys need **no business docs** — free signup |
 | **Resend** | Order confirmations, receipts, status updates, email verification | Free 100/day, 3,000/month |
 | **Web push (VAPID)** | Instant free alerts on the customer's phone, from the PWA — no credits, no phone number |
+| **Per-account lockout** | An account pauses briefly after repeated wrong passwords (`AUTH_MAX_FAILED_ATTEMPTS`); the bakery is alerted, and a password reset gets the owner straight back in |
 | **WhatsApp Cloud API** | WhatsApp notifications using **Meta-approved templates** (required outside the 24-hour window), with automatic plain-text fallback and a test-send button | Free test number, 1,000 conversations/month — setup: [WHATSAPP_TEMPLATES.md](WHATSAPP_TEMPLATES.md) |
 | **Textbelt** | SMS (free 1/day) | ⚠️ free tier blocked for Ghana numbers |
 | **Arkesel** | SMS (Ghana-based) | ✅ recommended for GH — free trial credits |
@@ -158,6 +159,12 @@ PAYSTACK_PUBLIC_KEY=
 # Resend (blank = emails printed to console)
 RESEND_API_KEY=
 EMAIL_FROM=Homely Treats <onboarding@resend.dev>
+
+# Per-account sign-in lockout (on top of the per-IP limiter). The lock lifts by
+# itself; a password reset clears it immediately.
+AUTH_MAX_FAILED_ATTEMPTS=10
+AUTH_LOCKOUT_MINUTES=15
+ALERT_EMAIL=                          # blank = the business email in Admin -> Settings
 
 # Web push / PWA notifications (blank = simulated). Generate with:
 #   cd server && npm run push:keys

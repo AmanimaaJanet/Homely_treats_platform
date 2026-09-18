@@ -43,7 +43,7 @@ let failed = 0;
 let adminToken = null;
 let janetToken = null;
 
-const created = { productIds: [], zoneIds: [], promoIds: [], orderIds: [], userId: null, userId2: null, userId3: null, riderIds: [], photoFiles: [] };
+const created = { productIds: [], zoneIds: [], promoIds: [], orderIds: [], userId: null, userId2: null, userId3: null, userId4: null, riderIds: [], photoFiles: [] };
 const runStartedAt = new Date();
 
 function check(name, ok, extra = '') {
@@ -80,6 +80,7 @@ async function teardown() {
     if (created.userId) await prisma.review.deleteMany({ where: { userId: created.userId } });
     if (created.userId2) await prisma.review.deleteMany({ where: { userId: created.userId2 } });
     if (created.userId3) await prisma.review.deleteMany({ where: { userId: created.userId3 } });
+    if (created.userId4) await prisma.review.deleteMany({ where: { userId: created.userId4 } });
 
     const orderIds = ids(created.orderIds);
     if (orderIds.length) {
@@ -109,6 +110,7 @@ async function teardown() {
     if (created.userId) await prisma.user.deleteMany({ where: { id: created.userId } });
     if (created.userId2) await prisma.user.deleteMany({ where: { id: created.userId2 } });
     if (created.userId3) await prisma.user.deleteMany({ where: { id: created.userId3 } });
+    if (created.userId4) await prisma.user.deleteMany({ where: { id: created.userId4 } });
 
     // The audit log is append-only in production, but a test run should not leave
     // its own noise behind. Remove only rows created since this run began.
@@ -1854,7 +1856,96 @@ E2E Imported ${rnd},CAKE,175,"Imported, with a comma",New,6,true,2,Vanilla|Choco
       (myOrders.data?.orders || []).some((o) => o.id === guestOrderId), `${myOrders.data?.orders?.length} order(s)`);
   }
 
-  // ---------------------------------------------------------------- 37. Unauthorised guard
+  // ---------------------------------------------------------------- 37. Per-account sign-in lockout
+  {
+    // Ask the *server* for its policy rather than assuming: a real deployment tunes
+    // AUTH_MAX_FAILED_ATTEMPTS, and the test must hold for any sane value.
+    const policy = await req('/api/admin/security/lockouts', { token: adminToken });
+    const limit = policy.data?.settings?.maxFailedAttempts || 10;
+    check('The admin lockout list reports the configured policy',
+      limit >= 3 && typeof policy.data?.settings?.lockoutMinutes === 'number',
+      `max=${limit} after ${policy.data?.settings?.lockoutMinutes} min`);
+
+    const lockEmail = `e2e.lock.${rnd.toLowerCase()}@test.com`;
+    const lockPass = 'LockProbe123';
+    const reg = await req('/api/auth/register', {
+      method: 'POST',
+      body: { fullName: `Lock Probe ${rnd}`, email: lockEmail, phone: '0200444555', password: lockPass },
+    });
+    check('A throwaway account for the lockout test is created', reg.status === 201, reg.data?.error);
+    const lockUserId = reg.data?.user?.id;
+    if (lockUserId) created.userId3 = lockUserId;
+
+    // Count down towards the limit (capped so a very high threshold can't turn this
+    // into hundreds of requests).
+    const attempts = Math.min(limit, 12);
+    let last;
+    for (let i = 0; i < attempts; i++) {
+      last = await req('/api/auth/login', { method: 'POST', body: { email: lockEmail, password: `wrong-${i}` } });
+    }
+
+    if (limit <= 12) {
+      check('Wrong passwords lock the account at the configured limit',
+        last.status === 423 && last.data?.code === 'ACCOUNT_LOCKED', `${last.status} ${last.data?.error}`);
+      check('The lock says how long the wait is and how to get back in now',
+        last.data?.minutesLeft >= 1 && last.data?.resetUrl === '/forgot-password', JSON.stringify(last.data));
+
+      const rightWhileLocked = await req('/api/auth/login', { method: 'POST', body: { email: lockEmail, password: lockPass } });
+      check('Even the correct password waits out the lock', rightWhileLocked.status === 423, `${rightWhileLocked.status}`);
+
+      const lockRow = await prisma.user.findUnique({ where: { email: lockEmail } });
+      check('The lock is recorded on the account itself', Boolean(lockRow?.lockedUntil),
+        `until ${lockRow?.lockedUntil?.toISOString?.()}`);
+
+      const listed = await req('/api/admin/security/lockouts', { token: adminToken });
+      check('The bakery can see which accounts are locked',
+        (listed.data?.lockouts || []).some((l) => l.email === lockEmail), `${listed.data?.lockouts?.length} locked`);
+      const anonList = await req('/api/admin/security/lockouts');
+      check('The lockout list is admin-only (401)', anonList.status === 401);
+
+      const cleared = await req(`/api/admin/security/lockouts/${lockUserId}/clear`, { method: 'POST', token: adminToken });
+      check('An admin can let the customer back in immediately',
+        cleared.status === 200 && cleared.data?.user?.lockedUntil === null, JSON.stringify(cleared.data?.user));
+      const afterClear = await req('/api/auth/login', { method: 'POST', body: { email: lockEmail, password: lockPass } });
+      check('The customer signs in right after the lock is cleared',
+        afterClear.status === 200 && Boolean(afterClear.data?.token), `${afterClear.status}`);
+
+      const audited = await prisma.auditLog.findFirst({ where: { action: 'ACCOUNT_LOCKED', entityId: lockUserId } });
+      check('The lockout is written to the activity log', Boolean(audited), audited?.detail);
+      const clearAudited = await prisma.auditLog.findFirst({ where: { action: 'LOCKOUT_CLEARED', entityId: lockUserId } });
+      check('Clearing a lock is written to the activity log too', Boolean(clearAudited), clearAudited?.detail);
+    } else {
+      check('Wrong passwords are counted against the account', last.data?.attemptsLeft === limit - attempts,
+        `attemptsLeft=${last.data?.attemptsLeft} of ${limit}`);
+      const row = await prisma.user.findUnique({ where: { email: lockEmail } });
+      check('The failure count and the last attempt are stored',
+        (row?.failedLoginAttempts || 0) === attempts && Boolean(row?.lastFailedLoginAt),
+        `${row?.failedLoginAttempts} failure(s)`);
+      check('A high threshold means no lock yet', !row?.lockedUntil);
+    }
+
+    const good = await req('/api/auth/login', { method: 'POST', body: { email: lockEmail, password: lockPass } });
+    check('The right password works and clears the record', good.status === 200, `${good.status}`);
+    const clean = await prisma.user.findUnique({ where: { email: lockEmail } });
+    check('A successful sign-in resets the counter and timestamps the login',
+      clean?.failedLoginAttempts === 0 && clean?.lockedUntil === null && Boolean(clean?.lastLoginAt),
+      `lastLoginAt=${clean?.lastLoginAt?.toISOString?.()}`);
+
+    // The count is per account: hammering one account leaves everyone else alone.
+    const otherEmail = `e2e.lock2.${rnd.toLowerCase()}@test.com`;
+    const other = await req('/api/auth/register', {
+      method: 'POST',
+      body: { fullName: `Lock Probe Two ${rnd}`, email: otherEmail, phone: '0200444666', password: lockPass },
+    });
+    if (other.data?.user?.id) created.userId4 = other.data.user.id;
+    await req('/api/auth/login', { method: 'POST', body: { email: otherEmail, password: 'nope-nope-nope' } });
+    const otherRow = await prisma.user.findUnique({ where: { email: otherEmail } });
+    const otherGood = await req('/api/auth/login', { method: 'POST', body: { email: otherEmail, password: lockPass } });
+    check('Failures on one account never lock a different one',
+      !otherRow?.lockedUntil && otherGood.status === 200, `${otherGood.status}`);
+  }
+
+  // ---------------------------------------------------------------- 38. Unauthorised guard
   {
     const r = await req('/api/admin/stats');
     check('Admin endpoints protected (401)', r.status === 401);

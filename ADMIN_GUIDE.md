@@ -206,3 +206,9 @@ email attaches their past orders automatically.
 - Admin actions are audited: price changes, refunds, status changes, bulk edits, CSV
   imports, review moderation and setting changes all land in **Activity log** with the
   actor, the time and the IP.
+- **Sign-in protection is per account, not just per IP.** After `AUTH_MAX_FAILED_ATTEMPTS`
+  wrong passwords (10 by default) an account pauses for `AUTH_LOCKOUT_MINUTES` (15). You
+  are emailed each time it happens, the customer is emailed a reset link, and **Admin →
+  Customers** lists any paused account with a *Let them in* button — so the phone call
+  that starts *"I can't log in"* has a one-click answer. The lock also lifts by itself,
+  and a password reset clears it instantly.

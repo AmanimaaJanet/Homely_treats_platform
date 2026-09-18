@@ -1,14 +1,44 @@
 import React, { useEffect, useState } from 'react';
-import { Users, ShoppingCart, Coins } from 'lucide-react';
+import { Users, ShoppingCart, Coins, Lock, Unlock, ShieldAlert } from 'lucide-react';
 import { api } from '../../api.js';
-import { ghs, fmtDate, initials } from '../../lib/format.js';
+import { useApp } from '../../store.jsx';
+import { ghs, fmtDate, fmtDateTime, initials } from '../../lib/format.js';
 
 export default function Customers() {
+  const { toast } = useApp();
   const [customers, setCustomers] = useState([]);
+  // Sign-in lockouts are shown here rather than buried in a log: a locked customer is
+  // usually on the phone right now, and the fix is one click.
+  const [lockouts, setLockouts] = useState([]);
+  const [lockSettings, setLockSettings] = useState(null);
+
+  const load = () =>
+    api.get('/admin/customers', { auth: true }).then((d) => setCustomers(d.customers)).catch(() => {});
+  const loadLockouts = () =>
+    api
+      .get('/admin/security/lockouts', { auth: true })
+      .then((d) => {
+        setLockouts(d.lockouts || []);
+        setLockSettings(d.settings);
+      })
+      .catch(() => {});
 
   useEffect(() => {
-    api.get('/admin/customers', { auth: true }).then((d) => setCustomers(d.customers)).catch(() => {});
+    load();
+    loadLockouts();
   }, []);
+
+  const lockedIds = new Set(lockouts.map((l) => l.id));
+
+  const unlock = async (id, email) => {
+    try {
+      await api.post(`/admin/security/lockouts/${id}/clear`, {}, { auth: true });
+      toast(`${email} can sign in again.`, 'success');
+      await loadLockouts();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
 
   const totalSpent = customers.reduce((s, c) => s + c.totalSpent, 0);
 
@@ -34,9 +64,28 @@ export default function Customers() {
         </div>
       </div>
 
+      {lockouts.length > 0 && (
+        <div className="alert warn">
+          <strong><ShieldAlert size={15} /> {lockouts.length} account{lockouts.length === 1 ? '' : 's'} paused after failed sign-ins</strong>
+          <p className="small">
+            An account locks for {lockSettings?.lockoutMinutes ?? 15} minutes after{' '}
+            {lockSettings?.maxFailedAttempts ?? 10} wrong passwords. The lock lifts by itself, the
+            customer can reset their password to get straight back in, or you can clear it now:
+          </p>
+          {lockouts.map((l) => (
+            <p className="small" key={l.id}>
+              {l.fullName} ({l.email}) — until {fmtDateTime(l.lockedUntil)}{' '}
+              <button className="btn btn-ghost btn-sm" onClick={() => unlock(l.id, l.email)}>
+                <Unlock size={13} /> Let them in
+              </button>
+            </p>
+          ))}
+        </div>
+      )}
+
       <table className="table">
         <thead>
-          <tr><th>Customer</th><th>Email</th><th>Phone</th><th>Orders</th><th>Total Spent</th><th>Member Since</th></tr>
+          <tr><th>Customer</th><th>Email</th><th>Phone</th><th>Orders</th><th>Total Spent</th><th>Member Since</th><th>Sign-in</th></tr>
         </thead>
         <tbody>
           {customers.map((c) => (
@@ -47,9 +96,16 @@ export default function Customers() {
               <td>{c.totalOrders}</td>
               <td>{ghs(c.totalSpent)}</td>
               <td>{fmtDate(c.createdAt)}</td>
+              <td>
+                {lockedIds.has(c.id) ? (
+                  <span className="status-pill pending"><Lock size={11} /> Locked</span>
+                ) : (
+                  <span className="muted small">OK</span>
+                )}
+              </td>
             </tr>
           ))}
-          {customers.length === 0 && <tr><td colSpan="6" className="centered muted">No customers yet</td></tr>}
+          {customers.length === 0 && <tr><td colSpan="7" className="centered muted">No customers yet</td></tr>}
         </tbody>
       </table>
     </div>

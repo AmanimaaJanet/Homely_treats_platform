@@ -25,6 +25,14 @@ model User {
   resetTokenExpires DateTime?
   active            Boolean  @default(true)
   loyaltyPoints     Int      @default(0)
+  // Per-account sign-in throttling. The per-IP limiter cannot tell one customer from a
+  // whole mobile network behind carrier-grade NAT, so the account itself counts its own
+  // failures and locks briefly. A successful sign-in or a password reset clears it.
+  failedLoginAttempts Int    @default(0)
+  lastFailedLoginAt   DateTime?
+  lockedUntil         DateTime?
+  lockoutNoticeSentAt DateTime?
+  lastLoginAt         DateTime?
   createdAt         DateTime @default(now())
   orders            Order[]
   reviews           Review[]

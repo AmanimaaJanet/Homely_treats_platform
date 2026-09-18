@@ -16,6 +16,7 @@ import { sendEmail } from '../services/email.js';
 import { config } from '../config.js';
 import { setSessionCookies, clearSessionCookies } from '../middleware/session.js';
 import { verifyTurnstile } from '../services/turnstile.js';
+import { audit } from '../services/audit.js';
 
 const router = Router();
 
@@ -36,6 +37,7 @@ const validEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v || ''));
 
 // POST /api/auth/register
 import { linkGuestOrders } from '../services/guestOrders.js';
+import { recordFailure, recordSuccess, clearLock, lockState } from '../services/loginGuard.js';
 
 router.post('/register', registerLimiter, async (req, res) => {
   try {
@@ -119,8 +121,47 @@ router.post('/login', loginLimiter, async (req, res) => {
     const user = await prisma.user.findUnique({ where: { email: String(email).toLowerCase().trim() } });
     if (!user) return res.status(401).json({ error: 'Invalid email or password' });
 
+    // Per-account lockout, checked before the password is even compared so a locked
+    // account costs an attacker nothing but time. The message tells the real owner how
+    // long is left and how to get back in immediately (reset the password).
+    const lock = lockState(user);
+    if (lock.locked) {
+      await audit(null, {
+        action: 'LOGIN_BLOCKED_LOCKED',
+        entity: 'User',
+        entityId: user.id,
+        detail: `Sign-in refused: account locked for ${lock.minutesLeft} more minute(s)`,
+      });
+      return res.status(423).json({
+        error: `Too many wrong passwords, so we paused sign-in on this account. Try again in ${lock.minutesLeft} minute${lock.minutesLeft === 1 ? '' : 's'}, or reset your password to get back in now.`,
+        code: 'ACCOUNT_LOCKED',
+        minutesLeft: lock.minutesLeft,
+        resetUrl: '/forgot-password',
+      });
+    }
+
     const ok = await bcrypt.compare(String(password), user.passwordHash);
-    if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
+    if (!ok) {
+      const state = await recordFailure(user);
+      if (state.locked) {
+        await audit(null, {
+          action: 'ACCOUNT_LOCKED',
+          entity: 'User',
+          entityId: user.id,
+          detail: `Account locked for ${state.minutesLeft} minute(s) after ${config.auth.maxFailedAttempts} failed sign-ins`,
+        });
+        return res.status(423).json({
+          error: `Too many wrong passwords, so we paused sign-in on this account for ${state.minutesLeft} minutes. You can reset your password to get back in now.`,
+          code: 'ACCOUNT_LOCKED',
+          minutesLeft: state.minutesLeft,
+          resetUrl: '/forgot-password',
+        });
+      }
+      return res.status(401).json({
+        error: 'Invalid email or password',
+        attemptsLeft: state.attemptsLeft,
+      });
+    }
 
     // Suspended staff/rider accounts cannot sign in.
     if (user.active === false) {
@@ -139,9 +180,12 @@ router.post('/login', loginLimiter, async (req, res) => {
       });
     }
 
-    const token = signToken(user);
+    // Right password for the right account: the counter goes back to zero and we record
+    // when it was last used (useful when an owner wonders who signed in).
+    const fresh = await recordSuccess(user);
+    const token = signToken(fresh);
     setSessionCookies(res, token);
-    res.json({ token, user: publicUser(user) });
+    res.json({ token, user: publicUser(fresh), lastLoginAt: fresh.lastLoginAt });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Login failed' });
@@ -330,7 +374,18 @@ router.post('/reset-password', resetLimiter, async (req, res) => {
         verificationToken: null,
       },
     });
-    res.json({ ok: true });
+
+    // A reset also lifts any sign-in lockout. This matters: without it, someone could
+    // keep a customer out of their own account simply by failing passwords at it.
+    await clearLock(user.id);
+    await audit(null, {
+      action: 'PASSWORD_RESET',
+      entity: 'User',
+      entityId: user.id,
+      detail: 'Password reset completed; any sign-in lockout cleared',
+    });
+
+    res.json({ ok: true, lockCleared: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Password reset failed' });
