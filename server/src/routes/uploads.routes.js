@@ -7,7 +7,7 @@ const router = Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB raw is fine — storage.js compresses to ~150-400 KB
   fileFilter: (req, file, cb) => {
     if (/^image\//.test(file.mimetype)) return cb(null, true);
     cb(new Error('Only image files are allowed'));

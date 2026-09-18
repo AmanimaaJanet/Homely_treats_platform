@@ -239,7 +239,13 @@ a:hover { color: var(--pd); }
 .product-name-link { color: var(--dark); display: inline-block; }
 .product-name-link:hover { color: var(--primary-ink); text-decoration: underline; }
 .product-price { color: var(--primary-ink); font-weight: 600; font-size: 15px; }
-.product-desc { color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.product-desc {
+  color: var(--muted); font-size: 12.5px; line-height: 1.5;
+  /* Long descriptions made every card a different height and pushed the buttons
+     around; two lines with an ellipsis keeps the grid even. The full text lives on
+     the product page, where there is room for it. */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
 .product-info .btn { margin-top: auto; }
 
 /* ------------------------------------------------ Steps ------------------ */
@@ -1060,6 +1066,9 @@ a:hover { color: var(--pd); }
 @media (max-width: 860px) { .product-detail { grid-template-columns: 1fr; gap: 20px; } }
 .product-detail h1 { margin: 6px 0 10px; font-size: 30px; }
 .detail-price { font-size: 24px; font-weight: 700; color: var(--pd, #A9622F); margin: 6px 0 12px; }
+/* The description is the story of the product — sized and spaced to be read, sitting
+   below the price and above the sizes, not squeezed between them as plain text. */
+.detail-desc { font-size: 15px; line-height: 1.75; color: var(--pd, #A9622F); max-width: 58ch; margin: 0 0 18px; }
 .detail-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .review-summary {
   display: flex; gap: 20px; align-items: center; flex-wrap: wrap;

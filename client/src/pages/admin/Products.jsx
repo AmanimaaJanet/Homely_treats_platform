@@ -452,8 +452,9 @@ export default function Products() {
                   <ImageIcon size={14} /> Product photos ({images.length}/{MAX_PHOTOS})
                 </label>
                 <p className="muted small" style={{ marginBottom: 8 }}>
-                  The first photo is the cover shown on the menu. JPG or PNG, up to 5 MB each.
-                  With no photos, the product shows its icon instead.
+                  The first photo is the cover shown on the menu. Photos straight from a
+                  phone camera are fine — anything up to 20 MB is accepted and compressed
+                  automatically. With no photos yet, the product shows a placeholder.
                 </p>
 
                 <div className="photo-grid">

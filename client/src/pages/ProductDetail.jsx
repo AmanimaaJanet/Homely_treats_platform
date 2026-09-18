@@ -111,7 +111,7 @@ export default function ProductDetail() {
           )}
 
           <p className="detail-price">{ghs(product.basePrice)}</p>
-          {product.description && <p>{product.description}</p>}
+          {product.description && <p className="detail-desc">{product.description}</p>}
 
           {sizes.length > 0 && (
             <>
