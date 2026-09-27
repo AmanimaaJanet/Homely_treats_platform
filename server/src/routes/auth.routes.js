@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { prisma } from '../prisma.js';
 import { signToken, publicUser } from '../utils.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
+import { usesSeedPassword } from '../services/seededCredentials.js';
 import {
   loginLimiter,
   registerLimiter,
@@ -15,6 +16,7 @@ import { sendEmail } from '../services/email.js';
 import { config } from '../config.js';
 import { setSessionCookies, clearSessionCookies } from '../middleware/session.js';
 import { verifyTurnstile } from '../services/turnstile.js';
+import { audit } from '../services/audit.js';
 
 const router = Router();
 
@@ -34,6 +36,9 @@ const clean = (v, max) => String(v ?? '').trim().slice(0, max);
 const validEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(v || ''));
 
 // POST /api/auth/register
+import { linkGuestOrders } from '../services/guestOrders.js';
+import { recordFailure, recordSuccess, clearLock, lockState } from '../services/loginGuard.js';
+
 router.post('/register', registerLimiter, async (req, res) => {
   try {
     const { fullName, email, phone, password } = req.body || {};
@@ -90,10 +95,17 @@ router.post('/register', registerLimiter, async (req, res) => {
       type: 'ORDER_CONFIRMED', // reused channel, logged generically
     });
 
+    // Attach any orders this person placed as a guest, so their history is not a dead
+    // end (see services/guestOrders.js for the matching rules).
+    const claim = await linkGuestOrders(user).catch((err) => {
+      console.error('[auth] linking guest orders failed:', err.message);
+      return { claimed: 0, orders: [] };
+    });
+
     const token = signToken(user);
     setSessionCookies(res, token);
     // `token` is still returned for API clients (the browser uses the cookie).
-    res.status(201).json({ token, user: publicUser(user), verifyUrl });
+    res.status(201).json({ token, user: publicUser(user), verifyUrl, claimedOrders: claim.claimed });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Registration failed' });
@@ -109,8 +121,47 @@ router.post('/login', loginLimiter, async (req, res) => {
     const user = await prisma.user.findUnique({ where: { email: String(email).toLowerCase().trim() } });
     if (!user) return res.status(401).json({ error: 'Invalid email or password' });
 
+    // Per-account lockout, checked before the password is even compared so a locked
+    // account costs an attacker nothing but time. The message tells the real owner how
+    // long is left and how to get back in immediately (reset the password).
+    const lock = lockState(user);
+    if (lock.locked) {
+      await audit(null, {
+        action: 'LOGIN_BLOCKED_LOCKED',
+        entity: 'User',
+        entityId: user.id,
+        detail: `Sign-in refused: account locked for ${lock.minutesLeft} more minute(s)`,
+      });
+      return res.status(423).json({
+        error: `Too many wrong passwords, so we paused sign-in on this account. Try again in ${lock.minutesLeft} minute${lock.minutesLeft === 1 ? '' : 's'}, or reset your password to get back in now.`,
+        code: 'ACCOUNT_LOCKED',
+        minutesLeft: lock.minutesLeft,
+        resetUrl: '/forgot-password',
+      });
+    }
+
     const ok = await bcrypt.compare(String(password), user.passwordHash);
-    if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
+    if (!ok) {
+      const state = await recordFailure(user);
+      if (state.locked) {
+        await audit(null, {
+          action: 'ACCOUNT_LOCKED',
+          entity: 'User',
+          entityId: user.id,
+          detail: `Account locked for ${state.minutesLeft} minute(s) after ${config.auth.maxFailedAttempts} failed sign-ins`,
+        });
+        return res.status(423).json({
+          error: `Too many wrong passwords, so we paused sign-in on this account for ${state.minutesLeft} minutes. You can reset your password to get back in now.`,
+          code: 'ACCOUNT_LOCKED',
+          minutesLeft: state.minutesLeft,
+          resetUrl: '/forgot-password',
+        });
+      }
+      return res.status(401).json({
+        error: 'Invalid email or password',
+        attemptsLeft: state.attemptsLeft,
+      });
+    }
 
     // Suspended staff/rider accounts cannot sign in.
     if (user.active === false) {
@@ -129,9 +180,12 @@ router.post('/login', loginLimiter, async (req, res) => {
       });
     }
 
-    const token = signToken(user);
+    // Right password for the right account: the counter goes back to zero and we record
+    // when it was last used (useful when an owner wonders who signed in).
+    const fresh = await recordSuccess(user);
+    const token = signToken(fresh);
     setSessionCookies(res, token);
-    res.json({ token, user: publicUser(user) });
+    res.json({ token, user: publicUser(fresh), lastLoginAt: fresh.lastLoginAt });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Login failed' });
@@ -139,8 +193,12 @@ router.post('/login', loginLimiter, async (req, res) => {
 });
 
 // GET /api/auth/me
-router.get('/me', requireAuth, (req, res) => {
-  res.json({ user: publicUser(req.user) });
+router.get('/me', requireAuth, async (req, res) => {
+  // The admin portal shows a warning until the seeded password is changed. Comparing
+  // a hash is cheap, and it means the nag disappears on its own once it's done.
+  const stillDefault =
+    req.user.role === 'ADMIN' ? await usesSeedPassword(bcrypt, req.user.passwordHash) : false;
+  res.json({ user: { ...publicUser(req.user), usesDefaultPassword: stillDefault } });
 });
 
 // POST /api/auth/logout — clears the session cookies
@@ -154,11 +212,21 @@ router.get('/verify', async (req, res) => {
     const { token } = req.query;
     const user = await prisma.user.findFirst({ where: { verificationToken: String(token || '') } });
     if (!user) return res.status(400).json({ error: 'Invalid or expired verification link' });
-    await prisma.user.update({
+    const verified = await prisma.user.update({
       where: { id: user.id },
       data: { emailVerified: true, verificationToken: null },
     });
-    res.json({ ok: true, message: 'Email verified successfully' });
+
+    // Now that the address is confirmed, the orders they placed as a guest can be
+    // attached to the account — this is the moment the email/phone match becomes
+    // trustworthy (see services/guestOrders.js).
+    const claim = await linkGuestOrders(verified).catch(() => ({ claimed: 0 }));
+
+    res.json({
+      ok: true,
+      message: 'Email verified successfully',
+      claimedOrders: claim.claimed,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Verification failed' });
@@ -306,7 +374,18 @@ router.post('/reset-password', resetLimiter, async (req, res) => {
         verificationToken: null,
       },
     });
-    res.json({ ok: true });
+
+    // A reset also lifts any sign-in lockout. This matters: without it, someone could
+    // keep a customer out of their own account simply by failing passwords at it.
+    await clearLock(user.id);
+    await audit(null, {
+      action: 'PASSWORD_RESET',
+      entity: 'User',
+      entityId: user.id,
+      detail: 'Password reset completed; any sign-in lockout cleared',
+    });
+
+    res.json({ ok: true, lockCleared: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Password reset failed' });

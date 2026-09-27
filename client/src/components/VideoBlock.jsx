@@ -30,6 +30,27 @@ export default function VideoBlock({
   const videoRef = useRef(null);
   const [reduced] = useState(prefersReducedMotion);
   const [active, setActive] = useState(eager || reduced);
+  // The hero video is above the fold but heavy (700 kB for the full-size file). Starting
+  // it immediately makes it race the stylesheet, the fonts and the JavaScript — on a
+  // phone on mobile data that is exactly the wrong order. So the still poster paints
+  // first and the video element is mounted once the page has settled.
+  const [settled, setSettled] = useState(!eager);
+
+  useEffect(() => {
+    if (settled) return;
+    const go = () => setSettled(true);
+    const timer = window.setTimeout(go, 1500);
+    const onLoad = () => {
+      if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(go, { timeout: 1000 });
+      else go();
+    };
+    if (document.readyState === 'complete') onLoad();
+    else window.addEventListener('load', onLoad, { once: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('load', onLoad);
+    };
+  }, [settled]);
 
   // Start loading only when the block approaches the viewport.
   useEffect(() => {
@@ -67,7 +88,7 @@ export default function VideoBlock({
 
   return (
     <div ref={wrapRef} className={`video-block ${className}`}>
-      {active && !reduced ? (
+      {active && settled && !reduced ? (
         <video
           ref={videoRef}
           className="video-el"
@@ -76,7 +97,9 @@ export default function VideoBlock({
           muted
           loop
           playsInline
-          preload={eager ? 'auto' : 'metadata'}
+          // 'metadata' rather than 'auto': the poster is already on screen and the video
+          // streams as it plays, so there is no reason to fetch the whole file up front.
+          preload="metadata"
           disablePictureInPicture
           aria-hidden="true"
           tabIndex={-1}

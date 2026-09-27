@@ -31,6 +31,19 @@ export const config = {
   // Set REQUIRE_EMAIL_VERIFICATION=true to force it once Resend is configured.
   requireEmailVerification:
     process.env.REQUIRE_EMAIL_VERIFICATION === 'true' || Boolean(process.env.RESEND_API_KEY),
+  monitoring: {
+    // Optional Sentry DSN — the server posts events to it directly (no SDK). Blank =
+    // errors are logged and kept in the admin-visible buffer only.
+    sentryDsn: process.env.SENTRY_DSN || '',
+    release: process.env.APP_RELEASE || process.env.RENDER_GIT_COMMIT?.slice(0, 7) || 'dev',
+    persistErrors: process.env.LOG_TO_FILE !== 'false',
+  },
+  // Per-account sign-in throttling (complements the per-IP limiter — see
+  // services/loginGuard.js for why the account has to count its own failures).
+  auth: {
+    maxFailedAttempts: Number(process.env.AUTH_MAX_FAILED_ATTEMPTS) || 10,
+    lockoutMinutes: Number(process.env.AUTH_LOCKOUT_MINUTES) || 15,
+  },
   turnstile: {
     secretKey: process.env.TURNSTILE_SECRET_KEY || '',
     enabled: Boolean(process.env.TURNSTILE_SECRET_KEY),
@@ -38,6 +51,13 @@ export const config = {
   databaseUrl:
     process.env.DATABASE_URL ||
     'postgresql://homely:homely@localhost:5432/homely?schema=public',
+  push: {
+    // Web push (PWA). Generate keys with: npm run push:keys
+    publicKey: process.env.VAPID_PUBLIC_KEY || '',
+    privateKey: process.env.VAPID_PRIVATE_KEY || '',
+    subject: process.env.VAPID_SUBJECT || 'mailto:orders@homelytreats.gh',
+    enabled: Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
+  },
   paystack: {
     // Ghana payments: MTN MoMo, AirtelTigo, Vodafone Cash & cards all go through Paystack
     secretKey: process.env.PAYSTACK_SECRET_KEY || '',

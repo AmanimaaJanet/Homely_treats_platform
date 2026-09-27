@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import ProductCard from '../components/ProductCard.jsx';
 import VideoBlock from '../components/VideoBlock.jsx';
 import { fmtDate } from '../lib/format.js';
+import Seo from '../components/Seo.jsx';
 
 function StarRow({ n }) {
   return (
@@ -21,15 +22,24 @@ export default function Home() {
   const [featured, setFeatured] = useState([]);
   const [reviews, setReviews] = useState(null);
   const [minLead, setMinLead] = useState(2);
+  // The shop's structured data (schema.org Bakery + current menu) is built by the API
+  // from the live database, so what search engines read is what is actually for sale.
+  const [structured, setStructured] = useState(null);
 
   useEffect(() => {
     api.get('/products?featured=true').then((d) => setFeatured(d.products.slice(0, 4))).catch(() => {});
     api.get('/reviews/recent').then((d) => setReviews(d.reviews)).catch(() => setReviews([]));
     api.get('/settings/public').then((d) => setMinLead(d.settings.minLeadDays || 2)).catch(() => {});
+    api.get('/structured-data.json').then(setStructured).catch(() => {});
   }, []);
 
   return (
     <div className="page">
+      <Seo
+        title="Homely Treats — custom cakes, pastries and confectioneries, baked to order in Accra"
+        description="Order custom cakes, pastries and confectioneries baked to order. Pay with Mobile Money or card, and track your delivery in real time."
+        jsonLd={structured}
+      />
       {/* Hero — ambient video of fresh pastries, mobile-first */}
       <section className="hero hero-video">
         <VideoBlock

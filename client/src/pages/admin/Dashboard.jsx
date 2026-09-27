@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Coins, ClipboardList, Loader, Users } from 'lucide-react';
 import { api } from '../../api.js';
 import StatusBadge from '../../components/StatusBadge.jsx';
+import LowStockPanel from '../../components/LowStockPanel.jsx';
 import { ghs, fmtDate } from '../../lib/format.js';
 
 function BarChart({ months }) {
@@ -69,6 +70,8 @@ export default function Dashboard() {
     <div>
       <h2 className="admin-title">Dashboard Overview</h2>
 
+      <LowStockPanel />
+
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-card-icon"><Coins size={26} /></div>
@@ -113,7 +116,7 @@ export default function Dashboard() {
         </div>
         <table className="table">
           <thead>
-            <tr><th>Order ID</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Date</th></tr>
+            <tr><th scope="col">Order ID</th><th scope="col">Customer</th><th scope="col">Items</th><th scope="col">Total</th><th scope="col">Status</th><th scope="col">Date</th></tr>
           </thead>
           <tbody>
             {recent.map((o) => (

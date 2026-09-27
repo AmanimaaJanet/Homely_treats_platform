@@ -10,7 +10,21 @@ build/
 # Runtime uploads (created on server start)
 server/uploads/
 
+# Original (unoptimised) source footage. The web-ready versions live in
+# client/public/media/ and are what the site actually serves; these masters are
+# 14 MB and stay on your machine.
+source-video/
+
 # Logs & OS files
 *.log
 .DS_Store
 Thumbs.db
+
+# Runtime logs (created by the error monitor)
+logs/
+
+# Test coverage output
+coverage/
+
+# Database dumps — contain customer data, never commit them
+backups/

@@ -4,7 +4,8 @@ import { Truck, Store, Smartphone, CreditCard, Banknote, Gem, Lock, User, Shoppi
 import { useApp } from '../store.jsx';
 import { api, pointsValue, maxRedeemablePoints } from '../api.js';
 import { ghs } from '../lib/format.js';
-import { ProductIcon } from '../components/ProductIcon.jsx';
+import ProductMonogram from '../components/ProductMonogram.jsx';
+import Seo from '../components/Seo.jsx';
 
 const PAYMENT_METHODS = [
   { id: 'MOMO', icon: Smartphone, label: 'MTN Mobile Money', note: 'Instant · Recommended' },
@@ -25,6 +26,13 @@ export default function Cart() {
   const [payOptions, setPayOptions] = useState(PAYMENT_METHODS);
   const [allowPickup, setAllowPickup] = useState(true);
   const [pickupAddress, setPickupAddress] = useState('Airport Residential, Accra');
+  // Delivery rules: counters to collect from, collection/delivery windows with live
+  // capacity for the chosen day, and closed days the bakery has declared.
+  const [pickupLocations, setPickupLocations] = useState([]);
+  const [pickupLocationId, setPickupLocationId] = useState('');
+  const [slots, setSlots] = useState([]);
+  const [timeSlot, setTimeSlot] = useState('');
+  const [blackout, setBlackout] = useState(null);
   const [promoCode, setPromoCode] = useState('');
   const [promo, setPromo] = useState(null);
   const [promoError, setPromoError] = useState('');
@@ -35,11 +43,33 @@ export default function Cart() {
   // Guest info
   const [guest, setGuest] = useState({ name: '', email: '', phone: '' });
 
+  const readyDate = cart[0]?.readyDate || '';
+
+  // Rules are re-read per date: a window that filled up a minute ago, or a day the
+  // bakery has since closed, can no longer be chosen.
   useEffect(() => {
-    api.get('/zones').then((d) => {
-      setZones(d.zones);
-      if (d.zones.length && !deliveryZone) setDeliveryZone(d.zones[0].id);
-    }).catch(() => {});
+    const q = readyDate ? `?date=${encodeURIComponent(readyDate)}` : '';
+    api
+      .get(`/delivery/options${q}`)
+      .then((d) => {
+        setZones(d.zones || []);
+        setDeliveryZone((z) => z || d.zones?.[0]?.id || '');
+        setPickupLocations(d.pickupLocations || []);
+        setPickupLocationId((p) => p || d.pickupLocations?.find((l) => l.isDefault)?.id || d.pickupLocations?.[0]?.id || '');
+        // A slot that is full (or a day that closed) must not stay selected.
+        setSlots(d.slots || []);
+        setTimeSlot((t) => {
+          const still = (d.slots || []).find((sl) => sl.label === t && sl.remaining > 0);
+          return still ? t : '';
+        });
+        setBlackout(d.blackout || null);
+      })
+      .catch(() => {});
+    // Re-runs when the customer changes the date so the remaining capacity per window
+    // is the live one; the loader is defined inline for that reason.
+  }, [readyDate]);
+
+  useEffect(() => {
     // Respect admin-configured payment methods / pickup availability
     api.get('/settings/public').then((d) => {
       const s = d.settings;
@@ -56,11 +86,18 @@ export default function Cart() {
       if (s.allowPickup === false && deliveryMethod === 'PICKUP') setDeliveryMethod('DELIVERY');
       setPaymentMethod((pm) => (opts.some((o) => o.id === pm) ? pm : opts[0]?.id || 'COD'));
     }).catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Deliberately once, on mount: the shop's own settings do not change mid-checkout.
   }, []);
 
-  const zone = zones.find((z) => z.id === deliveryZone);
-  const deliveryFee = deliveryMethod === 'DELIVERY' ? Number(zone?.fee || 0) : 0;
+  const zone = zones.find((z) => z.id === deliveryZone) || zones.find((z) => z.name === deliveryZone);
+  // A zone can refuse small baskets and waive the fee for large ones.
+  const ruleIssue =
+    deliveryMethod === 'DELIVERY' && zone?.minOrder && subtotal < zone.minOrder
+      ? `We deliver to ${zone.name} from ${ghs(zone.minOrder)} — your basket is ${ghs(subtotal)}. Add something else or choose pickup.`
+      : '';
+  const feeWaived =
+    deliveryMethod === 'DELIVERY' && zone?.freeOver && subtotal >= zone.freeOver && !ruleIssue;
+  const deliveryFee = deliveryMethod === 'DELIVERY' && !ruleIssue ? (feeWaived ? 0 : Number(zone?.fee || 0)) : 0;
   const discount = promo ? promo.discount : 0;
   const baseAfterPromo = Math.max(0, subtotal - discount);
   const loyaltyDiscount = usePoints ? pointsValue(pointsToUse) : 0;
@@ -92,6 +129,8 @@ export default function Cart() {
       toast('Please fill in your name, email and phone (or sign in).', 'error');
       return;
     }
+    if (ruleIssue) return toast(ruleIssue, 'error');
+    if (blackout) return toast(`We're closed on that date${blackout.reason ? ` (${blackout.reason})` : ''}. Please pick another day.`, 'error');
     if (deliveryMethod === 'DELIVERY' && !deliveryZone) {
       toast('Please select your delivery zone.', 'error');
       return;
@@ -111,6 +150,8 @@ export default function Cart() {
         deliveryAddress: deliveryMethod === 'DELIVERY' ? address : undefined,
         deliveryZone: deliveryMethod === 'DELIVERY' ? deliveryZone : undefined,
         readyDate: cart[0]?.readyDate || undefined,
+        timeSlot: timeSlot || undefined,
+        pickupLocation: deliveryMethod === 'PICKUP' ? pickupLocationId || undefined : undefined,
         notes: cart.map((i) => i.notes).filter(Boolean).join(' | ') || undefined,
         paymentMethod,
         promoCode: promo?.code,
@@ -141,6 +182,7 @@ export default function Cart() {
   if (cart.length === 0) {
     return (
       <div className="page">
+        <Seo title="Your Cart" description="Your order so far." noindex />
         <div className="container">
           <div className="section empty-state">
             <div className="empty-state-icon"><ShoppingCart size={56} strokeWidth={1.2} /></div>
@@ -155,6 +197,7 @@ export default function Cart() {
 
   return (
     <div className="page">
+    <Seo title="Your Cart" description="Your order so far." noindex />
       <div className="container">
         <div className="section">
           <h2 className="section-title">Cart & Checkout</h2>
@@ -169,17 +212,23 @@ export default function Cart() {
                   </p>
                   <div className="form-row">
                     <div className="form-group">
-                      <label className="form-label">Full Name *</label>
-                      <input className="form-input" value={guest.name} onChange={(e) => setGuest({ ...guest, name: e.target.value })} placeholder="Your name" />
+                      <label className="form-label">
+                        <span className="form-label-text">Full Name *</span>
+                        <input className="form-input" value={guest.name} onChange={(e) => setGuest({ ...guest, name: e.target.value })} placeholder="Your name" />
+                      </label>
                     </div>
                     <div className="form-group">
-                      <label className="form-label">Phone *</label>
-                      <input className="form-input" value={guest.phone} onChange={(e) => setGuest({ ...guest, phone: e.target.value })} placeholder="055 123 4567" />
+                      <label className="form-label">
+                        <span className="form-label-text">Phone *</span>
+                        <input className="form-input" value={guest.phone} onChange={(e) => setGuest({ ...guest, phone: e.target.value })} placeholder="055 123 4567" />
+                      </label>
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Email *</label>
-                    <input className="form-input" type="email" value={guest.email} onChange={(e) => setGuest({ ...guest, email: e.target.value })} placeholder="you@example.com" />
+                    <label className="form-label">
+                      <span className="form-label-text">Email *</span>
+                      <input className="form-input" type="email" value={guest.email} onChange={(e) => setGuest({ ...guest, email: e.target.value })} placeholder="you@example.com" />
+                    </label>
                   </div>
                 </div>
               )}
@@ -188,7 +237,7 @@ export default function Cart() {
               <div className="cart-items">
                 {cart.map((item) => (
                   <div className="cart-item" key={item.key}>
-                    <div className="cart-item-icon"><ProductIcon name={item.icon || item.emoji} size={30} /></div>
+                    <div className="cart-item-icon"><ProductMonogram name={item.name} size={40} ring={false} /></div>
                     <div className="cart-item-body">
                       <strong>{item.name}</strong>
                       <p className="muted small">
@@ -218,40 +267,124 @@ export default function Cart() {
 
               <h3 className="form-heading">Delivery Method</h3>
               <div className="delivery-options">
-                <div
+                <button
+                  type="button"
                   className={`delivery-option ${deliveryMethod === 'DELIVERY' ? 'selected' : ''}`}
                   onClick={() => setDeliveryMethod('DELIVERY')}
+                  aria-pressed={deliveryMethod === 'DELIVERY'}
                 >
-                  <strong><Truck size={18} /> Home Delivery</strong>
+                  <strong><Truck size={18} aria-hidden="true" /> Home Delivery</strong>
                   <p>Fee by zone · Greater Accra</p>
-                </div>
+                </button>
                 {allowPickup && (
-                  <div
+                  <button
+                    type="button"
                     className={`delivery-option ${deliveryMethod === 'PICKUP' ? 'selected' : ''}`}
                     onClick={() => setDeliveryMethod('PICKUP')}
+                    aria-pressed={deliveryMethod === 'PICKUP'}
                   >
-                    <strong><Store size={18} /> Pickup</strong>
-                    <p>Free · {pickupAddress}</p>
-                  </div>
+                    <strong><Store size={18} aria-hidden="true" /> Pickup</strong>
+                    <p>Free · {pickupLocations.find((l) => l.id === pickupLocationId)?.address || pickupAddress}</p>
+                  </button>
                 )}
               </div>
+
+              {blackout && (
+                <p className="checkout-warning">
+                  We're closed on {readyDate}
+                  {blackout.reason ? ` (${blackout.reason})` : ''} — please pick another date on the product page.
+                </p>
+              )}
 
               {deliveryMethod === 'DELIVERY' && (
                 <>
                   <div className="form-group" style={{ marginTop: '1.25rem' }}>
-                    <label className="form-label">Delivery Zone *</label>
-                    <select className="form-select" value={deliveryZone} onChange={(e) => setDeliveryZone(e.target.value)}>
-                      <option value="">Select your neighbourhood…</option>
-                      {zones.map((z) => (
-                        <option key={z.id} value={z.id}>{z.name} — {ghs(z.fee)}</option>
-                      ))}
-                    </select>
+                    <label className="form-label">
+                      <span className="form-label-text">Delivery Zone *</span>
+                      <select className="form-select" value={deliveryZone} onChange={(e) => setDeliveryZone(e.target.value)}>
+                        <option value="">Select your neighbourhood…</option>
+                        {zones.map((z) => (
+                          <option key={z.id} value={z.id}>{z.name} — {ghs(z.fee)}</option>
+                        ))}
+                </select>
+                      </label>
                   </div>
+                  {zone?.etaNote && <p className="muted small">{zone.etaNote}</p>}
+                  {zone?.minOrder ? (
+                    <p className={`muted small ${ruleIssue ? 'checkout-warning' : ''}`}>
+                      Minimum basket for {zone.name}: {ghs(zone.minOrder)}
+                      {zone.freeOver ? ` · free delivery over ${ghs(zone.freeOver)}` : ''}
+                    </p>
+                  ) : null}
                   <div className="form-group">
-                    <label className="form-label">Street Address / Landmark</label>
-                    <textarea className="form-textarea" placeholder="House no, street, landmark…" value={address} onChange={(e) => setAddress(e.target.value)} />
+                    <label className="form-label">
+                      <span className="form-label-text">Street Address / Landmark</span>
+                      <textarea className="form-textarea" placeholder="House no, street, landmark…" value={address} onChange={(e) => setAddress(e.target.value)} />
+                    </label>
                   </div>
                 </>
+              )}
+
+              {deliveryMethod === 'PICKUP' && pickupLocations.length > 1 && (
+                <div className="form-group">
+                  <label className="form-label">
+                    <span className="form-label-text">Collect from *</span>
+                    <select
+                      className="form-select"
+                      value={pickupLocationId}
+                      onChange={(e) => setPickupLocationId(e.target.value)}
+                    >
+
+                      {pickupLocations.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.name} — {l.address}
+                        </option>
+                      ))}
+                </select>
+                    </label>
+                </div>
+              )}
+
+              {deliveryMethod === 'PICKUP' && pickupLocations.length === 1 && (
+                <p className="muted small">
+                  Collect from <strong>{pickupLocations[0].name}</strong> — {pickupLocations[0].address}
+                  {pickupLocations[0].hours ? ` · ${pickupLocations[0].hours}` : ''}
+                </p>
+              )}
+
+              {readyDate && slots.length > 0 && !blackout && (
+                <div className="form-group">
+                  <label className="form-label">
+                    {deliveryMethod === 'DELIVERY' ? 'Delivery window' : 'Collection window'} for {readyDate}
+                  </label>
+                  <div className="slot-grid">
+                    <button
+                      type="button"
+                      className={`slot-chip ${!timeSlot ? 'selected' : ''}`}
+                      onClick={() => setTimeSlot('')}
+                    >
+                      <strong>Anytime</strong>
+                      <span className="muted small">We'll confirm when ready</span>
+                    </button>
+                    {slots.map((sl) => {
+                      const full = sl.remaining <= 0;
+                      return (
+                        <button
+                          key={sl.id}
+                          type="button"
+                          className={`slot-chip ${timeSlot === sl.label ? 'selected' : ''} ${full ? 'full' : ''}`}
+                          disabled={full}
+                          onClick={() => setTimeSlot(sl.label)}
+                        >
+                          <strong>{sl.label}</strong>
+                          <span className="muted small">
+                            {full ? 'Fully booked' : `${sl.remaining} of ${sl.capacity} left`}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </div>
 
@@ -259,7 +392,18 @@ export default function Cart() {
               <div className="cart-summary">
                 <h3>Order Summary</h3>
                 <div className="summary-row"><span>Subtotal</span><span>{ghs(subtotal)}</span></div>
-                <div className="summary-row"><span>Delivery fee</span><span>{ghs(deliveryFee)}</span></div>
+                <div className="summary-row">
+                  <span>Delivery fee</span>
+                  <span>
+                    {feeWaived ? (
+                      <>
+                        <s className="muted">{ghs(zone?.fee || 0)}</s> Free
+                      </>
+                    ) : (
+                      ghs(deliveryFee)
+                    )}
+                  </span>
+                </div>
                 <div className="summary-row"><span>Discount</span><span>{ghs(discount)}</span></div>
                 {usePoints && loyaltyDiscount > 0 && (
                   <div className="summary-row"><span>Loyalty points</span><span>−{ghs(loyaltyDiscount)}</span></div>
@@ -269,7 +413,7 @@ export default function Cart() {
                 <div className="form-group" style={{ marginTop: '1.5rem' }}>
                   <label className="form-label">Promo Code</label>
                   <div className="promo-row">
-                    <input className="form-input" placeholder="e.g. HOMELY10" value={promoCode} onChange={(e) => setPromoCode(e.target.value)} />
+                    <input aria-label="Promo code" className="form-input" placeholder="e.g. HOMELY10" value={promoCode} onChange={(e) => setPromoCode(e.target.value)} />
                     <button type="button" className="btn btn-secondary" onClick={applyPromo}>Apply</button>
                   </div>
                   {promo && <p className="small success"><Check size={13} /> {promo.promo.code} — {promo.promo.type === 'PERCENT' ? `${promo.promo.value}% off` : `${ghs(promo.promo.value)} off`}</p>}
@@ -305,15 +449,17 @@ export default function Cart() {
                 <h4 className="form-heading">Payment Method</h4>
                 <div className="payment-methods">
                   {payOptions.map((m) => (
-                    <div
+                    <button
+                      type="button"
                       key={m.id}
                       className={`payment-method ${paymentMethod === m.id ? 'selected' : ''}`}
                       onClick={() => setPaymentMethod(m.id)}
+                      aria-pressed={paymentMethod === m.id}
                     >
-                      <div className="pay-icon"><m.icon size={22} /></div>
+                      <div className="pay-icon"><m.icon size={22} aria-hidden="true" /></div>
                       <strong>{m.label}</strong>
                       <p className="small">{m.note}</p>
-                    </div>
+                    </button>
                   ))}
                 </div>
 

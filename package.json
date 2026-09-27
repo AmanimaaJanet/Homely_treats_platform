@@ -2,7 +2,7 @@
   "name": "homely-treats",
   "version": "1.0.0",
   "private": true,
-  "description": "Homely Treats — Custom Bakery Ordering Platform (React + Node.js + PostgreSQL + Paystack)",
+  "description": "Homely Treats \u2014 Custom Bakery Ordering Platform (React + Node.js + PostgreSQL + Paystack)",
   "engines": {
     "node": "20.x"
   },
@@ -13,6 +13,11 @@
     "build:client": "npm --prefix client run build",
     "db:migrate": "npm --prefix server run db:migrate",
     "db:seed": "npm --prefix server run db:seed",
-    "start": "npm --prefix server run start"
+    "start": "npm --prefix server run start",
+    "lint": "npm --prefix client run lint",
+    "test": "npm --prefix client run test",
+    "test:e2e": "npm --prefix server run test:e2e",
+    "verify": "npm --prefix client run lint && npm --prefix client run test && npm --prefix client run build && npm --prefix client run check:bundle",
+    "check:bundle": "npm --prefix client run check:bundle"
   }
 }

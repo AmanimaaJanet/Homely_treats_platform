@@ -14,11 +14,23 @@ const DEFAULTS = {
   enableCard: true,
   enableCod: true,
   enableWhatsapp: true,
+  // Send Meta-approved WhatsApp templates rather than free-form text. Required in
+  // production: WhatsApp only allows free-form replies within 24 hours of the
+  // customer's last message.
+  whatsappTemplates: true,
+  whatsappTemplateLanguage: 'en',
   enableLoyalty: true,
   enableReviews: true,
+  // When true a new review appears on the storefront immediately. Turn it off to
+  // hold every review in the admin moderation queue first.
+  autoApproveReviews: true,
   smsOrderConfirmed: true,
   emailOrderConfirmed: true,
   adminAlertNewOrder: true,
+  // Alert the bakery before a product sells out. Threshold is the stock level at
+  // which a product counts as "running low".
+  lowStockAlerts: true,
+  lowStockThreshold: 5,
 };
 
 let cache = null;

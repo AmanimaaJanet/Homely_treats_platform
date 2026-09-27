@@ -1,6 +1,6 @@
 // Homely Treats — service worker (PWA)
 // Bump this when the precache list or asset strategy changes, so clients pick it up.
-const CACHE = 'homely-treats-v2';
+const CACHE = 'homely-treats-v3';
 const PRECACHE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -34,7 +34,6 @@ self.addEventListener('fetch', (event) => {
   const isCacheableAsset =
     url.pathname.startsWith('/assets/') ||
     url.pathname.startsWith('/icons/') ||
-    url.pathname.startsWith('/catalogue/') ||
     url.pathname.startsWith('/media/') ||
     url.pathname === '/manifest.webmanifest' ||
     /\.(png|jpe?g|webp|avif|svg|gif|woff2?)$/i.test(url.pathname);
@@ -66,4 +65,50 @@ self.addEventListener('fetch', (event) => {
         .catch(() => caches.match('/'))
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// Push notifications
+// ---------------------------------------------------------------------------
+// Web push is the free channel: no per-message cost and no phone number needed, so
+// "your cake is ready" can reach a customer who installed the app.
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch {
+    payload = { title: 'Homely Treats', body: event.data ? event.data.text() : '' };
+  }
+
+  const title = payload.title || 'Homely Treats';
+  const options = {
+    body: payload.body || '',
+    icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    // Same tag replaces an older notification for the same order instead of stacking.
+    tag: payload.tag || undefined,
+    renotify: Boolean(payload.tag),
+    data: { url: payload.url || '/' },
+    vibrate: [80, 40, 80],
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Tapping the notification focuses the app if it is already open, otherwise opens it.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ('focus' in client) {
+          client.navigate(target).catch(() => {});
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    })
+  );
 });

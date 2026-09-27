@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Cake, Check, ShieldCheck, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
+import Seo from '../components/Seo.jsx';
 
 const PERKS = [
   'At least 8 characters',
@@ -51,6 +52,7 @@ export default function ResetPassword() {
   if (!token) {
     return (
       <div className="auth-wrap">
+        <Seo title="Reset Password" description="Choose a new password for your account." noindex />
         <div className="auth-side">
           <Link to="/" className="logo">Homely Treats</Link>
           <div className="auth-logo warn"><AlertTriangle size={44} strokeWidth={1.6} /></div>
@@ -72,6 +74,7 @@ export default function ResetPassword() {
   if (done) {
     return (
       <div className="auth-wrap">
+        <Seo title="Reset Password" description="Choose a new password for your account." noindex />
         <div className="auth-side">
           <Link to="/" className="logo">Homely Treats</Link>
           <div className="auth-logo ok"><ShieldCheck size={44} strokeWidth={1.6} /></div>
@@ -92,6 +95,7 @@ export default function ResetPassword() {
 
   return (
     <div className="auth-wrap">
+      <Seo title="Reset Password" description="Choose a new password for your account." noindex />
       <div className="auth-side">
         <Link to="/" className="logo">Homely Treats</Link>
         <div className="auth-logo"><Cake size={44} strokeWidth={1.6} /></div>
@@ -120,7 +124,7 @@ export default function ResetPassword() {
             <div className="form-group">
               <label className="form-label">New password</label>
               <div className="input-affix">
-                <input
+                <input aria-label="New password"
                   type={show ? 'text' : 'password'}
                   className="form-input"
                   value={password}
@@ -141,16 +145,18 @@ export default function ResetPassword() {
               </div>
             </div>
             <div className="form-group">
-              <label className="form-label">Confirm new password</label>
-              <input
-                type={show ? 'text' : 'password'}
-                className="form-input"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                autoComplete="new-password"
-                minLength={8}
-                required
-              />
+              <label className="form-label">
+                <span className="form-label-text">Confirm new password</span>
+                <input
+                  type={show ? 'text' : 'password'}
+                  className="form-input"
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                />
+              </label>
             </div>
             <button className="btn btn-primary btn-block" disabled={busy || !password || !confirm}>
               {busy ? 'Saving…' : 'Save new password'}

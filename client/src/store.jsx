@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
-import { api, setToken, getToken } from './api.js';
+import { api, setToken } from './api.js';
 
 const AppContext = createContext(null);
 

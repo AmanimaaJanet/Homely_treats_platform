@@ -109,6 +109,33 @@ ngrok URL. (On Render, just use your live `*.onrender.com` URL.)
 
 ---
 
+### Step 8 (optional) — Test a refund
+
+Refunds follow the same key: with Paystack configured the refund goes back to the
+customer's mobile-money wallet or card; without keys (simulation mode) it is recorded
+as settled offline, which is the right behaviour for cash orders too.
+
+1. Sign in as admin → **Admin → Orders** → open a **paid** order.
+2. In the order panel click **Start a refund**, type a reason (the customer sees it)
+   and click **Refund GH₵ …**.
+3. What happens behind the scenes: Paystack is asked to refund the transaction
+   reference; the order's payment status becomes **REFUNDED**; the stock goes back into
+   inventory; a timeline entry is written; the customer gets an email, WhatsApp message
+   and SMS; and the action is recorded in **Admin → Activity log**.
+4. **Admin → Reports** now shows a **Refunded** tile, and that order no longer counts
+   towards revenue.
+
+Two things worth knowing:
+
+- **A refused refund never marks money as returned.** If Paystack rejects the request
+  (wrong key, transaction not refundable) the order stays **Paid**, `refundStatus`
+  becomes `FAILED` and the screen tells you why — retry, or settle it by hand.
+- **Refunds are full-order only.** A part-refunded order would still sit in the "paid"
+  bucket and overstate revenue in every report; use the Paystack dashboard for a
+  partial amount.
+
+---
+
 ## 2. How to log in as admin
 
 The database is seeded with **one** admin account:

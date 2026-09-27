@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Cake, Check } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
+import Seo from '../components/Seo.jsx';
 
 const PERKS = [
   'Track all your orders in real time',
@@ -52,6 +53,7 @@ export default function SignIn() {
 
   return (
     <div className="auth-wrap">
+    <Seo title="Sign In" description="Sign in to your Homely Treats account." noindex />
       <div className="auth-side">
         <Link to="/" className="logo">Homely Treats</Link>
         <div className="auth-logo"><Cake size={44} strokeWidth={1.6} /></div>
@@ -69,12 +71,16 @@ export default function SignIn() {
 
           <form onSubmit={submit}>
             <div className="form-group">
-              <label className="form-label">Email Address</label>
-              <input type="email" className="form-input" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              <label className="form-label">
+                <span className="form-label-text">Email Address</span>
+                <input type="email" className="form-input" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              </label>
             </div>
             <div className="form-group">
-              <label className="form-label">Password</label>
-              <input type="password" className="form-input" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              <label className="form-label">
+                <span className="form-label-text">Password</span>
+                <input type="password" className="form-input" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              </label>
             </div>
             <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
               {busy ? 'Signing in…' : 'Sign In'}

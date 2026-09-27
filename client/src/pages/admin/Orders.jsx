@@ -1,18 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Printer, ChefHat, RotateCcw } from 'lucide-react';
 import { api } from '../../api.js';
 import StatusBadge from '../../components/StatusBadge.jsx';
-import { ProductIcon } from '../../components/ProductIcon.jsx';
 import { useApp } from '../../store.jsx';
 import { ghs, fmtDate, fmtDateTime } from '../../lib/format.js';
+import { useEscape } from '../../lib/a11y.js';
 
 const STATUSES = ['PENDING', 'CONFIRMED', 'IN_PROGRESS', 'READY', 'DELIVERED', 'CANCELLED'];
 
 export default function Orders() {
   const { toast } = useApp();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState('ALL');
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
+  const [refunding, setRefunding] = useState(false);
+  const [refundReason, setRefundReason] = useState('');
 
   const load = () => {
     const params = new URLSearchParams();
@@ -38,21 +43,50 @@ export default function Orders() {
     try {
       const { order } = await api.get(`/admin/orders/${id}`, { auth: true });
       setDetail(order);
+      setRefunding(false);
+      setRefundReason('');
     } catch (err) {
       toast(err.message, 'error');
     }
   };
 
+  const refundable = detail && ['PAID', 'SIMULATED'].includes(detail.paymentStatus);
+
+  const doRefund = async () => {
+    try {
+      const { order } = await api.post(
+        `/admin/orders/${detail.id}/refund`,
+        { reason: refundReason },
+        { auth: true }
+      );
+      setDetail(order);
+      setOrders((os) => os.map((o) => (o.id === order.id ? { ...o, ...order } : o)));
+      setRefunding(false);
+      setRefundReason('');
+      toast(`Refunded ${ghs(order.refundAmount)} for ${order.id}. Customer notified.`, 'success');
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+
+
+  // Escape closes the dialog (a keyboard user's only way back out), and focus is moved
+  // into it so the next Tab goes to the dialog's own controls rather than the page behind.
+  const dialogRef = useRef(null);
+  useEscape(!!detail, () => setDetail(null));
+  useEffect(() => {
+    if (detail) dialogRef.current?.focus();
+  }, [detail]);
   return (
     <div>
       <h2 className="admin-title">Order Management</h2>
 
       <div className="admin-toolbar">
-        <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select aria-label="Filter by order status" className="form-select" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="ALL">All Statuses</option>
           {STATUSES.map((s) => <option key={s}>{s.replace(/_/g, ' ')}</option>)}
         </select>
-        <input
+        <input aria-label="Search orders"
           className="form-input"
           placeholder="Search order / customer…"
           value={search}
@@ -65,8 +99,8 @@ export default function Orders() {
       <table className="table">
         <thead>
           <tr>
-            <th>Order ID</th><th>Customer</th><th>Items</th><th>Amount</th>
-            <th>Payment</th><th>Status</th><th>Date</th><th>Action</th>
+            <th scope="col">Order ID</th><th scope="col">Customer</th><th scope="col">Items</th><th scope="col">Amount</th>
+            <th scope="col">Payment</th><th scope="col">Status</th><th scope="col">Date</th><th scope="col">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -79,13 +113,13 @@ export default function Orders() {
               </td>
               <td>
                 {o.items.map((i) => (
-                  <span key={i.id} className="item-chip"><ProductIcon name={i.emoji} size={14} /> {i.name}</span>
+                  <span key={i.id} className="item-chip">{i.name}</span>
                 ))}
               </td>
               <td>{ghs(o.total)}</td>
               <td><StatusBadge status={o.paymentStatus} /></td>
               <td>
-                <select
+                <select aria-label="Change order status"
                   className="form-select status-select"
                   value={o.status}
                   onChange={(e) => updateStatus(o.id, e.target.value)}
@@ -94,7 +128,23 @@ export default function Orders() {
                 </select>
               </td>
               <td>{fmtDate(o.createdAt)}</td>
-              <td><button className="btn btn-secondary btn-sm" onClick={() => openDetail(o.id)}>View →</button></td>
+              <td className="row-actions">
+                <button className="btn btn-secondary btn-sm" onClick={() => openDetail(o.id)}>View</button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  title="Print customer receipt"
+                  onClick={() => navigate(`/admin/print/${o.id}?doc=receipt&auto=1`)}
+                >
+                  <Printer size={14} /> Receipt
+                </button>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  title="Print kitchen ticket"
+                  onClick={() => navigate(`/admin/print/${o.id}?doc=kitchen&auto=1`)}
+                >
+                  <ChefHat size={14} /> Ticket
+                </button>
+              </td>
             </tr>
           ))}
           {orders.length === 0 && <tr><td colSpan="8" className="centered muted">No orders found</td></tr>}
@@ -103,10 +153,24 @@ export default function Orders() {
 
       {detail && (
         <div className="modal active" onClick={(e) => e.target === e.currentTarget && setDetail(null)}>
-          <div className="modal-content modal-wide">
+          <div ref={dialogRef} tabIndex={-1} className="modal-content modal-wide" role="dialog" aria-modal="true" aria-labelledby="order-dialog-title">
             <div className="modal-header">
-              <h3>Order {detail.id}</h3>
-              <button className="close-btn" onClick={() => setDetail(null)}>×</button>
+              <h3 id="order-dialog-title">Order {detail.id}</h3>
+              <div className="modal-header-actions">
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => navigate(`/admin/print/${detail.id}?doc=receipt`)}
+                >
+                  <Printer size={15} /> Receipt
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => navigate(`/admin/print/${detail.id}?doc=kitchen`)}
+                >
+                  <ChefHat size={15} /> Kitchen ticket
+                </button>
+                <button className="close-btn" onClick={() => setDetail(null)}>×</button>
+              </div>
             </div>
 
             <div className="detail-grid">
@@ -123,7 +187,7 @@ export default function Orders() {
                 <p><strong>Items</strong></p>
                 {detail.items.map((i) => (
                   <p key={i.id} className="small">
-                    <span className="item-chip"><ProductIcon name={i.emoji} size={14} /> {i.name} × {i.quantity} — {ghs(i.price * i.quantity)}</span>
+                    <span className="item-chip">{i.name} × {i.quantity} — {ghs(i.price * i.quantity)}</span>
                     <span className="muted"> ({[i.size, i.flavor, i.icing].filter(Boolean).join(' · ') || 'standard'})</span>
                     {i.inscription && <> — "{i.inscription}"</>}
                   </p>
@@ -131,6 +195,57 @@ export default function Orders() {
                 {detail.notes && <p className="small"><strong>Notes:</strong> {detail.notes}</p>}
               </div>
             </div>
+
+            {detail.paymentStatus === 'REFUNDED' ? (
+              <div className="refund-note">
+                <strong>This order has been refunded.</strong>
+                <p className="small" style={{ margin: '6px 0 0' }}>
+                  {ghs(detail.refundAmount || detail.total)} returned
+                  {detail.refundStatus === 'OFFLINE' ? ' (settled offline)' : ''}
+                  {detail.refundRef && detail.refundRef !== 'offline' ? ` · Paystack ref ${detail.refundRef}` : ''}
+                  {detail.refundReason ? ` · ${detail.refundReason}` : ''}
+                </p>
+                <div className="refund-meta">
+                  <span className="muted">Refunded {fmtDateTime(detail.refundedAt)}</span>
+                  <span className="muted">Stock returned to inventory</span>
+                </div>
+              </div>
+            ) : refundable ? (
+              <div className="refund-box">
+                <h4><RotateCcw size={15} /> Refund this order</h4>
+                {!refunding ? (
+                  <>
+                    <p className="muted small" style={{ margin: '0 0 10px' }}>
+                      Returns the full {ghs(detail.total)} to the customer, frees the stock back up and notifies
+                      them by SMS, WhatsApp and email. The order then stops counting towards revenue.
+                    </p>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setRefunding(true)}>
+                      <RotateCcw size={15} /> Start a refund
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <label className="form-label" htmlFor="refund-reason">Reason (shown to the customer)</label>
+                    <input
+                      id="refund-reason"
+                      className="form-input"
+                      placeholder="e.g. Order cancelled — customer changed their mind"
+                      value={refundReason}
+                      onChange={(e) => setRefundReason(e.target.value)}
+                    />
+                    <p className="muted small" style={{ margin: '8px 0 10px' }}>
+                      Full refund only ({ghs(detail.total)}). For a part-refund, refund from your Paystack dashboard.
+                    </p>
+                    <div className="row-actions">
+                      <button className="btn btn-secondary btn-sm" onClick={() => setRefunding(false)}>Cancel</button>
+                      <button className="btn btn-primary btn-sm" onClick={doRefund}>
+                        Refund {ghs(detail.total)} now
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : null}
 
             <h4 className="form-heading">Status history</h4>
             <div className="timeline-list">

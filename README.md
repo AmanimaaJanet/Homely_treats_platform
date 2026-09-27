@@ -26,26 +26,35 @@ A full-stack bakery ordering platform built from your HTML mockup: **React** fro
 - 🧁 **Custom Order** — product, quantity, flavour, icing, inscription, required date + **size-based pricing** + **design-photo upload** (show our decorators a cake you love)
 - 🛒 **Cart & Checkout** — quantity controls, **delivery zones with per-neighbourhood fees**, promo codes, **loyalty-point redemption**, guest or signed-in checkout
 - 🚚 **Track Order** — live **real-time updates over WebSockets** (auto-falls back to polling), full status timeline, rider info, design photos, and the notification log
-- 👤 **Accounts** — register, sign in, email verification, profile, password change, order history with **"Order again"**, **loyalty points** balance
-- ⭐ **Reviews & ratings** — rate delivered orders (earn +5 bonus points); shown on the homepage
+- 👤 **Accounts** — register, sign in, email verification, profile, password change, order history with **"Order again"**, **loyalty points** balance, and per-account sign-in protection (a brief pause after repeated wrong passwords, with a reset link to get straight back in)
+- ⭐ **Reviews & ratings** — rate delivered orders (earn +5 bonus points); published on the homepage once approved when moderation is on
 - 🛵 **Rider app** at `/rider` — riders accept deliveries and mark them delivered (updates the customer's tracker instantly)
-- 📱 **PWA** — installable to the home screen (manifest + service worker + icons)
+- 📱 **PWA** — installable to the home screen, with free **web push alerts** ("your cake is ready") alongside SMS, WhatsApp and email
+- ❤️ **Saved items & restock alerts** — heart any product; if it's sold out we email you the moment it's back
+- ⭐ **Product pages** — photos, size prices, real ratings and verified-purchase reviews per product
 
 ### Admin portal (`/admin`)
-- 📊 **Dashboard** — revenue, orders, customers, 8-month revenue chart, category donut
-- 📋 **Orders** — filter/search, detail view with photos & status history, one-click status updates (auto-notifies customer via SMS + WhatsApp + email + WebSocket)
-- 🗂️ **Products** — full CRUD incl. **size-tier pricing** and **low-stock alerts**
+- 📊 **Dashboard** — revenue, orders, customers, 8-month revenue chart, category donut, low-stock panel
+- 📋 **Orders** — filter/search, detail view with photos, design uploads & status history, one-click status updates (auto-notifies customer via SMS + WhatsApp + email + WebSocket), and **Print receipt / Print ticket** buttons
+- 🗂️ **Products** — full CRUD incl. **size-tier pricing** and up to 8 photos each, **bulk actions** (availability, featured, stock, ±% price change), **CSV import/template**, and **duplicate-a-product**
+- 🖨️ **Printing** — a branded **customer receipt**, a **kitchen ticket** (definitive bake list, deadline at the top) and a **delivery note** for any order (one click, amount written in words)
+- ⭐ **Reviews** — approval queue with Publish / Hide / Re-queue, plus a waiting-count badge in the sidebar
+- 💸 **Refunds** — refund a paid order through Paystack or record one settled offline; stock returns and the customer is notified
 - 👥 **Customers** — orders, spend, loyalty points
 - 🎟️ **Promo codes** — percentage/fixed discounts with usage limits
-- 📈 **Reports** — date-range sales report, top products, **CSV export**
-- ⚙️ **Settings** — business info, lead time, **delivery zones management**, payment methods, loyalty/reviews toggles, notification toggles
+- 📈 **Reports** — date ranges with quick presets, revenue by day/zone/payment method, busiest weekdays and windows, repeat-customer rate, AOV, 12-month trend, top products with share of sales, **CSV export**
+- 🚚 **Deliveries** — zones with fees plus **minimum basket / free-over / ETA note**, pickup counters, collection windows with **daily capacity**, **closed days** and a 14-day kitchen calendar
+- ⚙️ **Settings** — business info, lead time, payment methods, loyalty/reviews toggles, low-stock threshold, notification toggles, WhatsApp templates (zone rules now live under Deliveries)
 
 ### Integrations (all degrade gracefully to simulation when keys are absent)
 | Service | What it does | Notes |
 |---|---|---|
 | **Paystack** | MTN MoMo, AirtelTigo, Vodafone Cash, Visa/MC | Test keys need **no business docs** — free signup |
 | **Resend** | Order confirmations, receipts, status updates, email verification | Free 100/day, 3,000/month |
-| **WhatsApp Cloud API** | WhatsApp notifications | Free test number, 1,000 conversations/month |
+| **Web push (VAPID)** | Instant free alerts on the customer's phone, from the PWA — no credits, no phone number |
+| **Monitoring** | Structured JSON logs, a request id on every response, error capture shown in **Admin → Diagnostics** (Sentry optional via `SENTRY_DSN`) |
+| **Per-account lockout** | An account pauses briefly after repeated wrong passwords (`AUTH_MAX_FAILED_ATTEMPTS`); the bakery is alerted, and a password reset gets the owner straight back in |
+| **WhatsApp Cloud API** | WhatsApp notifications using **Meta-approved templates** (required outside the 24-hour window), with automatic plain-text fallback and a test-send button | Free test number, 1,000 conversations/month — setup: [WHATSAPP_TEMPLATES.md](WHATSAPP_TEMPLATES.md) |
 | **Textbelt** | SMS (free 1/day) | ⚠️ free tier blocked for Ghana numbers |
 | **Arkesel** | SMS (Ghana-based) | ✅ recommended for GH — free trial credits |
 | **Cloudinary** | Design-photo storage (required on Render) | Free tier |
@@ -102,6 +111,10 @@ cd server && npm start      # http://localhost:5000
 ```
 
 ### Admin account (seeded)
+
+> Full walkthrough — signing in, every screen, the daily routine and the first 15
+> minutes of setup — is in **[ADMIN_GUIDE.md](ADMIN_GUIDE.md)**.
+
 | Role | Email | Password |
 |---|---|---|
 | Admin | `admin@homelytreats.gh` | `admin123` |
@@ -120,7 +133,82 @@ cd server && npm start      # http://localhost:5000
 
 ## 🧪 Testing
 
-A self-contained end-to-end test (50+ assertions) covers every feature. It builds its own fixtures through the admin API and cleans up afterwards, so it runs against a clean database:
+### Accessibility
+
+Built and audited to **WCAG 2.1 AA**: every form field has a programmatically attached
+label (109/109), every control is keyboard-operable, focus is always visible, the colour
+palette was corrected where it failed contrast, and dialogs close with Escape. The audit,
+the measured contrast table, and how to re-check any of it are in
+**[ACCESSIBILITY.md](ACCESSIBILITY.md)**.
+
+### SEO
+
+The shop is findable, and every page is shareable as *itself*:
+
+- **`/robots.txt`, `/sitemap.xml`, `/structured-data.json`** are generated by the API
+  from the live database — the sitemap lists every product still on the menu with its
+  real date, and the structured data (`schema.org` `Bakery`) carries the shop's actual
+  name, address, phone and prices. Nothing is invented: fields you have not set in
+  Admin → Settings are omitted, and a rating is only claimed when approved reviews
+  exist. In production set `CLIENT_URL` to the public address (e.g.
+  `https://homelytreats.gh`) — every generated URL is built from it.
+- **Every page sets its own title, description, canonical link and share-card tags**
+  (`client/src/components/Seo.jsx`): a product page shared on WhatsApp shows the
+  product's name, description and photo, not the homepage's. Private pages (cart,
+  account, admin, rider) carry `noindex` so they never appear in search results.
+
+After deploying, submit the sitemap once in
+[Google Search Console](https://search.google.com/search-console) — it verifies the
+domain and gives you the click data.
+
+### Performance
+
+Routing is split, so a visitor on the homepage downloads the shop — not the admin panel,
+the rider app or the print templates. `npm run check:bundle` measures the first load and
+fails the build if it creeps past its budget or if the built HTML points at a chunk that
+is not there.
+
+| | Before | After |
+|---|---|---|
+| JavaScript on first load | 416.4 kB (114.7 kB gzipped) | **230.1 kB (71.2 kB gzipped)** |
+| Files on first load | 1 | 4 (framework cached separately from app code) |
+| Route pages | all in the one file | 31 chunks, fetched when opened |
+| Heaviest on-demand page | — | 15.2 kB (Account) |
+
+Also in place: the hero video waits for the page to settle before downloading (the still
+poster paints first, which matters on mobile data), the menu is prefetched at idle on the
+homepage so the most likely next tap is instant, framework code is chunked separately so
+a redeploy only invalidates the app code, uploaded photos load lazily, and a failed page
+chunk shows a usable screen with a reload button rather than a blank page.
+
+### Backups
+
+```bash
+./scripts/backup.sh                                     # dump the database, prune old copies
+./scripts/restore.sh FILE --target homely_drill         # rehearse a restore, safely
+./scripts/restore.sh --verify-only --target homely_drill # compare the copy against live
+./scripts/restore.sh FILE --confirm                     # restore for real
+```
+
+Full runbook — schedule, off-site copies, what a dump misses, and the rehearsed drill
+with its actual output — in **[BACKUP_AND_RESTORE.md](BACKUP_AND_RESTORE.md)**.
+
+`npm run verify` runs everything a push must pass (lint → unit tests → build); the two
+suites in detail:
+
+| Command | What it checks | Where |
+|---|---|---|
+| `npm run lint` | ESLint over the React app — unused code, undefined variables, hook dependencies | `client/` |
+| `npm test` | 57 unit/component tests (Vitest + Testing Library): money and date formatting, amount-in-words, loyalty caps, the API wrapper's CSRF/error handling, chart maths, status badges | `client/` |
+| `npm run test:e2e` | 378 end-to-end assertions against a running API and a real PostgreSQL | `server/` |
+
+GitHub Actions (`.github/workflows/ci.yml`) runs all three on every push and pull
+request, plus a **schema-drift check** (the Prisma schema and the migration history must
+agree) and a **syntax check over every server file** — that last one exists because a
+bad edit once deleted four admin routes and only the E2E suite caught it.
+
+
+A self-contained end-to-end test (348 assertions) covers every feature. It builds its own fixtures through the admin API and cleans up afterwards, so it runs against a clean database:
 
 ```bash
 cd server
@@ -128,7 +216,12 @@ npm start                 # (or npm run dev) in one terminal
 node test-e2e.mjs         # in another — prints ✅/❌ for each check
 ```
 
-Covers: products & size pricing, zones, reviews, PWA assets, photo upload, order math (promo + zone + size), loyalty earn/redeem/refund, review rules, WebSocket broadcasts, rider accept/deliver flow, sales reports + CSV export, and auth guards.
+Covers: products & size pricing, zones and delivery rules, collection windows and
+blackouts, reviews & moderation, PWA assets, photo upload, order maths (promo + zone +
+size + loyalty), refunds, printing documents, bulk catalogue actions and CSV import,
+push/wishlist plumbing, guest-to-account conversion, analytics, per-account lockout,
+tracing/diagnostics, WebSocket broadcasts, the rider flow, reports + CSV export, and the
+auth guards on every admin route.
 
 ---
 
@@ -138,7 +231,7 @@ Covers: products & size pricing, zones, reviews, PWA assets, photo upload, order
 PORT=5000
 DATABASE_URL=postgresql://homely:homely@localhost:5432/homely?schema=public
 JWT_SECRET=change-me-to-a-long-random-string
-CLIENT_URL=http://localhost:5173     # payment callback + verify links
+CLIENT_URL=http://localhost:5173     # payment callback + verify links, sitemap + share-card URLs
 
 # Paystack (blank = simulated payments)
 PAYSTACK_SECRET_KEY=
@@ -148,7 +241,28 @@ PAYSTACK_PUBLIC_KEY=
 RESEND_API_KEY=
 EMAIL_FROM=Homely Treats <onboarding@resend.dev>
 
-# WhatsApp Cloud API (blank = simulated)
+# Logging + error monitoring. Logs are JSON per line in production; errors are kept in
+# a buffer shown in Admin -> Diagnostics (and logs/errors.jsonl), with Sentry optional.
+LOG_LEVEL=                # debug | info | warn | error | silent
+LOG_FORMAT=               # json | pretty
+SENTRY_DSN=               # blank = no Sentry, everything else still works
+APP_RELEASE=              # shown in diagnostics + Sentry releases
+
+# Per-account sign-in lockout (on top of the per-IP limiter). The lock lifts by
+# itself; a password reset clears it immediately.
+AUTH_MAX_FAILED_ATTEMPTS=10
+AUTH_LOCKOUT_MINUTES=15
+ALERT_EMAIL=                          # blank = the business email in Admin -> Settings
+
+# Web push / PWA notifications (blank = simulated). Generate with:
+#   cd server && npm run push:keys
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:orders@homelytreats.gh
+
+# WhatsApp Cloud API (blank = simulated). See WHATSAPP_TEMPLATES.md — WhatsApp
+# requires Meta-approved templates outside a 24-hour window; the app sends those
+# automatically and falls back to plain text.
 WHATSAPP_TOKEN=
 WHATSAPP_PHONE_NUMBER_ID=
 
@@ -180,18 +294,24 @@ homely-treats/
 │   ├── public/              # manifest.webmanifest, sw.js, icons/
 │   └── src/
 │       ├── pages/           # Home, Menu, CustomOrder, Cart, Track, Rider, Auth, Account, admin/*
-│       ├── components/      # Navbar, Footer, ProductCard, StatusBadge, Toasts
+│       ├── components/      # Navbar, Footer, ProductCard, ProductGallery, SavedItems, PushToggle, MiniChart, …
 │       ├── store.jsx        # auth + cart state (localStorage-persisted)
 │       ├── api.js           # fetch wrapper + loyalty helpers
 │       └── styles.css
 ├── server/                  # Node.js + Express + Prisma + WebSockets
-│   ├── prisma/schema.prisma # User, Product, ProductSize, DeliveryZone, Order, OrderItem,
-│   │                        # OrderPhoto, OrderEvent, Notification, Review, Promo, Setting
+│   ├── prisma/schema.prisma # User, Product, ProductSize, WishlistItem, PushSubscription,
+│   │                        # DeliveryZone, PickupLocation, TimeSlot, BlackoutDate, Order,
+│   │                        # OrderItem, OrderPhoto, OrderEvent, Notification, Review, Promo,
+│   │                        # PromoRedemption, AuditLog, Setting
 │   ├── src/
-│   │   ├── routes/          # auth, products, orders, payments, promos, admin, uploads, zones, reviews, rider
-│   │   ├── services/        # paystack, email, sms, whatsapp, storage, loyalty, realtime (WS), orderEvents, settings
+│   │   ├── routes/          # auth, products, orders, payments, promos, admin, uploads, zones,
+│   │   │                    # delivery, reviews, wishlist, push, rider
+│   │   ├── services/        # paystack, email, sms, whatsapp + whatsappTemplates, push,
+│   │   │                    # stockAlerts, stockNotifications, delivery, analytics,
+│   │   │                    # guestOrders, productReviews, storage, loyalty, realtime (WS),
+│   │   │                    # orderEvents, settings, audit
 │   │   └── seed.js
-│   └── test-e2e.mjs         # 47-assertion feature test
+│   └── test-e2e.mjs         # 348-assertion end-to-end feature test
 ├── scripts/                 # setup.sh (macOS/Linux/WSL) + setup.ps1 (Windows)
 ├── RENDER_DEPLOY.md         # step-by-step Render + Postgres deployment
 └── WINDOWS_SETUP.md         # Windows / VS Code instructions
@@ -232,6 +352,6 @@ The backend is hardened for production: Helmet security headers (tuned CSP), COR
 
 ## 💡 Future ideas
 
-- WhatsApp templates + a proper rider login/role, delivery zones beyond Accra, size-based *per-product* pricing refinements, order photo print/spec sheets, automated marketing emails, multi-vendor support.
+- Delivery rules beyond Accra (per-zone minimums, free delivery over GH₵ X, more pickup branches), collection/delivery time slots, PWA push notifications, reviews on product pages, automated marketing emails, multi-vendor support.
 
 Built as a full-stack upgrade of the original single-page mockup — © 2026 Homely Treats Service Limited.

@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import ProductCard from '../components/ProductCard.jsx';
 import { ProductIcon } from '../components/ProductIcon.jsx';
 import VideoBlock from '../components/VideoBlock.jsx';
+import Seo from '../components/Seo.jsx';
 
 const CATEGORIES = [
   { id: 'ALL', label: 'All Items', icon: null },
@@ -35,6 +36,7 @@ export default function Menu() {
 
   return (
     <div className="page">
+    <Seo title="Menu" description="The full menu — cakes, pastries and confectioneries with prices in GH₵, baked to order and delivered across Greater Accra." />
       <div className="page-banner">
         <VideoBlock
           className="page-banner-media"
@@ -54,14 +56,14 @@ export default function Menu() {
           <div className="menu-controls">
             <div className="search-box">
               <Search size={18} className="search-icon" />
-              <input
+              <input aria-label="Search treats"
                 className="form-input"
                 placeholder="Search treats…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <select className="form-select" value={sort} onChange={(e) => setSort(e.target.value)}>
+            <select aria-label="Sort treats by" className="form-select" value={sort} onChange={(e) => setSort(e.target.value)}>
               <option value="popular">Sort: Popular</option>
               <option value="price-asc">Price: Low → High</option>
               <option value="price-desc">Price: High → Low</option>

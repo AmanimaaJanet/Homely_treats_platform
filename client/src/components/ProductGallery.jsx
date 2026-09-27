@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { ProductIcon } from './ProductIcon.jsx';
+import ProductMonogram from './ProductMonogram.jsx';
 
 /**
  * Product photo gallery.
@@ -8,7 +8,7 @@ import { ProductIcon } from './ProductIcon.jsx';
  * - One photo simply renders large.
  * - Several photos render as a swipeable strip with thumbnails; arrow buttons are
  *   shown for keyboard and desktop users, and the strip scrolls with touch.
- * - No photos falls back to the Lucide icon so the page never looks broken.
+ * - No photos falls back to a typographic monogram so the page never looks broken.
  */
 export default function ProductGallery({ product }) {
   const images = product?.images || [];
@@ -20,7 +20,7 @@ export default function ProductGallery({ product }) {
   if (images.length === 0) {
     return (
       <div className="gallery gallery-fallback">
-        <ProductIcon name={product?.icon || product?.emoji} size={96} strokeWidth={1.2} />
+        <ProductMonogram name={product?.name} size={140} />
       </div>
     );
   }

@@ -1,5 +1,8 @@
 export function ghs(n) {
-  const v = Number(n || 0);
+  // Junk in, "GH₵ 0.00" out — never "GH₵ NaN". A price that reads NaN on a receipt is
+  // worse than one that reads zero, and this pattern is used on every money field.
+  const parsed = Number(n);
+  const v = Number.isFinite(parsed) ? parsed : 0;
   return 'GH₵ ' + v.toLocaleString('en-GH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 

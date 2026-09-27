@@ -55,11 +55,17 @@ throwaway addresses can register, order, and earn loyalty points.
 **Build:** require a verified email to sign in to an account (guest checkout still
 works), plus a friendly "resend verification" prompt. _Effort: S._
 
-### 5. Reviews can be spammed, and can't be moderated 🟠
-`POST /api/reviews` has no rate limit, and there's no admin screen to hide or delete a
-review — so one angry customer can post repeatedly with no recourse.
-**Build:** per-user + per-order review limits, one review per delivered order, admin
-moderation (hide / delete / reply), and optional "verified purchase" badge. _Effort: S._
+### 5. Reviews — spam limits and moderation ✅ **SHIPPED**
+`POST /api/reviews` is limited to 10 submissions per hour per IP, one review per
+delivered order, and reviews now carry a moderation status: **PENDING / APPROVED /
+HIDDEN**. With "Publish reviews immediately" on (the default) a review appears at once;
+switch it off in Settings and every new review waits in **Admin → Reviews**, which shows
+Awaiting review / Published / Hidden with counts and Publish, Hide and Re-queue actions.
+Only approved reviews reach the storefront or the public rating, and hiding keeps the
+row rather than destroying it — the difference between moderating and deleting. The
+customer keeps their bonus points either way, and the sidebar badge shows how many
+reviews are waiting so nothing sits unnoticed. _Still to consider: a reply field and a
+"verified purchase" badge._
 
 ### 6. No audit log for admin actions 🟠 _accountability_
 Nothing records who changed a price, cancelled an order, marked something delivered,
@@ -109,75 +115,148 @@ Cloudinary URLs are accepted, so an injected external URL or a path-traversal at
 is discarded. The bundled bakery stills from your footage now illustrate the sample
 croissant and fruit-tart products.
 
-### 12. WhatsApp message templates
-Business-initiated WhatsApp messages outside a 24-hour customer window **must** use
-Meta-approved templates; today the app sends free-form text that will silently fail in
-production.
-**Build:** template registry (name + language + ordered variables), per-status template
-mapping in Settings, graceful SMS/email fallback when a template isn't approved, and a
-"test send" button. _Effort: M._
+### 12. WhatsApp message templates — ✅ **SHIPPED**
+WhatsApp only allows free-form text within 24 hours of the customer's last message;
+every other update must use a Meta-approved template. Eight templates now ship in a
+registry (`server/src/services/whatsappTemplates.js`) covering confirmed, payment
+received, being prepared, ready, out for delivery, delivered, cancelled and refunded —
+each with its exact name, language, category, ordered variables and body text. The app
+sends templates by default and treats the old plain text as a **fallback**: if Meta
+refuses a template (still in review, renamed, parameter mismatch) the refusal is logged
+with Meta's own wording and the message is retried as plain text, which succeeds if the
+customer messaged recently. If that fails too, the notification is logged FAILED — SMS
+and email still carry the news.
 
-### 13. Automatic low-stock alerts
-Today low stock is a passive panel on the Products page.
-**Build:** per-product reorder threshold, daily digest email to the bakery, and an
-in-admin alert badge — driven by the real stock decrements from item 2. _Effort: S._
+**Admin → Settings → WhatsApp templates** lists every template with a copy button for
+the body text, the variable order, a sample rendering of the message the customer sees,
+and a **test send** to any number that reports Meta's response verbatim. Nothing needs
+a WhatsApp account to try it: without credentials the panel says *Not connected* and
+every send is simulated in the console. Full setup steps — including what to paste into
+Meta Business Manager — are in **[WHATSAPP_TEMPLATES.md](WHATSAPP_TEMPLATES.md)**.
 
-### 14. Receipts and kitchen tickets
-Customers have no printable proof of purchase and the kitchen has no printable spec
-sheet for custom orders (photo, inscription, flavours, date, zone).
-**Build:** a print-optimised receipt (customer + bakery copy) and a kitchen ticket per
-order, both with a "Print" button in admin; optional PDF. _Effort: M._
+### 13. Automatic low-stock alerts — ✅ **SHIPPED**
+A reorder threshold (default 5, editable in Settings) drives everything. The dashboard
+opens with a live panel listing what is at or below the threshold, sold-out items
+called out separately, with an "Email me now" button; the hourly server job emails the
+bakery a daily digest of the same list. Alerts are driven by the real stock decrements
+from item 2, so a product drops out of the panel the moment it is restocked. Because a
+sleeping free-tier host can miss a scheduled tick, the dashboard list is always live —
+the digest is a convenience, not the only line of defence.
 
-### 15. Delivery rules that match real operations
-Zones and fees exist; what's missing: delivery outside Accra, more than one pickup
-location, per-zone minimum order values, and "free delivery over GH₵ X".
-**Build:** extend the zone settings into a table with min order + free-over threshold,
-and support multiple pickup branches. _Effort: S._
+### 14. Receipts and kitchen tickets — ✅ **SHIPPED**
+Every order row and the order detail modal carry **Receipt** and **Ticket** buttons
+(`/admin/print/:id?doc=receipt|ticket`). The receipt is a proper branded document: the
+bakery's details, the customer, delivery address and zone, line items with
+size/flavour/icing and cake inscription, the subtotal → delivery → discount → loyalty
+→ total breakdown with the amount written in words, and the payment method, status and
+reference. The kitchen ticket drops pricing and leads with the "needed by" date, the
+full spec per line and the notes box. Both render as an A5 sheet and print with the
+sidebar and toolbar hidden, so only the document reaches paper.
 
-### 16. Collection / delivery time slots
-Customers pick a date but not a time, and lead time isn't enforced per product.
-**Build:** configurable slots per day (with capacity caps), per-product minimum lead
-time, blackout dates (holidays), and slot validation at checkout. _Effort: M._
+### 15. Delivery rules that match real operations — ✅ **SHIPPED**
+Zones now carry real trading rules: a **minimum basket**, a **free-delivery-over
+threshold** and an **ETA note** shown to the customer. All three are enforced in order
+creation, not merely displayed — a basket under a zone's minimum is refused with the
+zone's name and the amount it needs, and the fee is waived exactly at the threshold.
+The rules live in `server/src/services/delivery.js` so checkout, the storefront and the
+admin calendar all read the same numbers. Pickup **counters** are records now (a second
+shop means adding one, not a re-deploy) and the order stores the counter it was
+collected from, resolved to its name for the kitchen ticket. Deleting a zone that has
+delivered orders de-lists it instead, so history stays whole. Everything is managed on
+**Admin → Deliveries**, and the old duplicate zone table in Settings now points there.
 
-### 17. Refunds
-There's no way to refund a Paystack payment or record one, which you'll need the first
-time an order goes wrong.
-**Build:** Paystack refund API call from the order screen, refund record + reason,
-automatic customer notification, and partial refunds. _Effort: M._
+### 16. Collection / delivery time slots — ✅ **SHIPPED**
+Collection and delivery windows are configurable with a **daily capacity each**. The
+date picker is told the live remaining count per window, a full window cannot be chosen,
+and order creation re-checks the count so a stale tab cannot overbook; cancelling an
+order gives the place back. **Closed days** (public holidays, a family wedding) are
+refused at order creation with the reason and skipped by the picker. Each product can
+also demand **more notice than the shop default** — the stricter of the two wins, on
+both the picker and the server. Admin → Deliveries shows counters, windows, closed days
+and a 14-day calendar of what each day has promised and how full each window is.
 
-### 18. Push notifications (PWA)
-SMS costs money and Textbelt's free tier is blocked for Ghana. Web push is free and
-already half-built (the PWA is installable).
-**Build:** service-worker push handling, subscribe prompt after first order, and status
-pushes ("your cake is ready") alongside the existing email/SMS/WhatsApp channels.
-_Effort: M._
+### 17. Refunds — ✅ **SHIPPED**
+Admin → Orders → *Start a refund* refunds a paid order in full. Paystack payments go
+straight back to the original mobile-money wallet or card and the refund reference is
+kept; payments taken offline (cash, or a transfer you confirmed by hand) are recorded
+as settled offline. A refused Paystack refund returns a clear error and leaves the
+order **paid** — money is never marked returned when it wasn't. A refund also returns
+the stock, writes a timeline entry, emails/SMSes/WhatsApps the customer and lands in
+the activity log. Refunded orders drop out of every revenue figure and are reported
+separately, so turnover is never overstated.
 
-### 19. Reviews on product pages
-Reviews are order-level and only surface on the homepage; products show no rating.
-**Build:** average rating + count per product card, per-product review list, rating
-filter in the menu, and a "rate your order" prompt in the delivery email. _Effort: M._
+_Deliberately not built: partial refunds._ A part-refunded order would still sit in the
+"paid" bucket and quietly inflate revenue in every report; odd amounts are better
+settled from the Paystack dashboard, and the decision is explained in the code.
 
-### 20. Deeper sales analytics
-The dashboard has revenue/orders/customers plus an 8-month chart. Missing: revenue by
-zone and by product over time, repeat-customer rate, average order value, peak days,
-and a proper date-range picker.
-**Build:** extend `/admin/reports` with those breakdowns and charts. _Effort: M._
+### 18. Push notifications (PWA) — ✅ **SHIPPED**
+Web push now sits alongside email, SMS and WhatsApp as a fourth channel — and it is the
+only one that costs nothing per message and needs no phone number, which matters while
+Textbelt's free tier is blocked for Ghana. The service worker shows notifications with
+the bakery icon and opens (or focuses) the app on the order it is about, replacing an
+older alert for the same order rather than stacking. Order confirmations, "ready",
+"out for delivery", cancellations and refunds all push, and a **back-in-stock** alert
+fires when a sold-out product returns.
 
-### 21. Bulk admin actions and catalogue import
-Everything is edited one record at a time.
-**Build:** multi-select bulk operations (activate/deactivate, price adjust, mark ready),
-CSV **import** for products (CSV export already exists), and duplicate-a-product.
-_Effort: M._
+Customers turn alerts on per device from **Account → Saved & Alerts**, with a **Send a
+test** button; expired subscriptions are pruned automatically. Set it up with
+`cd server && npm run push:keys`, then put the two keys in `.env` as `VAPID_PUBLIC_KEY`
+and `VAPID_PRIVATE_KEY`. Without keys the app stays silent and the server logs what it
+would have sent, so nothing breaks.
 
-### 22. Wishlist and back-in-stock alerts
-Customers can't save items or be told when something returns.
-**Build:** favourites list in the account, "notify me" on out-of-stock products, and a
-short email when it's restocked. _Effort: S._
+### 19. Reviews on product pages — ✅ **SHIPPED**
+Every product now has its own page (`/menu/:id`): the gallery, the size price list, the
+lead time, and what customers actually said. Ratings come from **approved reviews of
+orders that contained the product** (a review belongs to an order, not a line item, so
+one order counts once), shown as stars on the menu cards, an average with a star
+histogram, and each review marked *Verified purchase* with the reviewer's first name
+and initial only. A product nobody has reviewed says so plainly instead of showing
+hollow stars. Reviewers earn bonus loyalty points, and the admin approval queue is
+unchanged — held reviews never touch a public rating.
 
-### 23. Guest → account conversion
-A guest order is a dead end: the details never become an account.
-**Build:** "create a password to track this order" prompt after guest checkout, linking
-past guest orders by email. _Effort: S._
+### 20. Deeper sales analytics — ✅ **SHIPPED**
+Reports now answer the questions an owner actually has, over any date range (with
+7/30/90-day, this-month and last-month shortcuts): **revenue by day**, **by zone**
+(collection included, so you can see what the trips are worth), **by payment method**
+(is the MoMo habit holding?), **busiest weekdays** and **which windows people choose**,
+plus **repeat-customer rate**, **customers**, **average order value**, **delivery fees
+collected** and **discounts given**. Products get a share-of-sales column and the page
+carries a 12-month revenue line. Charts are hand-rolled SVG (bars, columns, line), so
+the bundle stays small. Cancelled orders count towards demand but never towards revenue,
+and refunded orders are excluded from every figure and reported separately.
+
+### 21. Bulk admin actions and catalogue import — ✅ **SHIPPED**
+Admin → Products now has a selection bar: tick what you mean and apply one instruction
+to all of it — mark available or sold out, add or remove from featured, re-list or
+de-list, set stock, or **adjust prices by a percentage or a flat amount** (size prices
+move with the base price, so a rise stays proportional; a 100% discount is refused).
+Orders get the same treatment: select the weekend's orders and confirm or advance them
+in one go, with each order still going through the normal status path so customers get
+their notifications.
+
+CSV **import** closes the loop with the existing export: download the template, fill it
+in Excel, upload it, and every row is reported — created, updated, or skipped with the
+reason (an unknown category never half-imports). Re-importing the same product name
+updates it rather than duplicating the menu, sizes can carry a serving count
+(`Small:150:4`), and quoted commas survive. **Duplicate** copies a product with its
+sizes as a de-listed, zero-stock starting point for this year's variation.
+
+### 22. Wishlist and back-in-stock alerts — ✅ **SHIPPED**
+The heart on any product card or product page saves it, and a sold-out product's heart
+becomes **"Tell me when it's back"**. Saved items live in **Account → Saved & Alerts**
+with live stock, and when a product goes from nothing to something, everyone waiting is
+emailed and pushed exactly once — the wait is stamped, so three restocks do not mean
+three emails for the same ask, and a routine price edit sends nothing. A bakery sells
+out; this is how a sold-out moment keeps the customer.
+
+### 23. Guest → account conversion — ✅ **SHIPPED**
+A guest order used to be a dead end. Now the tracking page offers **"Keep track of this
+order"** (create an account, or sign in), and when someone registers, their earlier
+guest orders are attached to the new account automatically — the customer is told how
+many came with them. Matching is deliberately strict, because an order carries a home
+address: it takes a confirmed email **or** the same email *and* phone, so guessing an
+address gets you nothing. Registering also recognises the email on the checkout hint,
+so a returning customer is sent to sign in rather than asked to register twice.
 
 ---
 
@@ -185,12 +264,12 @@ past guest orders by email. _Effort: S._
 
 | # | Item | Why | Effort |
 |---|---|---|---|
-| 24 | **Automated tests + CI** — frontend component tests (Vitest + Testing Library), API contract tests, ESLint, GitHub Actions running lint/build/test on every push | Nothing catches a regression before you push | M |
-| 25 | **Error monitoring + structured logging** (e.g. Sentry, request IDs) | You currently find out about errors only if a customer calls | S |
+| 24 | **Automated tests + CI** — ✅ **SHIPPED**: ESLint (React + hooks rules), 57 Vitest/Testing Library unit tests, the 378-assertion API suite against real PostgreSQL, a Prisma schema-drift check and a syntax check over every server file, all wired into GitHub Actions on every push and PR | Nothing catches a regression before you push | M |
+| 25 | **Error monitoring + structured logging** — ✅ **SHIPPED**: JSON logs with a request id on every response, a hand-rolled Sentry hook (no SDK), and an **Admin → Diagnostics** screen showing integrations, failed notifications this week and recent errors | You currently find out about errors only if a customer calls | S |
 | 26 | **Backups + a rehearsed restore** (Render automated backups + documented restore drill) | One bad migration and the orders are gone | S |
 | 27 | **Performance budget** — route-level code-splitting (the admin bundle loads for shoppers), LCP/CLS measurement, keep media under budget (videos are at 2.3 MB — good) | Slow first paint on 3G loses orders | M |
 | 28 | **Accessibility pass (WCAG AA)** — focus states, form labels, contrast, keyboard-only ordering, screen-reader run-through | Also improves SEO and general usability | M |
-| 29 | **SEO** — `sitemap.xml`, `robots.txt`, per-product Open Graph images, LocalBusiness/Product structured data, Google Business profile | Free customer acquisition | S |
+| 29 | ✅ **SHIPPED** — **SEO** — `sitemap.xml`, `robots.txt`, per-product Open Graph images, LocalBusiness/Product structured data, Google Business profile | Free customer acquisition | S |
 | 30 | **Rider live GPS** on the tracking page + rider earnings/history | Nice-to-have; the tracker is status-based today | L |
 | 31 | **Multi-branch support** | Only when a second location opens | L |
 | 32 | **Bilingual UI (English / Twi)** | Wider local reach | L |
@@ -268,12 +347,26 @@ verified separately: 5 forgot-password requests then 429.
 | 9 | Cookie sessions | httpOnly + SameSite=Lax with double-submit CSRF; Bearer tokens still supported |
 | 10 | Bot protection | Opt-in Cloudflare Turnstile on the account endpoints, failing closed |
 
-### Phase 2 — selling properly: in progress
+### Phase 2 — selling properly: ✅ complete
+
+> Docs: **[ADMIN_GUIDE.md](ADMIN_GUIDE.md)** covers signing in and running the portal.
+
+> Running total: **378 end-to-end assertions** plus **57 frontend unit tests** and a
+> green lint — all enforced by CI on every push (`.github/workflows/ci.yml`).
 
 | # | Item | Status |
 |---|---|---|
 | 11 | **Product photos and galleries** | ✅ shipped |
-| 14 | Receipts and kitchen tickets | next |
-| 13 | Automatic low-stock alerts | next |
-| 5 | Review moderation in admin | partially done (limits shipped; moderation screen still to build) |
-| 17 | Refunds | not started |
+| 13 | **Automatic low-stock alerts** | ✅ shipped |
+| 14 | **Receipts and kitchen tickets** | ✅ shipped |
+| 5 | **Review moderation in admin** | ✅ shipped (rate limits + approval queue) |
+| 17 | **Refunds** | ✅ shipped (full refunds; see note above) |
+| 12 | **WhatsApp message templates** | ✅ shipped |
+| 15 | **Delivery rules** (min order, free over, pickup counters) | ✅ shipped |
+| 16 | **Collection / delivery time slots** (capacities, blackouts, lead time) | ✅ shipped |
+| 18 | **Push notifications (PWA)** | ✅ shipped (free channel, VAPID keys) |
+| 19 | **Reviews on product pages** | ✅ shipped (ratings, histogram, verified) |
+| 20 | **Deeper sales analytics** | ✅ shipped (zones, weekday, repeat rate, trend) |
+| 21 | **Bulk actions + CSV import + duplicate** | ✅ shipped |
+| 22 | **Wishlist and back-in-stock alerts** | ✅ shipped |
+| 23 | **Guest → account conversion** | ✅ shipped |

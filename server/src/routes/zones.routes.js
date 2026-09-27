@@ -9,6 +9,8 @@ router.get('/', async (req, res) => {
     const zones = await prisma.deliveryZone.findMany({
       where: { active: true },
       orderBy: { name: 'asc' },
+      // minOrder / freeOver / etaNote travel with the fee so the basket can explain
+      // the rule before the customer reaches the payment step.
     });
     res.json({ zones });
   } catch (err) {

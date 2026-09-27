@@ -1,0 +1,170 @@
+name: CI
+
+# Runs on every push and pull request.
+#
+# Three jobs, deliberately separate so a failure says *what* broke:
+#   • quality   — lint the client, then the server's syntax check
+#   • unit      — frontend unit/component tests (Vitest + Testing Library)
+#   • e2e       — the full API suite against a real PostgreSQL, exactly as a developer
+#                 would run it, because the fake version of an order flow proves nothing
+#
+# The E2E job is the one that matters most: it is the same 380-assertion suite that has
+# caught real regressions here (deleted routes, a const reassignment, a zone-name clash),
+# so a red build means something genuinely broke.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A push while a run is in flight cancels the older one — cheaper and clearer.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint & syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: |
+            client/package-lock.json
+            server/package-lock.json
+
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Lint the client
+        working-directory: client
+        # Zero errors is the bar; the handful of intentional warnings (mount-only effects
+        # and one module that exports both a provider and its hook) are allowed for, but a
+        # pile of new ones fails the build.
+        run: npm run lint -- --max-warnings 12
+
+      - name: Build the client
+        working-directory: client
+        run: npm run build
+
+      # Splitting routes into on-demand files introduces one new way to break a deploy:
+      # the HTML referencing a chunk that was never uploaded. This checks the built
+      # import graph is complete, and that the first load stays inside its size budget.
+      - name: Check the bundle is complete and within budget
+        working-directory: client
+        run: npm run check:bundle
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Syntax-check every server file
+        working-directory: server
+        run: |
+          fail=0
+          for f in $(git ls-files '*.js' | grep -v node_modules); do
+            node --check "$f" || fail=1
+          done
+          exit $fail
+
+      - name: Check the Prisma schema is valid and formatted
+        working-directory: server
+        run: npx prisma validate && npx prisma format --check
+
+  unit:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+        working-directory: client
+      - run: npm run test
+        working-directory: client
+
+  e2e:
+    name: API end-to-end
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: homely
+          POSTGRES_PASSWORD: homely
+          POSTGRES_DB: homely
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U homely"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://homely:homely@localhost:5432/homely?schema=public
+      JWT_SECRET: ci-only-secret-not-used-anywhere-real-0123456789
+      CLIENT_URL: http://localhost:5173
+      NODE_ENV: test
+      # The suite signs in far more often than a person would; rate limits are proven
+      # separately and stay enforced in production regardless of this flag.
+      DISABLE_RATE_LIMITS: 'true'
+      # A low threshold so the account-lockout block exercises the real lock, quickly.
+      AUTH_MAX_FAILED_ATTEMPTS: '4'
+      AUTH_LOCKOUT_MINUTES: '2'
+      LOG_LEVEL: warn
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Apply migrations
+        working-directory: server
+        run: npx prisma migrate deploy
+
+      - name: Seed the admin account
+        working-directory: server
+        run: npm run db:seed
+
+      # The migration history and schema.prisma must agree, or someone's local edit will
+      # silently never reach production. Freshly migrated, there should be no difference.
+      - name: Check for schema drift against the migrations
+        working-directory: server
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+
+      - name: Start the API
+        working-directory: server
+        run: |
+          npm start > /tmp/api.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl -fsS http://localhost:5000/api/health > /dev/null; then
+              echo "API is up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "API never came up:"; cat /tmp/api.log; exit 1
+
+      - name: Run the end-to-end suite
+        working-directory: server
+        run: node test-e2e.mjs
+
+      - name: Show the API log if something failed
+        if: failure()
+        run: tail -80 /tmp/api.log

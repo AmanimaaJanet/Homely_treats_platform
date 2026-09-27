@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Key, MessageCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Key, MessageCircle, Truck } from 'lucide-react';
 import { api } from '../../api.js';
 import { useApp } from '../../store.jsx';
+import WhatsAppTemplates from '../../components/WhatsAppTemplates.jsx';
+import AdminAccount from '../../components/AdminAccount.jsx';
 
 function Toggle({ label, checked, onChange }) {
   return (
@@ -14,16 +17,13 @@ function Toggle({ label, checked, onChange }) {
 
 export default function Settings() {
   const { toast } = useApp();
+  const navigate = useNavigate();
   const [s, setS] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [zones, setZones] = useState([]);
-  const [newZone, setNewZone] = useState({ name: '', fee: '' });
 
-  const loadZones = () => api.get('/admin/zones', { auth: true }).then((d) => setZones(d.zones)).catch(() => {});
 
   useEffect(() => {
     api.get('/admin/settings', { auth: true }).then((d) => setS(d.settings)).catch(() => {});
-    loadZones();
   }, []);
 
   if (!s) return <div className="empty-state"><p>Loading settings…</p></div>;
@@ -43,34 +43,11 @@ export default function Settings() {
     }
   };
 
-  const addZone = async (e) => {
-    e.preventDefault();
-    if (!newZone.name.trim()) return;
-    try {
-      await api.post('/admin/zones', { name: newZone.name.trim(), fee: Number(newZone.fee || 0) }, { auth: true });
-      setNewZone({ name: '', fee: '' });
-      toast('Zone added', 'success');
-      loadZones();
-    } catch (err) {
-      toast(err.message, 'error');
-    }
-  };
 
-  const updateZone = async (id, patch) => {
-    try {
-      await api.put(`/admin/zones/${id}`, patch, { auth: true });
-      loadZones();
-    } catch (err) {
-      toast(err.message, 'error');
-    }
-  };
 
-  const deleteZone = async (id) => {
-    if (!window.confirm('Delete this zone?')) return;
-    await api.del(`/admin/zones/${id}`, { auth: true });
-    toast('Zone deleted', 'success');
-    loadZones();
-  };
+
+
+
 
   return (
     <form onSubmit={save}>
@@ -80,22 +57,30 @@ export default function Settings() {
         <h3 className="form-heading">Business Information</h3>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Business Name</label>
-            <input className="form-input" value={s.businessName} onChange={(e) => set('businessName', e.target.value)} />
+            <label className="form-label">
+              <span className="form-label-text">Business Name</span>
+              <input className="form-input" value={s.businessName} onChange={(e) => set('businessName', e.target.value)} />
+            </label>
           </div>
           <div className="form-group">
-            <label className="form-label">Email Address</label>
-            <input className="form-input" value={s.businessEmail} onChange={(e) => set('businessEmail', e.target.value)} />
+            <label className="form-label">
+              <span className="form-label-text">Email Address</span>
+              <input className="form-input" value={s.businessEmail} onChange={(e) => set('businessEmail', e.target.value)} />
+            </label>
           </div>
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Phone Number</label>
-            <input className="form-input" value={s.businessPhone} onChange={(e) => set('businessPhone', e.target.value)} />
+            <label className="form-label">
+              <span className="form-label-text">Phone Number</span>
+              <input className="form-input" value={s.businessPhone} onChange={(e) => set('businessPhone', e.target.value)} />
+            </label>
           </div>
           <div className="form-group">
-            <label className="form-label">Business Address</label>
-            <input className="form-input" value={s.businessAddress} onChange={(e) => set('businessAddress', e.target.value)} />
+            <label className="form-label">
+              <span className="form-label-text">Business Address</span>
+              <input className="form-input" value={s.businessAddress} onChange={(e) => set('businessAddress', e.target.value)} />
+            </label>
           </div>
         </div>
       </div>
@@ -104,12 +89,16 @@ export default function Settings() {
         <h3 className="form-heading">Order & Delivery Settings</h3>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Min. Lead Time (days)</label>
-            <input type="number" className="form-input" value={s.minLeadDays} onChange={(e) => set('minLeadDays', parseInt(e.target.value || '2', 10))} />
+            <label className="form-label">
+              <span className="form-label-text">Min. Lead Time (days)</span>
+              <input type="number" className="form-input" value={s.minLeadDays} onChange={(e) => set('minLeadDays', parseInt(e.target.value || '2', 10))} />
+            </label>
           </div>
           <div className="form-group">
-            <label className="form-label">Default Delivery Fee (GH₵)</label>
-            <input type="number" className="form-input" value={s.deliveryFee} onChange={(e) => set('deliveryFee', parseInt(e.target.value || '0', 10))} />
+            <label className="form-label">
+              <span className="form-label-text">Default Delivery Fee (GH₵)</span>
+              <input type="number" className="form-input" value={s.deliveryFee} onChange={(e) => set('deliveryFee', parseInt(e.target.value || '0', 10))} />
+            </label>
           </div>
         </div>
         <Toggle label="Accept Online Orders" checked={!!s.acceptOrders} onChange={(v) => set('acceptOrders', v)} />
@@ -117,42 +106,15 @@ export default function Settings() {
       </div>
 
       <div className="section">
-        <div className="section-head-row">
-          <h3 className="form-heading" style={{ margin: 0 }}>Delivery Zones (Accra)</h3>
-        </div>
-        <div className="form-row" style={{ marginBottom: '1rem' }}>
-          <div className="form-group">
-            <input className="form-input" placeholder="Zone name (e.g. Labadi)" value={newZone.name} onChange={(e) => setNewZone({ ...newZone, name: e.target.value })} />
-          </div>
-          <div className="form-group">
-            <div className="promo-row">
-              <input type="number" className="form-input" placeholder="Fee GH₵" value={newZone.fee} onChange={(e) => setNewZone({ ...newZone, fee: e.target.value })} />
-              <button type="button" className="btn btn-secondary" onClick={addZone}>Add</button>
-            </div>
-          </div>
-        </div>
-        <table className="table">
-          <thead><tr><th>Zone</th><th>Fee</th><th>Active</th><th></th></tr></thead>
-          <tbody>
-            {zones.map((z) => (
-              <tr key={z.id}>
-                <td>{z.name}</td>
-                <td>
-                  <input
-                    type="number"
-                    className="form-input zone-fee-input"
-                    value={z.fee}
-                    onChange={(e) => updateZone(z.id, { fee: Number(e.target.value) })}
-                  />
-                </td>
-                <td>
-                  <input type="checkbox" checked={z.active} onChange={(e) => updateZone(z.id, { active: e.target.checked })} />
-                </td>
-                <td><button type="button" className="btn-link danger" onClick={() => deleteZone(z.id)}>Delete</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <h3 className="form-heading">Delivery &amp; collection</h3>
+        <p className="muted small">
+          Zone fees and rules (minimum basket, free delivery over), pickup counters,
+          collection windows with daily capacity, and closed days all live on the{' '}
+          <strong>Deliveries</strong> screen.
+        </p>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={() => navigate('/admin/deliveries')}>
+          <Truck size={14} /> Open Deliveries
+        </button>
       </div>
 
       <div className="section">
@@ -171,6 +133,14 @@ export default function Settings() {
         <h3 className="form-heading">Loyalty & Reviews</h3>
         <Toggle label="Enable Loyalty Points (1 pt per GH₵ 1 · 20 pts = GH₵ 1)" checked={!!s.enableLoyalty} onChange={(v) => set('enableLoyalty', v)} />
         <Toggle label="Enable Customer Reviews (+5 pts per review)" checked={!!s.enableReviews} onChange={(v) => set('enableReviews', v)} />
+        <Toggle
+          label="Publish reviews immediately"
+          checked={s.autoApproveReviews !== false}
+          onChange={(v) => set('autoApproveReviews', v)}
+        />
+        <p className="muted small">
+          Switch this off to hold every new review in Admin → Reviews until you approve it.
+        </p>
       </div>
 
       <div className="section">
@@ -179,12 +149,45 @@ export default function Settings() {
         <Toggle label="SMS order updates (confirmation, status, ready)" checked={!!s.smsOrderConfirmed} onChange={(v) => set('smsOrderConfirmed', v)} />
         <h4 className="form-heading small">WhatsApp (Cloud API)</h4>
         <Toggle label="WhatsApp order updates" checked={!!s.enableWhatsapp} onChange={(v) => set('enableWhatsapp', v)} />
-        <p className="muted small"><MessageCircle size={13} /> Configure <code>WHATSAPP_TOKEN</code> & <code>WHATSAPP_PHONE_NUMBER_ID</code> in <code>server/.env</code> (free test number available).</p>
+        <Toggle
+          label="Send approved templates (recommended — required outside the 24-hour window)"
+          checked={s.whatsappTemplates !== false}
+          onChange={(v) => set('whatsappTemplates', v)}
+        />
+        <p className="muted small">
+          <MessageCircle size={13} /> With this off, WhatsApp sends plain text, which only works within 24 hours
+          of the customer's last message.
+        </p>
         <h4 className="form-heading small">Email (Resend)</h4>
         <Toggle label="Email order updates (confirmation, receipt, status)" checked={!!s.emailOrderConfirmed} onChange={(v) => set('emailOrderConfirmed', v)} />
         <h4 className="form-heading small">Admin Alerts</h4>
         <Toggle label="Email the business when a new order is placed" checked={!!s.adminAlertNewOrder} onChange={(v) => set('adminAlertNewOrder', v)} />
+        <Toggle
+          label="Email a daily low-stock digest"
+          checked={s.lowStockAlerts !== false}
+          onChange={(v) => set('lowStockAlerts', v)}
+        />
+        <label className="form-label" style={{ marginTop: '10px', maxWidth: '320px' }}>
+          Reorder threshold
+          <span className="muted small">
+            {' '}— products at or below this stock level appear on the dashboard and in the digest
+          </span>
+        </label>
+        <input
+          className="form-input"
+          type="number"
+          min="0"
+          max="999"
+          aria-label="Reorder threshold (stock level)"
+          style={{ maxWidth: '160px' }}
+          value={s.lowStockThreshold ?? 5}
+          onChange={(e) => set('lowStockThreshold', Math.max(0, Number(e.target.value) || 0))}
+        />
       </div>
+
+      <WhatsAppTemplates />
+
+      <AdminAccount />
 
       <button className="btn btn-primary" disabled={saving} style={{ marginBottom: '2rem' }}>
         {saving ? 'Saving…' : 'Save All Settings'}

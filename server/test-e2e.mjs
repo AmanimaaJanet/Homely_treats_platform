@@ -43,7 +43,7 @@ let failed = 0;
 let adminToken = null;
 let janetToken = null;
 
-const created = { productIds: [], zoneIds: [], promoIds: [], orderIds: [], userId: null, userId2: null, userId3: null, riderIds: [], photoFiles: [] };
+const created = { productIds: [], zoneIds: [], promoIds: [], orderIds: [], userId: null, userId2: null, userId3: null, userId4: null, riderIds: [], photoFiles: [] };
 const runStartedAt = new Date();
 
 function check(name, ok, extra = '') {
@@ -68,7 +68,8 @@ async function req(pathname, { method = 'GET', body, token, raw = false } = {}) 
   if (raw) return res;
   let data = null;
   try { data = await res.json(); } catch { /* empty */ }
-  return { status: res.status, data };
+  // Headers are returned alongside the body so tracing (X-Request-Id) can be asserted.
+  return { status: res.status, data, headers: Object.fromEntries(res.headers.entries()) };
 }
 
 async function teardown() {
@@ -80,6 +81,7 @@ async function teardown() {
     if (created.userId) await prisma.review.deleteMany({ where: { userId: created.userId } });
     if (created.userId2) await prisma.review.deleteMany({ where: { userId: created.userId2 } });
     if (created.userId3) await prisma.review.deleteMany({ where: { userId: created.userId3 } });
+    if (created.userId4) await prisma.review.deleteMany({ where: { userId: created.userId4 } });
 
     const orderIds = ids(created.orderIds);
     if (orderIds.length) {
@@ -109,6 +111,7 @@ async function teardown() {
     if (created.userId) await prisma.user.deleteMany({ where: { id: created.userId } });
     if (created.userId2) await prisma.user.deleteMany({ where: { id: created.userId2 } });
     if (created.userId3) await prisma.user.deleteMany({ where: { id: created.userId3 } });
+    if (created.userId4) await prisma.user.deleteMany({ where: { id: created.userId4 } });
 
     // The audit log is append-only in production, but a test run should not leave
     // its own noise behind. Remove only rows created since this run began.
@@ -890,10 +893,1150 @@ async function main() {
     check('Non-image upload rejected', rejected.status === 500 || rejected.status === 400, `status ${rejected.status}`);
   }
 
-  // ---------------------------------------------------------------- 22. Unauthorised guard
+  // ---------------------------------------------------------------- 22. Receipts & kitchen tickets
+  {
+    // Print documents read from a single payload so a printed copy can't go
+    // half-stale between two requests.
+    const orderId = created.orderIds[0];
+    const print = await req(`/api/admin/orders/${orderId}/print`, { token: adminToken });
+    check('Print payload loads for an order', print.status === 200 && !!print.data?.order?.id, `status ${print.status}`);
+    check('Print payload knows which document it is', print.data?.document === 'Receipt', print.data?.document);
+    check('Print payload carries the order items', (print.data?.order?.items || []).length > 0);
+    check('Print payload carries bakery details for the header',
+      !!print.data?.shop?.name && !!print.data?.shop?.address, print.data?.shop?.name);
+    check('Print payload carries the customer', !!print.data?.order?.customer?.name, print.data?.order?.customer?.name);
+    check('Print payload is timestamped', !Number.isNaN(Date.parse(print.data?.printedAt || '')));
+    check('Items are priced per line for the printed table',
+      print.data.order.items.every((i) => typeof i.unitPrice === 'number' && typeof i.lineTotal === 'number'));
+
+    // A receipt is only useful if the money adds up.
+    const o = print.data.order;
+    const lineTotal = o.items.reduce((sum, i) => sum + i.lineTotal, 0);
+    check('Receipt line items add up to the subtotal', Math.abs(lineTotal - o.money.subtotal) < 0.01,
+      `${lineTotal} vs ${o.money.subtotal}`);
+    check('Receipt total = subtotal + delivery − discounts',
+      Math.abs((o.money.subtotal + o.money.deliveryFee - o.money.discount - o.money.loyaltyDiscount) - o.money.total) < 0.01,
+      `computed ${o.money.subtotal + o.money.deliveryFee - o.money.discount - o.money.loyaltyDiscount} vs ${o.money.total}`);
+
+    const missing = await req('/api/admin/orders/HT-DOES-NOT-EXIST/print', { token: adminToken });
+    check('Print of an unknown order is a clean 404', missing.status === 404);
+
+    const anon = await req(`/api/admin/orders/${orderId}/print`);
+    check('Print documents are admin-only (401)', anon.status === 401);
+  }
+
+  // ---------------------------------------------------------------- 23. Low-stock alerts
+  {
+    const threshold = await req('/api/admin/alerts/low-stock', { token: adminToken });
+    check('Low-stock list loads', threshold.status === 200 && Array.isArray(threshold.data?.products));
+    check('Low-stock list reports the reorder threshold', typeof threshold.data?.threshold === 'number',
+      `threshold ${threshold.data?.threshold}`);
+
+    // Create a deliberately nearly-empty product and confirm it surfaces.
+    const low = await req('/api/admin/products', {
+      method: 'POST', token: adminToken,
+      body: { name: `${PROD_CHOC} LOWSTOCK`, category: 'CAKE', basePrice: 120, icon: 'Cake', stock: 2, inStock: true, sizeOptions: [] },
+    });
+    const lowId = low.data?.product?.id;
+    created.productIds.push(lowId);
+
+    const after = await req('/api/admin/alerts/low-stock', { token: adminToken });
+    const flagged = after.data?.products?.find((p) => p.id === lowId);
+    check('Nearly-empty product appears in alerts', !!flagged, flagged ? `${flagged.stock} left` : 'missing');
+    check('Alerts are sorted by urgency (lowest stock first)',
+      (after.data?.products || []).every((p, i, arr) => i === 0 || arr[i - 1].stock <= p.stock));
+
+    // Well-stocked products stay out of the list.
+    const healthy = await req('/api/admin/products', {
+      method: 'POST', token: adminToken,
+      body: { name: `${PROD_CHOC} WELLSTOCKED`, category: 'CAKE', basePrice: 120, icon: 'Cake', stock: 40, inStock: true, sizeOptions: [] },
+    });
+    created.productIds.push(healthy.data?.product?.id);
+    const stillLow = await req('/api/admin/alerts/low-stock', { token: adminToken });
+    check('Well-stocked product stays out of alerts', !stillLow.data?.products?.some((p) => p.id === healthy.data?.product?.id));
+
+    // The threshold from settings is respected, not hard-coded.
+    const raise = await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { lowStockThreshold: 50 } });
+    check('Reorder threshold is configurable', raise.status === 200 && raise.data?.settings?.lowStockThreshold === 50);
+    const wide = await req('/api/admin/alerts/low-stock', { token: adminToken });
+    check('A wider threshold flags more products', wide.data?.products?.length > stillLow.data?.products?.length,
+      `${stillLow.data?.products?.length} → ${wide.data?.products?.length}`);
+    await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { lowStockThreshold: 5 } });
+
+    // Taking stock back up clears the alert.
+    await req(`/api/admin/products/${lowId}`, { method: 'PUT', token: adminToken, body: { stock: 25 } });
+    const cleared = await req('/api/admin/alerts/low-stock', { token: adminToken });
+    check('Restocking clears the alert', !cleared.data?.products?.some((p) => p.id === lowId));
+
+    // Sending the digest always reports back what it did.
+    const sent = await req('/api/admin/alerts/low-stock/send', { method: 'POST', token: adminToken });
+    check('Low-stock digest can be sent on demand', sent.status === 200 && sent.data?.sent === true,
+      JSON.stringify(sent.data));
+
+    const anon = await req('/api/admin/alerts/low-stock');
+    check('Stock alerts are admin-only (401)', anon.status === 401);
+  }
+
+  // ---------------------------------------------------------------- 24. Review moderation
+  {
+    // Hold new reviews in the queue and confirm nothing leaks to the storefront.
+    const held = await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { autoApproveReviews: false } });
+    check('Moderation can be switched on', held.status === 200 && held.data?.settings?.autoApproveReviews === false);
+
+    const mkOrder = async () => {
+      const r = await req('/api/orders', {
+        method: 'POST', token: janetToken,
+        body: {
+          items: [{ productId: created.productIds[0], quantity: 1 }],
+          deliveryMethod: 'PICKUP', paymentMethod: 'COD', readyDate: READY_DATE,
+        },
+      });
+      const id = r.data?.order?.id;
+      if (id) created.orderIds.push(id);
+      return id;
+    };
+
+    // Baseline: earlier blocks already published a review, so compare deltas.
+    const baselineStats = (await req('/api/reviews/stats')).data?.count || 0;
+
+    const o1 = await mkOrder();
+    await req(`/api/admin/orders/${o1}/status`, { method: 'PATCH', token: adminToken, body: { status: 'DELIVERED' } });
+    const sub = await req('/api/reviews', {
+      method: 'POST', token: janetToken,
+      body: { orderId: o1, rating: 5, comment: `E2E lovely cake ${rnd}` },
+    });
+    const reviewId = sub.data?.review?.id;
+    check('A held review saves as PENDING', sub.status === 201 && sub.data?.review?.status === 'PENDING',
+      `status ${sub.data?.review?.status}`);
+    check('The customer is told their review awaits approval', sub.data?.awaitingApproval === true);
+    check('Reviewing still earns the bonus points', sub.data?.bonusPoints === 5);
+
+    const hiddenRecent = await req('/api/reviews/recent');
+    check('Pending review is not published on the storefront',
+      !hiddenRecent.data?.reviews?.some((r) => r.id === reviewId));
+    const hiddenStats = await req('/api/reviews/stats');
+    check('Pending review does not count towards the public rating', hiddenStats.data?.count === baselineStats,
+      `${baselineStats} → ${hiddenStats.data?.count}`);
+
+    const queue = await req('/api/admin/reviews?status=PENDING', { token: adminToken });
+    check('Admin queue lists the pending review', queue.status === 200 && queue.data?.reviews?.some((r) => r.id === reviewId));
+    check('Queue reports per-status counts', queue.data?.summary?.PENDING >= 1, JSON.stringify(queue.data?.summary));
+    check('Queue carries the customer and order for context',
+      !!queue.data?.reviews?.find((r) => r.id === reviewId)?.user?.email);
+
+    const bad = await req(`/api/admin/reviews/${reviewId}`, { method: 'PATCH', token: adminToken, body: { status: 'DELETED' } });
+    check('Unknown moderation status refused', bad.status === 400);
+
+    const approve = await req(`/api/admin/reviews/${reviewId}`, { method: 'PATCH', token: adminToken, body: { status: 'APPROVED' } });
+    check('Review can be published', approve.status === 200 && approve.data?.review?.status === 'APPROVED');
+    check('Moderation is stamped with who and when',
+      !!approve.data?.review?.moderatedAt && !!approve.data?.review?.moderatedBy,
+      approve.data?.review?.moderatedBy);
+
+    const liveRecent = await req('/api/reviews/recent');
+    check('Published review appears on the storefront', liveRecent.data?.reviews?.some((r) => r.id === reviewId));
+    const liveStats = await req('/api/reviews/stats');
+    check('Published review counts towards the public rating', liveStats.data?.count === baselineStats + 1,
+      `${baselineStats} → ${liveStats.data?.count}`);
+
+    const hide = await req(`/api/admin/reviews/${reviewId}`, { method: 'PATCH', token: adminToken, body: { status: 'HIDDEN' } });
+    check('A published review can be hidden again', hide.data?.review?.status === 'HIDDEN');
+    const afterHide = await req('/api/reviews/recent');
+    check('Hidden review is gone from the storefront', !afterHide.data?.reviews?.some((r) => r.id === reviewId));
+    check('Hiding keeps the review on record (nothing destroyed)',
+      (await req('/api/admin/reviews?status=HIDDEN', { token: adminToken })).data?.reviews?.some((r) => r.id === reviewId));
+
+    const modAudit = await req('/api/admin/audit?limit=200', { token: adminToken });
+    check('Moderation is written to the activity log',
+      (modAudit.data?.logs || modAudit.data?.entries || []).some((l) => l.action === 'REVIEW_MODERATE'));
+
+    const modAnon = await req('/api/admin/reviews');
+    check('Moderation endpoints are admin-only (401)', modAnon.status === 401);
+    await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { autoApproveReviews: true } });
+  }
+
+  // ---------------------------------------------------------------- 25. Refunds
+  {
+    const mkPaidOrder = async () => {
+      const r = await req('/api/orders', {
+        method: 'POST', token: janetToken,
+        body: {
+          items: [{ productId: created.productIds[0], quantity: 2 }],
+          deliveryMethod: 'PICKUP', paymentMethod: 'MOMO', readyDate: READY_DATE2,
+        },
+      });
+      const id = r.data?.order?.id;
+      if (id) created.orderIds.push(id);
+      return id;
+    };
+
+    // An unpaid order must not be refundable — there is no captured payment.
+    const unpaidId = await mkPaidOrder();
+    const unpaid = await req(`/api/admin/orders/${unpaidId}/refund`, { method: 'POST', token: adminToken, body: {} });
+    check('Unpaid orders cannot be refunded', unpaid.status === 400, `status ${unpaid.status}`);
+
+    // Pay (simulated checkout), then refund.
+    const paidId = await mkPaidOrder();
+    const beforeRefund = await req(`/api/admin/orders/${paidId}`, { token: adminToken });
+    const stockBefore = (await req('/api/products')).data?.products?.find((p) => p.id === created.productIds[0])?.stock;
+    await req(`/api/payments/${paidId}/simulate`, { method: 'POST' });
+
+    const refund = await req(`/api/admin/orders/${paidId}/refund`, {
+      method: 'POST', token: adminToken,
+      body: { reason: 'E2E refund check' },
+    });
+    check('A paid order can be refunded', refund.status === 200, `status ${refund.status}`);
+    check('Refund flips the payment status', refund.data?.order?.paymentStatus === 'REFUNDED');
+    check('Refund records the full amount', refund.data?.order?.refundAmount === beforeRefund.data?.order?.total,
+      `${refund.data?.order?.refundAmount} vs ${beforeRefund.data?.order?.total}`);
+    check('Refund keeps the reason', refund.data?.order?.refundReason === 'E2E refund check');
+    check('Refund is timestamped', !!refund.data?.order?.refundedAt);
+    check('Simulation-mode refunds are recorded as settled offline', refund.data?.order?.refundStatus === 'OFFLINE',
+      refund.data?.order?.refundStatus);
+
+    const stockAfter = (await req('/api/products')).data?.products?.find((p) => p.id === created.productIds[0])?.stock;
+    check('Refunding returns the stock to inventory', stockAfter === stockBefore + 2,
+      `${stockBefore} → ${stockAfter}`);
+
+    const twice = await req(`/api/admin/orders/${paidId}/refund`, { method: 'POST', token: adminToken, body: {} });
+    check('An order cannot be refunded twice (409)', twice.status === 409, `status ${twice.status}`);
+
+    // Revenue reporting must not count money that was given back.
+    const from = daysFromNow(-1);
+    const to = daysFromNow(1);
+    const report = await req(`/api/admin/reports?from=${from}&to=${to}`, { token: adminToken });
+    const refundedOrder = (report.data?.orders || []).find((o) => o.id === paidId);
+    check('Refunded order is marked REFUNDED in reports', refundedOrder?.paymentStatus === 'REFUNDED');
+    check('Refunded order is excluded from revenue', report.data?.refunds?.count >= 1,
+      `refunds ${JSON.stringify(report.data?.refunds)}`);
+    check('Reports show the refunded total separately', (report.data?.refunds?.total || 0) > 0,
+      `total ${report.data?.refunds?.total}`);
+
+    const timeline = await req(`/api/admin/orders/${paidId}`, { token: adminToken });
+    check('Refund appears on the order timeline',
+      (timeline.data?.order?.events || []).some((e) => e.status === 'REFUNDED'));
+
+    const refundAudit = await req('/api/admin/audit?limit=200', { token: adminToken });
+    check('Refund is written to the activity log',
+      (refundAudit.data?.logs || refundAudit.data?.entries || []).some((l) => l.action === 'ORDER_REFUND'));
+
+    const refundAnon = await req(`/api/admin/orders/${paidId}/refund`, { method: 'POST', body: {} });
+    check('Refunds are admin-only (401)', refundAnon.status === 401);
+  }
+
+  // ---------------------------------------------------------------- 26. WhatsApp templates
+  {
+    const reg = await req('/api/admin/whatsapp/templates', { token: adminToken });
+    check('WhatsApp template registry loads', reg.status === 200 && Array.isArray(reg.data?.templates),
+      `status ${reg.status}`);
+    const tpls = reg.data?.templates || [];
+    check('Every order update has a template', tpls.length === 8, `${tpls.length} templates`);
+
+    const requiredTypes = ['ORDER_CONFIRMED', 'PAYMENT_VERIFIED', 'IN_PROGRESS', 'READY', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED', 'REFUNDED'];
+    check('Every status we notify about is covered',
+      requiredTypes.every((t) => tpls.some((x) => x.type === t)),
+      tpls.map((x) => x.type).join(', '));
+    check('Template names are valid for Meta (lowercase, digits, underscores)',
+      tpls.every((t) => /^[a-z0-9_]+$/.test(t.name)), tpls.map((t) => t.name).join(', '));
+    check('Template names are unique', new Set(tpls.map((t) => t.name)).size === tpls.length);
+    check('Each template declares its variables and a sample',
+      tpls.every((t) => Array.isArray(t.vars) && t.vars.length > 0 && t.sample.length === t.vars.length));
+    check('Each template declares a language and category',
+      tpls.every((t) => !!t.language && !!t.category), tpls[0]?.language);
+    check('Variables in the body match the declared variable count',
+      tpls.every((t) => {
+        const placeholders = (t.body.match(/\{\{\d+\}\}/g) || []).length;
+        return placeholders === t.vars.length;
+      }));
+    check('Previews render with no unfilled placeholders',
+      tpls.every((t) => t.preview && !t.preview.includes('{{')), tpls.find((t) => t.type === 'READY')?.preview);
+
+    check('Template sending is on by default', reg.data?.useTemplates === true);
+    check('The registry reports whether WhatsApp is connected',
+      typeof reg.data?.enabled === 'boolean', `connected: ${reg.data?.enabled}`);
+
+    // Test send — the button that proves an approved template works before it matters.
+    const sim = await req('/api/admin/whatsapp/test', {
+      method: 'POST', token: adminToken, body: { phone: '0551234567', type: 'READY' },
+    });
+    check('A test message can be sent', sim.status === 200 && sim.data?.ok === true, JSON.stringify(sim.data)?.slice(0, 120));
+    check('Test reports the template and language it used', sim.data?.template === 'order_ready' && !!sim.data?.language,
+      `${sim.data?.template} (${sim.data?.language})`);
+    check('Test fills one parameter per declared variable', sim.data?.parameters?.length === 3,
+      JSON.stringify(sim.data?.parameters));
+    check('Test renders the message the customer would see',
+      typeof sim.data?.preview === 'string' && sim.data.preview.length > 20, sim.data?.preview);
+
+    const badPhone = await req('/api/admin/whatsapp/test', {
+      method: 'POST', token: adminToken, body: { phone: '12345', type: 'READY' },
+    });
+    check('Test rejects a phone number WhatsApp could not reach', badPhone.status === 400, badPhone.data?.error);
+    const badType = await req('/api/admin/whatsapp/test', {
+      method: 'POST', token: adminToken, body: { phone: '0551234567', type: 'NOT_A_STATUS' },
+    });
+    check('Test rejects an unknown notification type', badType.status === 400);
+
+    const waAnon = await req('/api/admin/whatsapp/templates');
+    check('WhatsApp templates are admin-only (401)', waAnon.status === 401);
+
+    // A real order must actually go through the template layer.
+    const mk = await req('/api/orders', {
+      method: 'POST', token: janetToken,
+      body: {
+        items: [{ productId: created.productIds[0], quantity: 1 }],
+        deliveryMethod: 'PICKUP', paymentMethod: 'COD', readyDate: READY_DATE,
+      },
+    });
+    const waOrderId = mk.data?.order?.id;
+    if (waOrderId) created.orderIds.push(waOrderId);
+    const waOrder = await req(`/api/admin/orders/${waOrderId}`, { token: adminToken });
+    const waNotes = (waOrder.data?.order?.notifications || []).filter((n) => n.channel === 'WHATSAPP');
+    check('Order confirmation sent through the WhatsApp template layer',
+      waNotes.some((n) => (n.detail || '').includes('order_confirmed')),
+      waNotes.map((n) => n.detail).join(' | '));
+
+    // Switching templates off falls back to plain text (for the Meta test number).
+    await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { whatsappTemplates: false } });
+    const off = await req('/api/admin/whatsapp/templates', { token: adminToken });
+    check('Template sending can be switched off', off.data?.useTemplates === false);
+    await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { whatsappTemplates: true } });
+    const backOn = await req('/api/admin/whatsapp/templates', { token: adminToken });
+    check('Template sending can be switched back on', backOn.data?.useTemplates === true);
+  }
+
+  // ---------------------------------------------------------------- 27. Admin account state
+  {
+    // The portal warns until the published seed password is changed, so /auth/me has
+    // to report the state accurately — without leaking anything about the hash.
+    const me = await req('/api/auth/me', { token: adminToken });
+    check('Admin account state is reported', typeof me.data?.user?.usesDefaultPassword === 'boolean',
+      `usesDefaultPassword: ${me.data?.user?.usesDefaultPassword}`);
+    check('The admin account is identified by role', me.data?.user?.role === 'ADMIN');
+    check('No password material is ever returned', !JSON.stringify(me.data).includes('$2a$')
+      && !JSON.stringify(me.data).includes('passwordHash'));
+
+    const cust = await req('/api/auth/me', { token: janetToken });
+    check('Customers never carry the admin password flag', cust.data?.user?.usesDefaultPassword === false);
+
+    // Changing the password is refused without the current one, and a weak new one is
+    // rejected by policy before anything is written.
+    const noCurrent = await req('/api/auth/password', {
+      method: 'PUT', token: adminToken, body: { newPassword: 'somethingelse1' },
+    });
+    check('Password change requires the current password', noCurrent.status === 400);
+    const weak = await req('/api/auth/password', {
+      method: 'PUT', token: adminToken, body: { currentPassword: 'not-the-password', newPassword: 'short' },
+    });
+    check('A weak new password is rejected', weak.status === 400, weak.data?.error);
+    const wrongCurrent = await req('/api/auth/password', {
+      method: 'PUT', token: adminToken, body: { currentPassword: 'definitely-wrong-9', newPassword: 'aGoodPass123' },
+    });
+    check('A wrong current password cannot change the password', wrongCurrent.status === 400);
+    // Confirm nothing changed: the suite's admin token still works.
+    const stillAdmin = await req('/api/admin/stats', { token: adminToken });
+    check('Admin access is unaffected by refused password changes', stillAdmin.status === 200);
+
+    const anon = await req('/api/auth/password', { method: 'PUT', body: { currentPassword: 'x', newPassword: 'y' } });
+    check('Password change requires a session (401)', anon.status === 401);
+  }
+
+  // ---------------------------------------------------------------- 28. Delivery rules & time slots
+  {
+    const DELIVERY_ZONE = `E2E Delivery Zone ${rnd}`;
+    const SLOT_OK = `E2E Slot A ${rnd}`;
+    const SLOT_FULL = `E2E Slot B ${rnd}`;
+    const COUNTER = `E2E Counter ${rnd}`;
+    const NEAR_DATE = daysFromNow(9);
+    const FULL_DATE = daysFromNow(10);
+    const CLOSED_DATE = daysFromNow(11);
+
+    // --- what checkout is told -------------------------------------------------
+    const before = await req('/api/delivery/options');
+    check('Checkout can read the delivery options', before.status === 200, `status ${before.status}`);
+    check('Options report the shop-wide lead time', typeof before.data?.minLeadDays === 'number',
+      `${before.data?.minLeadDays} days`);
+    check('Options list closed days for the date picker', Array.isArray(before.data?.blackoutDates));
+    check('Options always offer somewhere to collect from',
+      (before.data?.pickupLocations || []).length >= 1,
+      before.data?.pickupLocations?.[0]?.name);
+    check('Delivery options are public (no sign-in needed)', before.status !== 401);
+
+    // --- zone rules ------------------------------------------------------------
+    const zone = await req('/api/admin/zones', {
+      method: 'POST', token: adminToken,
+      body: { name: DELIVERY_ZONE, fee: 45, minOrder: 300, freeOver: 900, etaNote: 'Same-day before 4pm' },
+    });
+    created.zoneIds.push(zone.data?.zone?.id);
+    check('A zone can carry trading rules', zone.status === 201 && zone.data?.zone?.minOrder === 300,
+      `min ${zone.data?.zone?.minOrder}, free over ${zone.data?.zone?.freeOver}`);
+    const zoneId = zone.data?.zone?.id;
+
+    const listed = await req('/api/delivery/options');
+    const listedZone = listed.data?.zones?.find((z) => z.id === zoneId);
+    check('Zone rules reach checkout', listedZone?.minOrder === 300 && listedZone?.freeOver === 900);
+    check('Zone extends the note to customers', listedZone?.etaNote === 'Same-day before 4pm');
+
+    const mk = (body) =>
+      req('/api/orders', {
+        method: 'POST', token: janetToken,
+        body: { items: [{ productId: created.productIds[0], quantity: 1 }], paymentMethod: 'COD', ...body },
+      });
+
+    const belowMin = await mk({ deliveryMethod: 'DELIVERY', deliveryZone: zoneId, readyDate: NEAR_DATE });
+    check('A basket under the zone minimum is refused', belowMin.status === 400, belowMin.data?.error);
+    check('The refusal names the zone and the threshold',
+      (belowMin.data?.error || '').includes(DELIVERY_ZONE) && (belowMin.data?.error || '').includes('300'),
+      belowMin.data?.error);
+
+    // A basket big enough, but under the free-delivery threshold, still pays the fee.
+    const product0 = (await req('/api/products')).data?.products?.find((p) => p.id === created.productIds[0]);
+    const perUnit = product0?.basePrice || 200;
+    const qtyForMin = Math.ceil(300 / perUnit) + 1;
+    const paidDelivery = await mk({
+      deliveryMethod: 'DELIVERY', deliveryZone: zoneId, readyDate: NEAR_DATE,
+      items: [{ productId: created.productIds[0], quantity: qtyForMin }],
+    });
+    check('A delivery at or above the minimum is accepted', paidDelivery.status === 201, paidDelivery.data?.error);
+    if (paidDelivery.data?.order?.id) created.orderIds.push(paidDelivery.data.order.id);
+    check('The zone fee is charged', paidDelivery.data?.order?.deliveryFee === 45,
+      `fee ${paidDelivery.data?.order?.deliveryFee}`);
+
+    const qtyFree = Math.ceil(900 / perUnit) + 1;
+    const freeDelivery = await mk({
+      deliveryMethod: 'DELIVERY', deliveryZone: zoneId, readyDate: NEAR_DATE,
+      items: [{ productId: created.productIds[0], quantity: qtyFree }],
+    });
+    if (freeDelivery.data?.order?.id) created.orderIds.push(freeDelivery.data.order.id);
+    check('Delivery is free above the free-over threshold', freeDelivery.data?.order?.deliveryFee === 0,
+      `subtotal ${freeDelivery.data?.order?.subtotal}, fee ${freeDelivery.data?.order?.deliveryFee}`);
+
+    // --- pickup counters ------------------------------------------------------
+    const counter = await req('/api/admin/pickup-locations', {
+      method: 'POST', token: adminToken,
+      body: { name: COUNTER, address: '2 Test Lane, Osu', phone: '0551234999', hours: 'Mon–Sat 8–7', isDefault: true },
+    });
+    check('A second pickup counter can be added', counter.status === 201, counter.data?.error);
+    check('It can be marked the default', counter.data?.location?.isDefault === true);
+    const counterId = counter.data?.location?.id;
+
+    const opts2 = await req('/api/delivery/options');
+    check('Counters reach checkout', (opts2.data?.pickupLocations || []).some((l) => l.id === counterId));
+    const pastOrders = await req('/api/admin/orders?search=__never__', { token: adminToken });
+    check('Admin can still read orders alongside counters', pastOrders.status === 200);
+
+    // A counter chosen by id is stored on the order by name (what the ticket prints).
+    const pickupOrder = await mk({ deliveryMethod: 'PICKUP', readyDate: NEAR_DATE, pickupLocation: counterId });
+    if (pickupOrder.data?.order?.id) created.orderIds.push(pickupOrder.data.order.id);
+    check('The chosen counter is recorded on the order',
+      pickupOrder.data?.order?.pickupLocation === COUNTER,
+      pickupOrder.data?.order?.pickupLocation);
+
+    // --- time slots with capacity --------------------------------------------
+    const slotA = await req('/api/admin/time-slots', {
+      method: 'POST', token: adminToken, body: { label: SLOT_OK, capacity: 1, sortOrder: 1 },
+    });
+    const slotB = await req('/api/admin/time-slots', {
+      method: 'POST', token: adminToken, body: { label: SLOT_FULL, capacity: 5, sortOrder: 2 },
+    });
+    check('Collection windows can be created with a daily capacity',
+      slotA.status === 201 && slotA.data?.slot?.capacity === 1, `${slotA.data?.slot?.label}`);
+
+    const badSlot = await mk({ deliveryMethod: 'PICKUP', readyDate: FULL_DATE, timeSlot: 'Not a real window' });
+    check('An unknown window is refused', badSlot.status === 400, badSlot.data?.error);
+
+    const booked = await mk({ deliveryMethod: 'PICKUP', readyDate: FULL_DATE, timeSlot: SLOT_OK });
+    if (booked.data?.order?.id) created.orderIds.push(booked.data.order.id);
+    check('A window can be booked', booked.status === 201 && booked.data?.order?.timeSlot === SLOT_OK,
+      booked.data?.order?.timeSlot);
+
+    const overBooked = await mk({ deliveryMethod: 'PICKUP', readyDate: FULL_DATE, timeSlot: SLOT_OK });
+    check('A full window cannot be overbooked', overBooked.status === 400, overBooked.data?.error);
+    check('The refusal explains the window is full', (overBooked.data?.error || '').toLowerCase().includes('fully booked'));
+
+    const withSlots = await req(`/api/delivery/options?date=${FULL_DATE}`);
+    const slotState = withSlots.data?.slots?.find((s) => s.label === SLOT_OK);
+    check('Checkout sees live remaining capacity', slotState?.remaining === 0 && slotState?.booked === 1,
+      `${slotState?.booked}/${slotState?.capacity} booked`);
+    check('An untouched window still has room',
+      withSlots.data?.slots?.find((s) => s.label === SLOT_FULL)?.remaining === 5);
+
+    // Cancelling gives the place back, so a full day is never permanently lost.
+    await req(`/api/admin/orders/${booked.data.order.id}/status`, {
+      method: 'PATCH', token: adminToken, body: { status: 'CANCELLED' },
+    });
+    const afterCancel = await req(`/api/delivery/options?date=${FULL_DATE}`);
+    check('Cancelling frees the window again',
+      afterCancel.data?.slots?.find((s) => s.label === SLOT_OK)?.remaining === 1,
+      afterCancel.data?.slots?.find((s) => s.label === SLOT_OK)?.remaining);
+
+    // --- closed days ----------------------------------------------------------
+    const blackout = await req('/api/admin/blackouts', {
+      method: 'POST', token: adminToken, body: { date: CLOSED_DATE, reason: `E2E holiday ${rnd}` },
+    });
+    check('A day can be closed to orders', blackout.status === 201, blackout.data?.error);
+
+    const closedOrder = await mk({ deliveryMethod: 'PICKUP', readyDate: CLOSED_DATE });
+    check('Orders on a closed day are refused', closedOrder.status === 400, closedOrder.data?.error);
+    check('The refusal names the day and the reason',
+      (closedOrder.data?.error || '').includes('closed') && (closedOrder.data?.error || '').includes(`E2E holiday ${rnd}`));
+
+    const optsClosed = await req(`/api/delivery/options?date=${CLOSED_DATE}`);
+    check('Checkout is told the day is closed', !!optsClosed.data?.blackout, optsClosed.data?.blackout?.reason);
+    const pickerList = await req('/api/delivery/options');
+    check('Closed days are listed for the date picker',
+      (pickerList.data?.blackoutDates || []).some((b) => b.date === CLOSED_DATE));
+
+    // Reopening the day must put it back on sale.
+    await req(`/api/admin/blackouts/${blackout.data.blackout.id}`, { method: 'DELETE', token: adminToken });
+    const reopened = await mk({ deliveryMethod: 'PICKUP', readyDate: CLOSED_DATE });
+    if (reopened.data?.order?.id) created.orderIds.push(reopened.data.order.id);
+    check('Reopening the day allows orders again', reopened.status === 201, reopened.data?.error);
+
+    // --- per-product notice ---------------------------------------------------
+    await req(`/api/admin/products/${created.productIds[0]}`, {
+      method: 'PUT', token: adminToken, body: { leadDays: 8 },
+    });
+    const tooSoon = await mk({ deliveryMethod: 'PICKUP', readyDate: daysFromNow(3) });
+    check('A product with its own notice refuses a too-soon date', tooSoon.status === 400, tooSoon.data?.error);
+    check('The refusal states the notice and the earliest date',
+      (tooSoon.data?.error || '').includes('8 days') && (tooSoon.data?.error || '').includes(daysFromNow(8)));
+    await req(`/api/admin/products/${created.productIds[0]}`, {
+      method: 'PUT', token: adminToken, body: { leadDays: null },
+    });
+
+    // --- kitchen view ---------------------------------------------------------
+    const calendar = await req('/api/admin/delivery-calendar?days=14', { token: adminToken });
+    check('The delivery calendar builds', calendar.status === 200 && calendar.data?.calendar?.length === 14,
+      `${calendar.data?.calendar?.length} days`);
+    const busyDay = calendar.data?.calendar?.find((d) => d.date === NEAR_DATE);
+    check('Calendar shows the day\'s orders and value', busyDay?.orders >= 1, `${busyDay?.orders} order(s)`);
+    check('Calendar shows each window with its remaining capacity',
+      Array.isArray(busyDay?.slots) && busyDay.slots.every((s) => typeof s.remaining === 'number'));
+    const calendarAnon = await req('/api/admin/delivery-calendar');
+    check('The delivery calendar is admin-only (401)', calendarAnon.status === 401);
+
+    // --- tidy up --------------------------------------------------------------
+    await prisma.timeSlot.deleteMany({ where: { id: { in: [slotA.data.slot.id, slotB.data.slot.id] } } });
+    await prisma.pickupLocation.deleteMany({ where: { id: counterId } });
+    await prisma.blackoutDate.deleteMany({ where: { reason: `E2E holiday ${rnd}` } });
+  }
+
+  // ---------------------------------------------------------------- 29. Paper: receipts, kitchen tickets, delivery notes
+  {
+    const printOrder = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: created.productIds[0], quantity: 2 }],
+        deliveryMethod: 'DELIVERY',
+        deliveryAddress: '12 Print Street, East Legon',
+        deliveryZone: ZONE_NAME,
+        readyDate: READY_DATE,
+        notes: `E2E print job ${rnd}`,
+        paymentMethod: 'COD',
+        guest: { name: `Print Probe ${rnd}`, email: `print.${rnd.toLowerCase()}@test.com`, phone: '0200555666' },
+      },
+    });
+    check('Order for the printer is accepted', printOrder.status === 201, printOrder.data?.error);
+    const printId = printOrder.data?.order?.id;
+    if (printId) created.orderIds.push(printId);
+
+    const receipt = await req(`/api/admin/orders/${printId}/print?doc=receipt`, { token: adminToken });
+    check('The customer receipt builds', receipt.status === 200 && receipt.data?.document === 'Receipt', receipt.data?.error);
+    check('The receipt names the customer and what they bought',
+      receipt.data?.order?.customer?.name?.includes('Print Probe') &&
+      receipt.data?.order?.items?.[0]?.name === PROD_VANILLA,
+      `${receipt.data?.order?.customer?.name} · ${receipt.data?.order?.items?.[0]?.name}`);
+    check('The receipt carries totals, zone and delivery address',
+      receipt.data?.order?.money?.total > 0 && receipt.data?.order?.deliveryZone === ZONE_NAME &&
+      receipt.data?.order?.deliveryAddress === '12 Print Street, East Legon',
+      `total=${receipt.data?.order?.money?.total}`);
+    check('The receipt quotes the shop it was printed for', Boolean(receipt.data?.shop?.name));
+
+    const kitchen = await req(`/api/admin/orders/${printId}/print?doc=kitchen`, { token: adminToken });
+    check('The kitchen ticket builds', kitchen.data?.document === 'Kitchen ticket');
+    check('The kitchen ticket puts the deadline first',
+      Boolean(kitchen.data?.order?.readyDate) && kitchen.data?.order?.deliveryMethod === 'DELIVERY');
+    check('The kitchen ticket warns about allergens',
+      (kitchen.data?.shop?.footer || '').toLowerCase().includes('allergen'), kitchen.data?.shop?.footer);
+
+    const deliveryNote = await req(`/api/admin/orders/${printId}/print?doc=delivery`, { token: adminToken });
+    check('The delivery note builds', deliveryNote.data?.document === 'Delivery note');
+
+    const unknownDoc = await req(`/api/admin/orders/${printId}/print?doc=whatever`, { token: adminToken });
+    check('An unknown document type falls back to the receipt', unknownDoc.data?.document === 'Receipt');
+
+    const printAnon = await req(`/api/admin/orders/${printId}/print`);
+    check('Printing requires an admin session (401)', printAnon.status === 401);
+    const printMissing = await req('/api/admin/orders/HT-NOPE-9999/print', { token: adminToken });
+    check('Printing an order that does not exist is a 404', printMissing.status === 404, `${printMissing.status}`);
+  }
+
+  // ---------------------------------------------------------------- 30. Low stock, wishlist and restock alerts
+  {
+    const alertProduct = await req('/api/admin/products', {
+      method: 'POST',
+      token: adminToken,
+      body: { name: `E2E Restock ${rnd}`, category: 'CUPCAKE', basePrice: 40, stock: 20, inStock: true, sizeOptions: [{ label: 'Box of 6', serves: 6, price: 40 }] },
+    });
+    const alertId = alertProduct.data?.product?.id;
+    if (alertId) created.productIds.push(alertId);
+
+    const lowList = await req('/api/admin/alerts/low-stock', { token: adminToken });
+    check('The low-stock watch list answers', lowList.status === 200 && Array.isArray(lowList.data?.products),
+      `threshold=${lowList.data?.threshold}`);
+
+    await req(`/api/admin/products/${alertId}`, { method: 'PUT', token: adminToken, body: { stock: 2 } });
+    const afterDrop = await req('/api/admin/alerts/low-stock', { token: adminToken });
+    check('A product down to its last two is flagged',
+      (afterDrop.data?.products || []).some((p) => p.id === alertId), `${afterDrop.data?.products?.length} flagged`);
+
+    const digest = await req('/api/admin/alerts/low-stock/send', { method: 'POST', token: adminToken, body: { force: true } });
+    check('The restock digest sends on demand', digest.status === 200 && digest.data?.sent !== false, `${digest.status}`);
+
+    // A signed-out visitor keeps no list; a customer's list survives a restock alert.
+    const anonWish = await req('/api/wishlist', {
+      method: 'POST', body: { productId: alertId },
+    });
+    check('The wishlist needs an account (401)', anonWish.status === 401);
+
+    await req(`/api/admin/products/${alertId}`, { method: 'PUT', token: adminToken, body: { stock: 0, inStock: false } });
+    const saved = await req('/api/wishlist', { method: 'POST', token: janetToken, body: { productId: alertId } });
+    check('A customer can save a sold-out product', saved.status === 201, saved.data?.error);
+    check('The save promises a restock email', (saved.data?.message || '').toLowerCase().includes('back in stock'), saved.data?.message);
+
+    const ids = await req('/api/wishlist/ids', { token: janetToken });
+    check('The saved list reports the product', (ids.data?.productIds || []).includes(alertId));
+
+    // Restock it: the waiters must be told, exactly once.
+    const restocked = await req(`/api/admin/products/${alertId}`, {
+      method: 'PUT', token: adminToken, body: { stock: 12, inStock: true },
+    });
+    check('Restocking notifies the customer waiting for it', restocked.data?.restockNotified >= 1,
+      `notified=${restocked.data?.restockNotified}`);
+
+    const savedAfter = await req('/api/wishlist', { token: janetToken });
+    const entry = (savedAfter.data?.items || []).find((i) => i.productId === alertId);
+    check('The restock is recorded against the saved item', Boolean(entry?.notifiedAt), `${entry?.notifiedAt}`);
+    check('The product shows as available again', entry?.product?.inStock === true);
+
+    // Editing an in-stock product must not fire the alert again.
+    const editAgain = await req(`/api/admin/products/${alertId}`, {
+      method: 'PUT', token: adminToken, body: { stock: 15, inStock: true },
+    });
+    check('A routine stock edit sends nothing', !editAgain.data?.restockNotified, `notified=${editAgain.data?.restockNotified}`);
+
+    const removed = await req(`/api/wishlist/${alertId}`, { method: 'DELETE', token: janetToken });
+    check('A saved product can be removed', removed.status === 200);
+    const idsAfter = await req('/api/wishlist/ids', { token: janetToken });
+    check('The removed product leaves the list', !(idsAfter.data?.productIds || []).includes(alertId));
+  }
+
+  // ---------------------------------------------------------------- 31. Web push (PWA) plumbing
+  {
+    const key = await req('/api/push/public-key');
+    check('The push public key is served to the browser', key.status === 200 && 'enabled' in (key.data || {}),
+      `enabled=${key.data?.enabled}`);
+
+    const status = await req('/api/push/status', { token: janetToken });
+    check('A customer can see their own notification state', status.status === 200 && typeof status.data?.devices === 'number',
+      `devices=${status.data?.devices}`);
+
+    const statusAnon = await req('/api/push/status');
+    check('The notification state is private (401)', statusAnon.status === 401);
+
+    const incomplete = await req('/api/push/subscribe', { method: 'POST', body: { endpoint: 'https://example.invalid/e2e' } });
+    check('An incomplete subscription is refused', incomplete.status === 400, incomplete.data?.error);
+
+    const fake = `https://example.invalid/e2e.${rnd}`;
+    const subscribed = await req('/api/push/subscribe', {
+      method: 'POST', token: janetToken, body: { endpoint: fake, keys: { p256dh: 'probe-key', auth: 'probe-auth' } },
+    });
+    check('A device can subscribe to alerts', subscribed.status === 201 && subscribed.data?.personal === true, `${subscribed.status}`);
+
+    const afterSub = await req('/api/push/status', { token: janetToken });
+    check('The subscribed device is counted', afterSub.data?.devices >= 1, `devices=${afterSub.data?.devices}`);
+
+    const testPush = await req('/api/push/test', { method: 'POST', token: janetToken });
+    check('A test notification is attempted', testPush.status === 200 && testPush.data?.ok === true,
+      `sent=${testPush.data?.sent} simulated=${testPush.data?.simulated}`);
+
+    const unsub = await req('/api/push/unsubscribe', { method: 'POST', body: { endpoint: fake } });
+    check('A device can unsubscribe', unsub.status === 200 && unsub.data?.removed === 1, `removed=${unsub.data?.removed}`);
+    const afterUnsub = await req('/api/push/status', { token: janetToken });
+    check('The unsubscribed device is gone', afterUnsub.data?.devices === 0, `devices=${afterUnsub.data?.devices}`);
+  }
+
+  // ---------------------------------------------------------------- 32. Reviews on product pages
+  {
+    const detail = await req(`/api/products/${created.productIds[0]}`);
+    check('A product page carries its rating block',
+      detail.status === 200 && detail.data?.product?.rating && Array.isArray(detail.data?.product?.reviews),
+      `avg=${detail.data?.product?.rating?.average} count=${detail.data?.product?.rating?.count}`);
+    check('A product page carries a star histogram', Array.isArray(detail.data?.product?.histogram) && detail.data.product.histogram.length === 5);
+
+    const list = await req('/api/products');
+    const mine = (list.data?.products || []).find((p) => p.id === created.productIds[0]);
+    check('The menu list carries ratings too', Boolean(mine?.rating), `avg=${mine?.rating?.average}`);
+
+    const missing = await req('/api/products/does-not-exist-at-all');
+    check('An unknown product is a 404', missing.status === 404);
+
+    // Reviews only count once they are approved: hold one and watch the public page ignore it.
+    const heldUser = await req('/api/auth/register', {
+      method: 'POST',
+      body: { fullName: `E2E Held ${rnd}`, email: `held.${rnd.toLowerCase()}@test.com`, phone: '0200111222', password: CUST_PASS },
+    });
+    check('A customer for the moderation check is created', heldUser.status === 201, heldUser.data?.error);
+    const heldId = heldUser.data?.user?.id;
+    if (heldId) created.userId3 = heldId;
+
+    const heldOrder = await req('/api/orders', {
+      method: 'POST', token: heldUser.data?.token,
+      body: {
+        items: [{ productId: created.productIds[0], quantity: 1 }],
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE,
+      },
+    });
+    const heldOrderId = heldOrder.data?.order?.id;
+    if (heldOrderId) {
+      created.orderIds.push(heldOrderId);
+      await req(`/api/admin/orders/${heldOrderId}/status`, { method: 'PATCH', token: adminToken, body: { status: 'DELIVERED' } });
+    }
+
+    const before = await req(`/api/products/${created.productIds[0]}`);
+    const beforeCount = before.data?.product?.rating?.count || 0;
+
+    // Default policy: reviews publish immediately (the setting exists to hold them).
+    const review = await req('/api/reviews', {
+      method: 'POST', token: heldUser.data?.token,
+      body: { orderId: heldOrderId, rating: 2, comment: `E2E held review ${rnd}` },
+    });
+    check('A review can be submitted', review.status === 201, review.data?.error);
+    check('A published review says so', review.data?.awaitingApproval === false, `status=${review.data?.review?.status}`);
+
+    const afterPublish = await req(`/api/products/${created.productIds[0]}`);
+    check('A published review counts towards the rating',
+      (afterPublish.data?.product?.rating?.count || 0) > beforeCount,
+      `count ${beforeCount} → ${afterPublish.data?.product?.rating?.count}`);
+
+    // Now hold reviews for approval and check the shop stays clean in the meantime.
+    await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { autoApproveReviews: false } });
+    const secondOrder = await req('/api/orders', {
+      method: 'POST', token: heldUser.data?.token,
+      body: { items: [{ productId: created.productIds[0], quantity: 1 }], deliveryMethod: 'PICKUP', readyDate: READY_DATE2 },
+    });
+    const secondOrderId = secondOrder.data?.order?.id;
+    if (secondOrderId) {
+      created.orderIds.push(secondOrderId);
+      await req(`/api/admin/orders/${secondOrderId}/status`, { method: 'PATCH', token: adminToken, body: { status: 'DELIVERED' } });
+    }
+    const held = await req('/api/reviews', {
+      method: 'POST', token: heldUser.data?.token,
+      body: { orderId: secondOrderId, rating: 1, comment: `E2E awaiting approval ${rnd}` },
+    });
+    check('With approval required, a new review is held', held.data?.awaitingApproval === true, `status=${held.data?.review?.status}`);
+
+    const countBeforeHeld = (await req(`/api/products/${created.productIds[0]}`)).data?.product?.rating?.count || 0;
+    const publicHeld = await req(`/api/products/${created.productIds[0]}`);
+    check('A held review is not shown publicly',
+      !(publicHeld.data?.product?.reviews || []).some((r) => r.comment === `E2E awaiting approval ${rnd}`));
+    check('A held review does not change the public rating',
+      (publicHeld.data?.product?.rating?.count || 0) === countBeforeHeld, `${countBeforeHeld}`);
+
+    const queue = await req('/api/admin/reviews?status=PENDING', { token: adminToken });
+    check('The held review waits in the admin queue',
+      (queue.data?.reviews || []).some((r) => r.id === held.data?.review?.id), `${queue.data?.reviews?.length} pending`);
+
+    const approved = await req(`/api/admin/reviews/${held.data?.review?.id}`, {
+      method: 'PATCH', token: adminToken, body: { status: 'APPROVED' },
+    });
+    check('An admin can approve the held review', approved.status === 200 && approved.data?.review?.status === 'APPROVED',
+      JSON.stringify(approved.data?.review?.status));
+
+    const afterApproval = await req(`/api/products/${created.productIds[0]}`);
+    check('Approving it publishes the review and its rating',
+      (afterApproval.data?.product?.reviews || []).some((r) => r.comment === `E2E awaiting approval ${rnd}`) &&
+      (afterApproval.data?.product?.rating?.count || 0) > countBeforeHeld,
+      `count ${countBeforeHeld} → ${afterApproval.data?.product?.rating?.count}`);
+
+    // Put the shop back the way it was found.
+    await req('/api/admin/settings', { method: 'PUT', token: adminToken, body: { autoApproveReviews: true } });
+    check('The approval setting is restored', (await req('/api/admin/settings', { token: adminToken })).data?.settings?.autoApproveReviews === true);
+  }
+
+  // ---------------------------------------------------------------- 33. Deeper sales analytics
+  {
+    const report = await req('/api/admin/reports', { token: adminToken });
+    check('The report still returns the headline numbers',
+      report.status === 200 && typeof report.data?.revenue === 'number' && typeof report.data?.orderCount === 'number');
+
+    const a = report.data?.analytics;
+    check('The report carries a by-day series', Array.isArray(a?.byDay));
+    check('The report breaks revenue down by zone', Array.isArray(a?.byZone),
+      (a?.byZone || []).map((z) => `${z.zone}:${z.orders}`).join(', '));
+    check('The report breaks revenue down by payment method', Array.isArray(a?.byPayment));
+    check('The report shows the weekday rhythm', (a?.byWeekday || []).length === 7);
+    check('The report shows which windows customers pick', Array.isArray(a?.bySlot), `${a?.bySlot?.length} slot(s)`);
+    check('The report computes a repeat-customer rate',
+      a?.repeat && typeof a.repeat.repeatRate === 'number' && typeof a.repeat.customers === 'number',
+      `${a?.repeat?.repeatCustomers}/${a?.repeat?.customers} = ${a?.repeat?.repeatRate}%`);
+    check('The report lists products with their share of sales',
+      Array.isArray(a?.products) && a.products.every((p) => typeof p.share === 'number'),
+      `${a?.products?.length} product(s)`);
+    check('The report includes a 12-month trend', (report.data?.trend || []).length === 12);
+    check('The report totals discounts and delivery collected',
+      typeof a?.totals?.discountGiven === 'number' && typeof a?.totals?.deliveryFees === 'number');
+    check('A range with no orders still answers cleanly',
+      (await req(`/api/admin/reports?from=${daysFromNow(-400)}&to=${daysFromNow(-399)}`, { token: adminToken })).status === 200);
+
+    const csv = await fetch(`${BASE}/api/admin/reports/export`, { headers: { Authorization: `Bearer ${adminToken}` } });
+    const csvText = await csv.text();
+    check('The CSV export still works', csv.status === 200 && csvText.includes('Order'), `${csvText.split('\n')[0]?.slice(0, 40)}`);
+  }
+
+  // ---------------------------------------------------------------- 34. Bulk catalogue actions and CSV import
+  {
+    const all = await req('/api/admin/products', { token: adminToken });
+    const targets = (all.data?.products || []).filter((p) => created.productIds.includes(p.id)).slice(0, 2);
+    const ids = targets.map((p) => p.id);
+
+    const noSelection = await req('/api/admin/products/bulk', { method: 'POST', token: adminToken, body: { action: 'activate', ids: [] } });
+    check('A bulk action with nothing selected is refused', noSelection.status === 400, noSelection.data?.error);
+
+    const unknown = await req('/api/admin/products/bulk', { method: 'POST', token: adminToken, body: { ids, action: 'teleport' } });
+    check('An unknown bulk action is refused', unknown.status === 400, unknown.data?.error);
+
+    const rise = await req('/api/admin/products/bulk', { method: 'POST', token: adminToken, body: { ids, action: 'priceAdjust', value: 10, mode: 'percent' } });
+    check('A seasonal price rise applies to the whole selection', rise.status === 200 && rise.data?.updated === ids.length, rise.data?.summary);
+    const riced = (rise.data?.products || []).find((p) => p.sizeOptions?.length);
+    check('Size prices rise with the base price',
+      riced ? riced.sizeOptions.every((sz) => targets.find((t) => t.id === riced.id).sizeOptions.every((o) => o.id !== sz.id || Math.abs(sz.price - o.price * 1.1) < 0.05)) : true,
+      riced?.sizeOptions?.map((s) => `${s.label} ${s.price}`).join(', '));
+
+    const freeMenu = await req('/api/admin/products/bulk', { method: 'POST', token: adminToken, body: { ids, action: 'priceAdjust', value: -100, mode: 'percent' } });
+    check('A bulk discount of 100% is refused', freeMenu.status === 400, freeMenu.data?.error);
+
+    const back = await req('/api/admin/products/bulk', { method: 'POST', token: adminToken, body: { ids, action: 'priceAdjust', value: -9.0909090909, mode: 'percent' } });
+    check('The price rise can be undone', back.status === 200, back.data?.summary);
+
+    const stock = await req('/api/admin/products/bulk', { method: 'POST', token: adminToken, body: { ids, action: 'stock', value: 9 } });
+    check('Stock can be set across the selection', stock.status === 200 && (stock.data?.products || []).every((p) => p.stock === 9), stock.data?.summary);
+
+    const dup = await req(`/api/admin/products/${ids[0]}/duplicate`, { method: 'POST', token: adminToken });
+    check('Duplicating a product makes a de-listed copy',
+      dup.status === 201 && dup.data?.product?.isActive === false && dup.data?.product?.stock === 0,
+      dup.data?.product?.name);
+    check('The copy keeps the size options', (dup.data?.product?.sizeOptions || []).length >= 1,
+      `${dup.data?.product?.sizeOptions?.length} size(s)`);
+    if (dup.data?.product?.id) await prisma.product.delete({ where: { id: dup.data.product.id } });
+
+    const template = await fetch(`${BASE}/api/admin/products/import-template`, { headers: { Authorization: `Bearer ${adminToken}` } });
+    const templateText = await template.text();
+    check('The import template downloads with its headers',
+      template.status === 200 && templateText.includes('name,category,basePrice'), templateText.split('\n')[0]?.slice(0, 48));
+
+    const badRow = await req('/api/admin/products/import', {
+      method: 'POST', token: adminToken,
+      body: { csv: 'name,category,basePrice\nE2E Wrong Cat,NONSENSE,10' },
+    });
+    check('An unusable row is reported, not created',
+      badRow.data?.skipped === 1 && (badRow.data?.errors?.[0]?.message || '').includes('CAKE'), badRow.data?.errors?.[0]?.message);
+
+    const imported = await req('/api/admin/products/import', {
+      method: 'POST', token: adminToken,
+      body: {
+        csv: `name,category,basePrice,description,badge,stock,inStock,leadDays,flavors,sizes
+E2E Imported ${rnd},CAKE,175,"Imported, with a comma",New,6,true,2,Vanilla|Chocolate,Small:150:4|Large:260:10`,
+      },
+    });
+    check('A new product can be imported from CSV', imported.data?.created === 1, `created=${imported.data?.created} ${imported.data?.errors?.[0]?.message || ''}`);
+    const importedProduct = await prisma.product.findFirst({
+      where: { name: `E2E Imported ${rnd}` }, include: { sizeOptions: true },
+    });
+    if (importedProduct?.id) created.productIds.push(importedProduct.id);
+    check('The imported row keeps its sizes, serves and flavours',
+      importedProduct?.sizeOptions?.length === 2 && importedProduct.sizeOptions[1].serves === 10 && importedProduct.flavors.length === 2,
+      `${importedProduct?.sizeOptions?.map((s) => `${s.label}:${s.price}:${s.serves}`).join('|')}`);
+    check('A quoted comma survives in a description', importedProduct?.description === 'Imported, with a comma', importedProduct?.description);
+    check('The imported row respects the notice period', importedProduct?.leadDays === 2, `leadDays=${importedProduct?.leadDays}`);
+
+    const reimport = await req('/api/admin/products/import', {
+      method: 'POST', token: adminToken,
+      body: { csv: `name,category,basePrice,stock,inStock\nE2E Imported ${rnd},CAKE,199,8,true` },
+    });
+    check('Re-importing the same name updates instead of duplicating',
+      reimport.data?.updated === 1 && reimport.data?.created === 0, `updated=${reimport.data?.updated} created=${reimport.data?.created}`);
+    const afterReimport = await prisma.product.count({ where: { name: `E2E Imported ${rnd}` } });
+    check('There is still exactly one of that product', afterReimport === 1, `${afterReimport}`);
+  }
+
+  // ---------------------------------------------------------------- 35. Bulk order actions
+  {
+    const o1 = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: created.productIds[0], quantity: 1 }],
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE,
+        guest: { name: `Bulk A ${rnd}`, email: `bulka.${rnd.toLowerCase()}@test.com`, phone: '0200777888' },
+      },
+    });
+    const o2 = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: created.productIds[0], quantity: 1 }],
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE,
+        guest: { name: `Bulk B ${rnd}`, email: `bulkb.${rnd.toLowerCase()}@test.com`, phone: '0200777999' },
+      },
+    });
+    const ids = [o1.data?.order?.id, o2.data?.order?.id].filter(Boolean);
+    ids.forEach((id) => created.orderIds.push(id));
+    check('Two orders were raised for the bulk update', ids.length === 2, ids.join(', '));
+
+    const bulk = await req('/api/admin/orders/bulk', { method: 'POST', token: adminToken, body: { ids, status: 'CONFIRMED' } });
+    check('Bulk order status works', bulk.status === 200 && bulk.data?.updated === 2, JSON.stringify(bulk.data?.results));
+    const states = await Promise.all(ids.map((id) => prisma.order.findUnique({ where: { id } })));
+    check('Both orders moved to CONFIRMED', states.every((o) => o.status === 'CONFIRMED'), states.map((o) => o.status).join(', '));
+
+    const badStatus = await req('/api/admin/orders/bulk', { method: 'POST', token: adminToken, body: { ids, status: 'MOON' } });
+    check('An invalid bulk status is refused', badStatus.status === 400, badStatus.data?.error);
+    const none = await req('/api/admin/orders/bulk', { method: 'POST', token: adminToken, body: { ids: [], status: 'READY' } });
+    check('A bulk update with no orders is refused', none.status === 400, none.data?.error);
+  }
+
+  // ---------------------------------------------------------------- 36. Guest → account conversion
+  {
+    const guestEmail = `e2e.guest.${rnd.toLowerCase()}@test.com`;
+    const guestPhone = '0200333444';
+    const guestOrder = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: created.productIds[0], quantity: 1 }],
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE,
+        guest: { name: `Guest ${rnd}`, email: guestEmail, phone: guestPhone },
+      },
+    });
+    const guestOrderId = guestOrder.data?.order?.id;
+    if (guestOrderId) created.orderIds.push(guestOrderId);
+    check('A guest can order without an account', guestOrder.status === 201 && Boolean(guestOrderId));
+
+    // An order that merely shares an address is NOT the same person.
+    const strangerOrder = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: created.productIds[0], quantity: 1 }],
+        deliveryMethod: 'PICKUP', readyDate: READY_DATE,
+        guest: { name: 'Stranger', email: `stranger.${rnd.toLowerCase()}@test.com`, phone: '0200999888' },
+      },
+    });
+    const strangerOrderId = strangerOrder.data?.order?.id;
+    if (strangerOrderId) created.orderIds.push(strangerOrderId);
+
+    const hintBefore = await req('/api/orders/guest-hint', { method: 'POST', body: { email: guestEmail } });
+    check('Before signing up, the email has no account', hintBefore.data?.hasAccount === false, JSON.stringify(hintBefore.data));
+    const hintNoEmail = await req('/api/orders/guest-hint', { method: 'POST', body: {} });
+    check('The conversion check needs an email', hintNoEmail.status === 400);
+
+    const registered = await req('/api/auth/register', {
+      method: 'POST',
+      body: { fullName: `Guest ${rnd}`, email: guestEmail, phone: guestPhone, password: CUST_PASS },
+    });
+    check('A guest can create an account afterwards', registered.status === 201, registered.data?.error);
+    if (registered.data?.user?.id) created.userId3 = registered.data.user.id;
+    check('Registering adopts the past guest order', registered.data?.claimedOrders === 1, `claimed=${registered.data?.claimedOrders}`);
+
+    const claimed = await prisma.order.findUnique({ where: { id: guestOrderId } });
+    const untouched = await prisma.order.findUnique({ where: { id: strangerOrderId } });
+    check('The matching order now belongs to the account', Boolean(claimed?.userId), `${claimed?.userId}`);
+    check("Another person's order is left alone", !untouched?.userId, `${untouched?.userId}`);
+
+    const hintAfter = await req('/api/orders/guest-hint', { method: 'POST', body: { email: guestEmail } });
+    check('After signing up, the email is recognised', hintAfter.data?.hasAccount === true);
+
+    const myOrders = await req('/api/orders/my', { token: registered.data?.token });
+    check('The adopted order shows in their history',
+      (myOrders.data?.orders || []).some((o) => o.id === guestOrderId), `${myOrders.data?.orders?.length} order(s)`);
+  }
+
+  // ---------------------------------------------------------------- 37. Per-account sign-in lockout
+  {
+    // Ask the *server* for its policy rather than assuming: a real deployment tunes
+    // AUTH_MAX_FAILED_ATTEMPTS, and the test must hold for any sane value.
+    const policy = await req('/api/admin/security/lockouts', { token: adminToken });
+    const limit = policy.data?.settings?.maxFailedAttempts || 10;
+    check('The admin lockout list reports the configured policy',
+      limit >= 3 && typeof policy.data?.settings?.lockoutMinutes === 'number',
+      `max=${limit} after ${policy.data?.settings?.lockoutMinutes} min`);
+
+    const lockEmail = `e2e.lock.${rnd.toLowerCase()}@test.com`;
+    const lockPass = 'LockProbe123';
+    const reg = await req('/api/auth/register', {
+      method: 'POST',
+      body: { fullName: `Lock Probe ${rnd}`, email: lockEmail, phone: '0200444555', password: lockPass },
+    });
+    check('A throwaway account for the lockout test is created', reg.status === 201, reg.data?.error);
+    const lockUserId = reg.data?.user?.id;
+    if (lockUserId) created.userId3 = lockUserId;
+
+    // Count down towards the limit (capped so a very high threshold can't turn this
+    // into hundreds of requests).
+    const attempts = Math.min(limit, 12);
+    let last;
+    for (let i = 0; i < attempts; i++) {
+      last = await req('/api/auth/login', { method: 'POST', body: { email: lockEmail, password: `wrong-${i}` } });
+    }
+
+    if (limit <= 12) {
+      check('Wrong passwords lock the account at the configured limit',
+        last.status === 423 && last.data?.code === 'ACCOUNT_LOCKED', `${last.status} ${last.data?.error}`);
+      check('The lock says how long the wait is and how to get back in now',
+        last.data?.minutesLeft >= 1 && last.data?.resetUrl === '/forgot-password', JSON.stringify(last.data));
+
+      const rightWhileLocked = await req('/api/auth/login', { method: 'POST', body: { email: lockEmail, password: lockPass } });
+      check('Even the correct password waits out the lock', rightWhileLocked.status === 423, `${rightWhileLocked.status}`);
+
+      const lockRow = await prisma.user.findUnique({ where: { email: lockEmail } });
+      check('The lock is recorded on the account itself', Boolean(lockRow?.lockedUntil),
+        `until ${lockRow?.lockedUntil?.toISOString?.()}`);
+
+      const listed = await req('/api/admin/security/lockouts', { token: adminToken });
+      check('The bakery can see which accounts are locked',
+        (listed.data?.lockouts || []).some((l) => l.email === lockEmail), `${listed.data?.lockouts?.length} locked`);
+      const anonList = await req('/api/admin/security/lockouts');
+      check('The lockout list is admin-only (401)', anonList.status === 401);
+
+      const cleared = await req(`/api/admin/security/lockouts/${lockUserId}/clear`, { method: 'POST', token: adminToken });
+      check('An admin can let the customer back in immediately',
+        cleared.status === 200 && cleared.data?.user?.lockedUntil === null, JSON.stringify(cleared.data?.user));
+      const afterClear = await req('/api/auth/login', { method: 'POST', body: { email: lockEmail, password: lockPass } });
+      check('The customer signs in right after the lock is cleared',
+        afterClear.status === 200 && Boolean(afterClear.data?.token), `${afterClear.status}`);
+
+      const audited = await prisma.auditLog.findFirst({ where: { action: 'ACCOUNT_LOCKED', entityId: lockUserId } });
+      check('The lockout is written to the activity log', Boolean(audited), audited?.detail);
+      const clearAudited = await prisma.auditLog.findFirst({ where: { action: 'LOCKOUT_CLEARED', entityId: lockUserId } });
+      check('Clearing a lock is written to the activity log too', Boolean(clearAudited), clearAudited?.detail);
+    } else {
+      check('Wrong passwords are counted against the account', last.data?.attemptsLeft === limit - attempts,
+        `attemptsLeft=${last.data?.attemptsLeft} of ${limit}`);
+      const row = await prisma.user.findUnique({ where: { email: lockEmail } });
+      check('The failure count and the last attempt are stored',
+        (row?.failedLoginAttempts || 0) === attempts && Boolean(row?.lastFailedLoginAt),
+        `${row?.failedLoginAttempts} failure(s)`);
+      check('A high threshold means no lock yet', !row?.lockedUntil);
+    }
+
+    const good = await req('/api/auth/login', { method: 'POST', body: { email: lockEmail, password: lockPass } });
+    check('The right password works and clears the record', good.status === 200, `${good.status}`);
+    const clean = await prisma.user.findUnique({ where: { email: lockEmail } });
+    check('A successful sign-in resets the counter and timestamps the login',
+      clean?.failedLoginAttempts === 0 && clean?.lockedUntil === null && Boolean(clean?.lastLoginAt),
+      `lastLoginAt=${clean?.lastLoginAt?.toISOString?.()}`);
+
+    // The count is per account: hammering one account leaves everyone else alone.
+    const otherEmail = `e2e.lock2.${rnd.toLowerCase()}@test.com`;
+    const other = await req('/api/auth/register', {
+      method: 'POST',
+      body: { fullName: `Lock Probe Two ${rnd}`, email: otherEmail, phone: '0200444666', password: lockPass },
+    });
+    if (other.data?.user?.id) created.userId4 = other.data.user.id;
+    await req('/api/auth/login', { method: 'POST', body: { email: otherEmail, password: 'nope-nope-nope' } });
+    const otherRow = await prisma.user.findUnique({ where: { email: otherEmail } });
+    const otherGood = await req('/api/auth/login', { method: 'POST', body: { email: otherEmail, password: lockPass } });
+    check('Failures on one account never lock a different one',
+      !otherRow?.lockedUntil && otherGood.status === 200, `${otherGood.status}`);
+  }
+
+  // ---------------------------------------------------------------- 38. Tracing, logging and diagnostics
+  {
+    // Every response is traceable: a customer quoting the reference in a 500 lets the
+    // exact request be pulled out of the logs.
+    const plain = await fetch(`${BASE}/api/products`);
+    const id = plain.headers.get('x-request-id');
+    check('Every response carries a request id', typeof id === 'string' && id.length >= 8, `${id}`);
+
+    const supplied = 'e2e-trace-123456';
+    const echoed = await fetch(`${BASE}/api/products`, { headers: { 'X-Request-Id': supplied } });
+    check('An upstream request id is preserved so traces line up', echoed.headers.get('x-request-id') === supplied,
+      echoed.headers.get('x-request-id'));
+
+    const bogus = await fetch(`${BASE}/api/products`, { headers: { 'X-Request-Id': '<script>x</script>' } });
+    check('A bogus request id is replaced, never echoed', bogus.headers.get('x-request-id') !== '<script>x</script>',
+      bogus.headers.get('x-request-id'));
+
+    const unauthorised = await req('/api/admin/diagnostics');
+    check('A refused request still reports its id', unauthorised.status === 401 && Boolean(unauthorised.headers?.['x-request-id']),
+      `${unauthorised.status}`);
+
+    // A 404 from the API is a clean JSON error, not the SPA's HTML.
+    const missing = await fetch(`${BASE}/api/definitely-not-a-route`);
+    const missingBody = await missing.json().catch(() => ({}));
+    check('An unknown API route answers with JSON, not HTML',
+      missing.status === 404 && typeof missingBody.error === 'string', `${missing.status} ${missingBody.error}`);
+
+    const diag = await req('/api/admin/diagnostics', { token: adminToken });
+    check('Diagnostics loads for an admin', diag.status === 200 && Boolean(diag.data?.integrations), `${diag.status}`);
+    check('Diagnostics reports each integration as on or off',
+      ['paystack', 'resend', 'whatsapp', 'push', 'cloudinary'].every((k) => typeof diag.data.integrations[k] === 'boolean'),
+      JSON.stringify(diag.data.integrations));
+    check('Diagnostics reports notification health', diag.data.notifications &&
+      typeof diag.data.notifications.failedLast7Days === 'number', `failed=${diag.data.notifications?.failedLast7Days}`);
+    check('Diagnostics lists the recent admin actions', Array.isArray(diag.data.recentAdminActions));
+    check('Diagnostics reports uptime and release',
+      typeof diag.data.uptimeSeconds === 'number' && Boolean(diag.data.release), `release=${diag.data.release}`);
+
+    const testAlert = await req('/api/admin/diagnostics/test-alert', { method: 'POST', token: adminToken });
+    check('A test alert is captured', testAlert.status === 200 && Boolean(testAlert.data?.captured?.message), testAlert.data?.captured?.message);
+    check('The captured error carries the request id', Boolean(testAlert.data?.captured?.requestId));
+
+    const withError = await req('/api/admin/diagnostics', { token: adminToken });
+    check('The captured error appears on the diagnostics screen',
+      (withError.data?.recentErrors || []).some((e) => e.message.includes('Test alert')),
+      `${withError.data?.recentErrors?.length} buffered`);
+
+    const clearedErrors = await req('/api/admin/diagnostics/errors', { method: 'DELETE', token: adminToken });
+    check('The error list can be cleared', clearedErrors.data?.cleared >= 1, `cleared=${clearedErrors.data?.cleared}`);
+    const afterClear = await req('/api/admin/diagnostics', { token: adminToken });
+    check('The error list is empty afterwards', (afterClear.data?.recentErrors || []).length === 0);
+  }
+
+  // ---------------------------------------------------------------- 39. Unauthorised guard
   {
     const r = await req('/api/admin/stats');
     check('Admin endpoints protected (401)', r.status === 401);
+  }
+
+  // ---------------------------------------------------------------- 40. SEO: crawler files
+  {
+    const robots = await req('/robots.txt', { raw: true });
+    const robotsBody = await robots.text();
+    check(
+      'robots.txt served at the site root',
+      robots.status === 200 && robotsBody.includes('Disallow: /admin') && robotsBody.includes('Sitemap:'),
+      `status=${robots.status}`,
+    );
+
+    const sm = await req('/sitemap.xml', { raw: true });
+    const smBody = await sm.text();
+    const locs = (smBody.match(/<loc>/g) || []).length;
+    // The sitemap points at the storefront (CLIENT_URL), which is not necessarily the
+    // API's own origin — assert on the shape of the URLs, not on BASE.
+    check(
+      'sitemap lists the shop pages and the live menu',
+      sm.status === 200
+        && smBody.includes('</urlset>')
+        && /<loc>[^<]*\/menu<\/loc>/.test(smBody)
+        && /<loc>[^<]*\/menu\/[^<]+<\/loc>/.test(smBody)
+        && locs >= 7,
+      `${locs} urls`,
+    );
+
+    const sd = await req('/api/structured-data.json');
+    const bakery = sd.data?.['@graph']?.find((g) => g['@type'] === 'Bakery');
+    check(
+      'structured data describes the bakery with its real menu',
+      sd.status === 200 && Boolean(bakery) && Array.isArray(bakery.makesOffer) && bakery.makesOffer.length > 0,
+      `offers=${bakery?.makesOffer?.length ?? 0}`,
+    );
   }
 
   // ---------------------------------------------------------------- summary

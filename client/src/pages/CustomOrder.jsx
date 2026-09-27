@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import { useApp } from '../store.jsx';
 import { ghs, minDate } from '../lib/format.js';
 import ProductGallery from '../components/ProductGallery.jsx';
+import Seo from '../components/Seo.jsx';
 
 const DEFAULT_FLAVORS = ['Vanilla', 'French Vanilla', 'Chocolate', 'Red Velvet', 'Lemon', 'Matcha'];
 const ICINGS = ['Buttercream', 'Fondant', 'Whipped Cream', 'Ganache', 'Naked (No Icing)'];
@@ -27,6 +28,7 @@ export default function CustomOrder() {
   const [photos, setPhotos] = useState([]); // uploaded design reference urls
   const [uploading, setUploading] = useState(false);
   const [minLead, setMinLead] = useState(2);
+  const [blackoutDates, setBlackoutDates] = useState([]);
 
   useEffect(() => {
     api.get('/products').then((d) => {
@@ -35,7 +37,22 @@ export default function CustomOrder() {
       if (preselect && d.products.find((p) => p.id === preselect)) setProductId(preselect);
     });
     api.get('/settings/public').then((d) => setMinLead(d.settings.minLeadDays || 2)).catch(() => {});
+    api.get('/delivery/options').then((d) => setBlackoutDates(d.blackoutDates || [])).catch(() => {});
   }, [params]);
+
+  // A product can need longer than the shop-wide notice (a tiered cake vs a tray of
+  // cookies), so the picker follows whichever is stricter.
+  useEffect(() => {
+    if (!productId) return;
+    api
+      .get('/delivery/options')
+      .then((d) => {
+        const p = products.find((x) => x.id === productId);
+        setMinLead(Math.max(Number(d.minLeadDays ?? 2), Number(p?.leadDays ?? 0)));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId]);
 
   const product = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
   const flavors = product?.flavors?.length ? product.flavors : DEFAULT_FLAVORS;
@@ -96,6 +113,7 @@ export default function CustomOrder() {
 
   return (
     <div className="page">
+    <Seo title="Custom Orders" description="Tell us the occasion — pick your cake, size, flavour, icing and inscription, and it will be baked to order." />
       <div className="container">
         <div className="section">
           <h2 className="section-title">Build Your Perfect Order</h2>
@@ -116,20 +134,22 @@ export default function CustomOrder() {
             <h3 className="form-heading">Configure Your Order</h3>
 
             <div className="form-group">
-              <label className="form-label">Product Type *</label>
-              <select
-                className="form-select"
-                required
-                value={productId}
-                onChange={(e) => { setProductId(e.target.value); setSize(''); }}
-              >
-                <option value="">Select a product…</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} — from {ghs(p.basePrice)}
-                  </option>
-                ))}
-              </select>
+              <label className="form-label">
+                <span className="form-label-text">Product Type *</span>
+                <select
+                  className="form-select"
+                  required
+                  value={productId}
+                  onChange={(e) => { setProductId(e.target.value); setSize(''); }}
+                >
+                  <option value="">Select a product…</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} — from {ghs(p.basePrice)}
+                    </option>
+                  ))}
+                </select>
+                </label>
             </div>
 
             {product && (
@@ -147,68 +167,92 @@ export default function CustomOrder() {
 
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Quantity</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  min="1"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  required
-                />
+                <label className="form-label">
+                  <span className="form-label-text">Quantity</span>
+                  <input
+                    type="number"
+                    className="form-input"
+                    min="1"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    required
+                  />
+                </label>
               </div>
               <div className="form-group">
-                <label className="form-label">Size *</label>
-                <select className="form-select" value={size} onChange={(e) => setSize(e.target.value)} required>
-                  <option value="">— choose size —</option>
-                  {sizeOptions.map((s) => (
-                    <option key={s.id} value={s.label}>
-                      {s.label} {s.serves > 1 ? `· serves ${s.serves}` : ''} — {ghs(s.price)}
-                    </option>
-                  ))}
+                <label className="form-label">
+                  <span className="form-label-text">Size *</span>
+                  <select className="form-select" value={size} onChange={(e) => setSize(e.target.value)} required>
+                    <option value="">— choose size —</option>
+                    {sizeOptions.map((s) => (
+                      <option key={s.id} value={s.label}>
+                        {s.label} {s.serves > 1 ? `· serves ${s.serves}` : ''} — {ghs(s.price)}
+                      </option>
+                    ))}
                 </select>
+                  </label>
               </div>
             </div>
 
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Flavour</label>
-                <select className="form-select" value={flavor} onChange={(e) => setFlavor(e.target.value)}>
-                  <option value="">— choose —</option>
-                  {flavors.map((f) => <option key={f}>{f}</option>)}
+                <label className="form-label">
+                  <span className="form-label-text">Flavour</span>
+                  <select className="form-select" value={flavor} onChange={(e) => setFlavor(e.target.value)}>
+                    <option value="">— choose —</option>
+                    {flavors.map((f) => <option key={f}>{f}</option>)}
                 </select>
+                  </label>
               </div>
               <div className="form-group">
-                <label className="form-label">Icing Type</label>
-                <select className="form-select" value={icing} onChange={(e) => setIcing(e.target.value)}>
-                  <option value="">— choose —</option>
-                  {ICINGS.map((i) => <option key={i}>{i}</option>)}
+                <label className="form-label">
+                  <span className="form-label-text">Icing Type</span>
+                  <select className="form-select" value={icing} onChange={(e) => setIcing(e.target.value)}>
+                    <option value="">— choose —</option>
+                    {ICINGS.map((i) => <option key={i}>{i}</option>)}
                 </select>
+                  </label>
               </div>
             </div>
 
             <div className="form-group">
-              <label className="form-label">Delivery / Pickup Date *</label>
-              <input
-                type="date"
-                className="form-input"
-                min={minDate(minLead)}
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-              />
-              <p className="muted small">Minimum {minLead} days advance notice required.</p>
+              <label className="form-label">
+                <span className="form-label-text">Delivery / Pickup Date *</span>
+                <input
+                  type="date"
+                  className="form-input"
+                  min={minDate(minLead)}
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  required
+                />
+              </label>
+              <p className="muted small">
+                Minimum {minLead} days advance notice required
+                {product?.leadDays ? ` for ${product.name}` : ''}.
+              </p>
+              {date && blackoutDates.some((b) => b.date === date) && (
+                <p className="checkout-warning">
+                  We're closed on {date}
+                  {blackoutDates.find((b) => b.date === date)?.reason
+                    ? ` (${blackoutDates.find((b) => b.date === date).reason})`
+                    : ''}
+                  . Please choose another day.
+                </p>
+              )}
             </div>
 
             <div className="form-group">
-              <label className="form-label">Inscription / Message (optional)</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="e.g., Happy Birthday, Kwame!"
-                value={inscription}
-                onChange={(e) => setInscription(e.target.value)}
-              />
+              <label className="form-label">
+                <span className="form-label-text">Inscription / Message (optional)</span>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g., Happy Birthday, Kwame!"
+                  value={inscription}
+                  onChange={(e) => setInscription(e.target.value)}
+                />
+              </label>
             </div>
 
             <div className="form-group">
@@ -233,13 +277,15 @@ export default function CustomOrder() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Special Notes / Allergies (optional)</label>
-              <textarea
-                className="form-textarea"
-                placeholder="Any special requests or dietary requirements…"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
+              <label className="form-label">
+                <span className="form-label-text">Special Notes / Allergies (optional)</span>
+                <textarea
+                  className="form-textarea"
+                  placeholder="Any special requests or dietary requirements…"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+              </label>
             </div>
 
             <div className="price-box">

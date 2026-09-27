@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Cake, Check, Mail, KeyRound } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
+import Seo from '../components/Seo.jsx';
 
 const PERKS = [
   'The reset link expires in 30 minutes',
@@ -33,6 +34,7 @@ export default function ForgotPassword() {
 
   return (
     <div className="auth-wrap">
+    <Seo title="Forgot Password" description="Reset your Homely Treats password." noindex />
       <div className="auth-side">
         <Link to="/" className="logo">Homely Treats</Link>
         <div className="auth-logo"><KeyRound size={44} strokeWidth={1.6} /></div>
@@ -70,16 +72,18 @@ export default function ForgotPassword() {
 
               <form onSubmit={submit}>
                 <div className="form-group">
-                  <label className="form-label">Email Address</label>
-                  <input
-                    type="email"
-                    className="form-input"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    autoComplete="email"
-                    required
-                    autoFocus
-                  />
+                  <label className="form-label">
+                    <span className="form-label-text">Email Address</span>
+                    <input
+                      type="email"
+                      className="form-input"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      autoComplete="email"
+                      required
+                      autoFocus
+                    />
+                  </label>
                 </div>
                 <button className="btn btn-primary btn-block" disabled={busy || !email}>
                   {busy ? 'Sending…' : 'Send reset link'}
