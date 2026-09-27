@@ -221,3 +221,63 @@ pg_restore --no-owner -d "postgresql://USER:PASSWORD@HOST/DATABASE?ssl=true" hom
 ```bash
 cd server && npx prisma migrate reset --force
 ```
+
+## 8. Moving the database to Neon (when Render's free Postgres expires)
+
+Render's free PostgreSQL is deleted **90 days after creation** (they email a warning
+first). Neon's free tier never expires — it gives 0.5 GB of storage, which is far more
+than this app needs (the demo database is about 1 MB), and the database simply sleeps
+when idle instead of being deleted.
+
+**Step 1 — create the Neon project**
+1. Go to [neon.tech](https://neon.tech) → sign up → **Create project**.
+2. Name it (e.g. `homely-treats`), and pick the **region closest to your Render
+   service** (if Render shows Frankfurt, choose `eu-central-1` on Neon too — same
+   region means faster queries).
+3. On the project dashboard, find the **Connection string** and copy it. It looks like:
+   `postgresql://user:password@ep-xxxx-123456.eu-central-1.aws.neon.tech/neondb?sslmode=require`
+
+> **Which string?** Neon offers a *pooled* string (host contains `-pooler`) and a
+> *direct* one. **Use the direct string** (no `-pooler`): the Render build runs
+> Prisma's migrations through this URL, and migrations are safest on a direct
+> connection. Keep the `?sslmode=require` — Neon refuses connections without it.
+
+**Step 2 — point Render at it**
+1. Render → your **web service** → **Environment**.
+2. Find `DATABASE_URL` → replace the old (expired) Render value with the Neon string.
+3. **Save Changes**, then **Manual Deploy → Deploy latest commit**.
+
+That's the whole migration: the build command already runs
+`npx prisma migrate deploy && node src/seed.js`, so the new database gets every table
+and the admin account automatically (the seed is idempotent — safe on every deploy).
+
+**Step 3 — check it, then rebuild your catalogue**
+- Visit the site → sign in with the admin account → Admin → Products → re-add your
+  products (photos too — see below).
+
+**What about the old data?** An expired Render database is *deleted*. If you took a
+backup with `scripts/backup.sh` before it expired, restore it into Neon:
+
+```bash
+DATABASE_URL="<your Neon direct connection string>" bash scripts/restore.sh backups/<file>.sql.gz --confirm
+```
+
+The backup and restore scripts keep `sslmode`, so they work against Neon as-is.
+
+**Two things worth doing the same day**
+
+- **Switch photo storage to Cloudinary** (free): Render's disk is wiped on every
+  deploy, so product photos uploaded to local disk vanish. Create a Cloudinary
+  account → copy *Cloud name*, *API Key*, *API Secret* → add
+  `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` to Render's
+  environment → photos then live in Cloudinary and survive every deploy.
+- **Take your first Neon backup**: `DATABASE_URL="<Neon string>" bash scripts/backup.sh`
+
+**Neon habits to know**
+- Free databases **sleep after ~5 idle minutes**; the first request after sleep takes
+  an extra half-second to wake. Harmless for a bakery shop. If you want it always
+  awake, a free cron at [cron-job.org](https://cron-job.org) pinging
+  `https://<your-site>/api/health` every 5 minutes does it.
+- **0.5 GB storage / 190 compute-hours a month** on the free plan — roughly a hundred
+  times what this shop needs.
+

@@ -32,8 +32,14 @@ if [[ -z "${DATABASE_URL:-}" ]]; then
 fi
 
 # Prisma appends ?schema=public to the URL; pg_dump rejects unknown query parameters.
-# Drop the query string — the dump always targets the connection's default schema.
+# Drop the query string — the dump always targets the connection's default schema —
+# but keep sslmode: hosted databases (Neon, Render) refuse connections without it.
 PGURL="${DATABASE_URL%%\?*}"
+SSLMODE="$(printf '%s' "$DATABASE_URL" | grep -oE 'sslmode=[a-z]+' | head -1 || true)"
+case "$PGURL" in
+  *localhost*|*127.0.0.1*) ;;                       # local Postgres: no SSL needed
+  *) PGURL="${PGURL}?${SSLMODE:-sslmode=require}" ;; # hosted: SSL required
+esac
 
 if ! command -v pg_dump >/dev/null 2>&1; then
   echo "❌ pg_dump not found. Install the PostgreSQL client tools:" >&2

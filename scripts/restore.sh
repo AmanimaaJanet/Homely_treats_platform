@@ -42,9 +42,19 @@ fi
 
 # Split the URL so a different database name can be substituted for the rehearsal.
 # Prisma appends ?schema=public, which psql/pg_dump reject as an unknown parameter.
+# sslmode is kept (re-attached below): hosted databases (Neon, Render) refuse
+# connections without it, local ones ignore it harmlessly... except that psql on a
+# machine without an SSL-capable local server errors on an explicit sslmode, so it is
+# only re-attached for non-local hosts.
 BASE="${DATABASE_URL%%\?*}"                 # strip ?schema=public
-# Deliberately not kept: Prisma's ?schema=public is meaningless to psql/pg_dump.
 PREFIX="${BASE%/*}"                          # postgresql://user:pass@host:5432
+# Hosted databases (Neon, Render) refuse connections without SSL; local ones do not
+# need it. The suffix is appended after the database name, where a query string lives.
+SSLMODE="$(printf '%s' "$DATABASE_URL" | grep -oE 'sslmode=[a-z]+' | head -1 || true)"
+case "$PREFIX" in
+  *localhost*|*127.0.0.1*) SSL_SUFFIX="" ;;
+  *) SSL_SUFFIX="?${SSLMODE:-sslmode=require}" ;;
+esac
 LIVE_DB="${BASE##*/}"
 
 if ! command -v psql >/dev/null 2>&1; then
@@ -52,7 +62,7 @@ if ! command -v psql >/dev/null 2>&1; then
   exit 1
 fi
 
-url_for() { echo "${PREFIX}/$1"; }
+url_for() { echo "${PREFIX}/$1${SSL_SUFFIX}"; }
 
 count_rows() {
   local url="$1"
