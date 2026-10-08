@@ -19,11 +19,11 @@ export async function recordEvent(orderId, status, note) {
   return prisma.orderEvent.create({ data: { orderId, status, note } });
 }
 
-export async function notifyCustomer(order, type, { note = '' } = {}) {
+export async function notifyCustomer(order, type, { note = '', baseUrl } = {}) {
   const phone = order.user?.phone || order.guestPhone;
   const email = order.user?.email || order.guestEmail;
   const name = order.user?.fullName || order.guestName || 'Customer';
-  const trackUrl = `${config.clientUrl}/track?ref=${order.id}`;
+  const trackUrl = `${baseUrl || config.clientUrl}/track?ref=${order.id}`;
 
   const messages = {
     ORDER_CONFIRMED: {
@@ -117,7 +117,7 @@ export async function notifyCustomer(order, type, { note = '' } = {}) {
     if (settings.enableWhatsapp !== false) {
       // The order travels with the call so WhatsApp can fill an approved template's
       // variables (name, order number, total, tracking link).
-      await sendWhatsApp({ phone, message: m.sms, orderId: order.id, type, order });
+      await sendWhatsApp({ phone, message: m.sms, orderId: order.id, type, order, baseUrl });
     }
   }
   if (email && settings.emailOrderConfirmed !== false) {

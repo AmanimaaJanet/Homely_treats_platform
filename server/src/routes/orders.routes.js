@@ -5,6 +5,7 @@ import { nextOrderId, round2 } from '../utils.js';
 import { getSettings } from '../services/settings.js';
 import { applyZoneRules, blackoutFor, validateSlot, earliestReadyDate, requiredLeadDays } from '../services/delivery.js';
 import { initializeTransaction } from '../services/paystack.js';
+import { publicUrl } from '../services/publicUrl.js';
 import { recordEvent, notifyCustomer, applyStatus } from '../services/orderEvents.js';
 import { earnPoints, maxRedeemablePoints, discountForPoints } from '../services/loyalty.js';
 import { reserveStock, StockError } from '../services/stock.js';
@@ -407,6 +408,7 @@ router.post('/', optionalAuth, async (req, res) => {
     await recordEvent(id, 'PENDING', 'Order placed');
     await notifyCustomer(order, 'ORDER_CONFIRMED', {
       note: isCod ? 'Pay in cash on delivery / pickup.' : 'Complete payment to confirm your order.',
+      baseUrl: publicUrl(req),
     });
 
     // ---- Admin new-order alert ----
@@ -432,7 +434,7 @@ router.post('/', optionalAuth, async (req, res) => {
         orderId: id,
         paymentMethod,
         phone: user?.phone || guestPhone,
-        callbackUrl: `${config.clientUrl}/pay/callback?order=${id}`,
+        callbackUrl: `${publicUrl(req)}/pay/callback?order=${id}`,
       });
       authorizationUrl = init.authorizationUrl;
       await prisma.order.update({ where: { id }, data: { paymentRef: init.reference } });

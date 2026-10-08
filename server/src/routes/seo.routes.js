@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { publicUrl } from '../services/publicUrl.js';
 import { prisma } from '../prisma.js';
 import { getSettings } from '../services/settings.js';
 
@@ -23,7 +24,7 @@ import { getSettings } from '../services/settings.js';
 
 const router = Router();
 
-const SITE_URL = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+
 
 /** A page worth indexing, with how often it changes and how much it matters. */
 const STATIC_PAGES = [
@@ -39,6 +40,7 @@ const STATIC_PAGES = [
 const DISALLOW = ['/admin', '/rider', '/account', '/cart', '/pay', '/verify', '/reset-password', '/forgot-password', '/api'];
 
 router.get('/robots.txt', (req, res) => {
+  const siteUrl = publicUrl(req);
   const lines = [
     'User-agent: *',
     'Allow: /',
@@ -48,7 +50,7 @@ router.get('/robots.txt', (req, res) => {
     'Allow: /media/',
     'Allow: /uploads/',
     '',
-    `Sitemap: ${SITE_URL}/sitemap.xml`,
+    `Sitemap: ${siteUrl}/sitemap.xml`,
     '',
   ];
   res.type('text/plain').send(lines.join('\n'));
@@ -56,6 +58,7 @@ router.get('/robots.txt', (req, res) => {
 
 router.get('/sitemap.xml', async (req, res, next) => {
   try {
+    const siteUrl = publicUrl(req);
     const products = await prisma.product.findMany({
       where: { isActive: true, stock: { gt: 0 } },
       select: { id: true, createdAt: true },
@@ -65,7 +68,7 @@ router.get('/sitemap.xml', async (req, res, next) => {
 
     const url = ({ loc, lastmod, changefreq, priority }) => [
       '  <url>',
-      `    <loc>${SITE_URL}${loc}</loc>`,
+      `    <loc>${siteUrl}${loc}</loc>`,
       lastmod ? `    <lastmod>${lastmod}</lastmod>` : null,
       changefreq ? `    <changefreq>${changefreq}</changefreq>` : null,
       priority ? `    <priority>${priority}</priority>` : null,
@@ -119,13 +122,15 @@ const structuredData = async (req, res, next) => {
       }),
     ]);
 
+    const siteUrl = publicUrl(req);
+
     const business = {
       '@type': 'Bakery',
-      '@id': `${SITE_URL}/#bakery`,
+      '@id': `${siteUrl}/#bakery`,
       name: settings?.businessName || 'Homely Treats',
-      url: SITE_URL,
-      image: `${SITE_URL}/og.jpg`,
-      logo: `${SITE_URL}/brand.png`,
+      url: siteUrl,
+      image: `${siteUrl}/og.jpg`,
+      logo: `${siteUrl}/brand.png`,
       servesCuisine: 'Cakes, pastries and confectionery',
       currenciesAccepted: 'GHS',
       paymentAccepted: 'Cash, Mobile Money, Card',
@@ -152,13 +157,13 @@ const structuredData = async (req, res, next) => {
           '@type': 'Product',
           name: p.name,
           ...(p.description ? { description: p.description } : {}),
-          ...(p.images?.length ? { image: p.images[0].startsWith('http') ? p.images[0] : `${SITE_URL}${p.images[0]}` } : {}),
+          ...(p.images?.length ? { image: p.images[0].startsWith('http') ? p.images[0] : `${siteUrl}${p.images[0]}` } : {}),
           ...(p.category ? { category: p.category } : {}),
         },
         price: p.basePrice,
         priceCurrency: 'GHS',
         availability: 'https://schema.org/InStock',
-        url: `${SITE_URL}/menu/${p.id}`,
+        url: `${siteUrl}/menu/${p.id}`,
       })),
     };
 
@@ -167,10 +172,10 @@ const structuredData = async (req, res, next) => {
       '@graph': [
         {
           '@type': 'WebSite',
-          '@id': `${SITE_URL}/#website`,
-          url: SITE_URL,
+          '@id': `${siteUrl}/#website`,
+          url: siteUrl,
           name: settings?.businessName || 'Homely Treats',
-          publisher: { '@id': `${SITE_URL}/#bakery` },
+          publisher: { '@id': `${siteUrl}/#bakery` },
           inLanguage: 'en-GH',
         },
         business,

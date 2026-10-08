@@ -9,6 +9,7 @@ import { audit } from '../services/audit.js';import { SAMPLE_PRODUCT_NAMES } fro
 import { lowStockProducts, sendLowStockDigest } from '../services/stockAlerts.js';
 import { describeTemplates } from '../services/whatsappTemplates.js';
 import { notifyBackInStock } from '../services/stockNotifications.js';
+import { publicUrl } from '../services/publicUrl.js';
 import { buildAnalytics, monthlyTrend } from '../services/analytics.js';
 import { customerKey } from '../services/analytics.js';
 import { currentlyLocked, clearLock } from '../services/loginGuard.js';
@@ -38,12 +39,12 @@ const MAX_PRODUCT_IMAGES = 8;
  * everyone who asked to be told; anything else is silent (a price edit, a re-list, or
  * raising stock on something that never sold out).
  */
-async function announceRestock(before, after) {
+async function announceRestock(before, after, baseUrl) {
   try {
     const wasOut = (before?.stock ?? 0) <= 0;
     const isBack = after.stock > 0 && after.inStock !== false;
     if (!wasOut || !isBack) return {};
-    const result = await notifyBackInStock(after, { previousStock: before?.stock ?? 0 });
+    const result = await notifyBackInStock(after, { previousStock: before?.stock ?? 0, baseUrl });
     if (result.notified > 0) {
       await audit(null, {
         action: 'BACK_IN_STOCK',
@@ -1277,7 +1278,7 @@ router.put('/products/:id', async (req, res) => {
         entityId: product.id,
         detail: `Updated "${product.name}" (price GH₵ ${product.basePrice}, stock ${product.stock})`,
       });
-      const restock = await announceRestock(before, updated);
+      const restock = await announceRestock(before, updated, publicUrl(req));
       return res.json({ product: updated, ...restock });
     }
     await audit(req, {
@@ -1286,7 +1287,7 @@ router.put('/products/:id', async (req, res) => {
       entityId: product.id,
       detail: `Updated "${product.name}" (price GH₵ ${product.basePrice}, stock ${product.stock})`,
     });
-    const restock = await announceRestock(before, product);
+    const restock = await announceRestock(before, product, publicUrl(req));
     res.json({ product, ...restock });
   } catch (err) {
     console.error(err);

@@ -12,7 +12,7 @@ import { sendPushToUser } from './push.js';
  * who waits through three restocks isn't emailed three times for the same ask; the
  * stamp is cleared if they re-add the item.
  */
-export async function notifyBackInStock(product, { previousStock = 0 } = {}) {
+export async function notifyBackInStock(product, { previousStock = 0, baseUrl } = {}) {
   if (!product || product.stock <= 0 || product.inStock === false) return { notified: 0 };
   if (previousStock > 0) return { notified: 0 }; // it was never actually out
 
@@ -40,7 +40,7 @@ export async function notifyBackInStock(product, { previousStock = 0 } = {}) {
               `Hi ${(item.user.fullName || 'there').split(' ')[0]}, the ${product.name} you were waiting for is available again — ${product.stock} in stock right now.`,
               `The kitchen bakes in small batches, so it usually goes quickly.`,
             ],
-            ctaUrl: `${process.env.CLIENT_URL || 'http://localhost:5173'}/menu`,
+            ctaUrl: `${baseUrl || process.env.CLIENT_URL || 'http://localhost:5173'}/menu`,
             ctaLabel: 'Order it now',
           }),
           type: 'BACK_IN_STOCK',

@@ -50,7 +50,7 @@ export function lockState(user) {
  * Called on a wrong password *and* on an unknown email — the caller keeps the response
  * identical either way, so this never becomes an account-enumeration oracle.
  */
-export async function recordFailure(user) {
+export async function recordFailure(user, { baseUrl } = {}) {
   if (!user) return { locked: false };
   const { maxAttempts, lockoutMinutes } = settings();
   const now = new Date();
@@ -72,7 +72,7 @@ export async function recordFailure(user) {
   });
 
   if (shouldLock) {
-    await alertOwnerOfLock(updated, attempts).catch((err) =>
+    await alertOwnerOfLock(updated, attempts, baseUrl).catch((err) =>
       console.error('[auth] lockout alert failed:', err.message)
     );
   }
@@ -119,7 +119,7 @@ export async function clearLock(userId) {
  * is exactly the alert item 33 asks for — and the customer is told how to get back in,
  * because a locked customer who doesn't know why is a lost customer.
  */
-async function alertOwnerOfLock(user, attempts) {
+async function alertOwnerOfLock(user, attempts, baseUrl) {
   const { lockoutMinutes } = settings();
   const businessName = 'Homely Treats';
 
@@ -139,7 +139,7 @@ async function alertOwnerOfLock(user, attempts) {
           'If this was not them, someone is guessing at the account. The lock lifts by itself, and they can also reset the password to get straight back in.',
           `When: ${new Date().toUTCString()}`,
         ],
-        ctaUrl: `${process.env.CLIENT_URL || 'http://localhost:5173'}/admin/audit`,
+        ctaUrl: `${baseUrl || process.env.CLIENT_URL || 'http://localhost:5173'}/admin/audit`,
         ctaLabel: 'Open the activity log',
       }),
       type: 'ACCOUNT_LOCKED',
@@ -156,7 +156,7 @@ async function alertOwnerOfLock(user, attempts) {
         'Nothing has changed about your orders or your points. Wait a few minutes and try again — or reset your password now and you can sign in straight away.',
         'If this was not you, resetting your password is the safest next step.',
       ],
-      ctaUrl: `${process.env.CLIENT_URL || 'http://localhost:5173'}/forgot-password`,
+      ctaUrl: `${baseUrl || process.env.CLIENT_URL || 'http://localhost:5173'}/forgot-password`,
       ctaLabel: 'Reset my password',
     }),
     type: 'ACCOUNT_LOCKED',

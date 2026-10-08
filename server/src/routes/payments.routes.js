@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { publicUrl } from '../services/publicUrl.js';
 import { prisma } from '../prisma.js';
 import { verifyTransaction, verifyWebhook } from '../services/paystack.js';
 import { recordEvent, notifyCustomer } from '../services/orderEvents.js';
@@ -19,7 +20,7 @@ async function awardPoints(orderId) {
   }
 }
 
-async function markPaid(orderId, { method, reference } = {}) {
+async function markPaid(orderId, { method, reference, baseUrl } = {}) {
   const order = await prisma.order.findUnique({ where: { id: orderId }, include: { user: true, items: true } });
   if (!order) throw new Error('Order not found');
   if (order.paymentStatus === 'PAID') return order;
@@ -39,7 +40,7 @@ async function markPaid(orderId, { method, reference } = {}) {
   if (updated.status === 'CONFIRMED') {
     await recordEvent(orderId, 'CONFIRMED', 'Order confirmed');
   }
-  await notifyCustomer(updated, 'PAYMENT_VERIFIED');
+  await notifyCustomer(updated, 'PAYMENT_VERIFIED', { baseUrl });
   await awardPoints(orderId);
   broadcastOrder(orderId, { status: updated.status, paymentStatus: updated.paymentStatus });
   return updated;
@@ -60,7 +61,7 @@ router.post('/verify', async (req, res) => {
     const order = await prisma.order.findFirst({ where: { paymentRef: reference } });
     if (!order) return res.status(404).json({ error: 'Order not found for this payment' });
 
-    const updated = await markPaid(order.id, { method: 'PAYSTACK', reference });
+    const updated = await markPaid(order.id, { method: 'PAYSTACK', reference, baseUrl: publicUrl(req) });
     res.json({ ok: true, orderId: updated.id });
   } catch (err) {
     console.error(err);
@@ -74,7 +75,7 @@ router.post('/verify', async (req, res) => {
 router.post('/:orderId/simulate', async (req, res) => {
   if (config.paystack.enabled) return res.status(403).json({ error: 'Simulation disabled when Paystack is configured' });
   try {
-    const updated = await markPaid(req.params.orderId, { method: 'SIMULATED' });
+    const updated = await markPaid(req.params.orderId, { method: 'SIMULATED', baseUrl: publicUrl(req) });
     res.json({ ok: true, orderId: updated.id });
   } catch (err) {
     console.error(err);
@@ -95,7 +96,7 @@ router.post('/webhook', async (req, res) => {
     if (payload.event === 'charge.success') {
       const reference = payload.data?.reference;
       const order = await prisma.order.findFirst({ where: { paymentRef: reference } });
-      if (order) await markPaid(order.id, { method: 'PAYSTACK', reference });
+      if (order) await markPaid(order.id, { method: 'PAYSTACK', reference, baseUrl: publicUrl(req) });
     }
     res.sendStatus(200);
   } catch (err) {

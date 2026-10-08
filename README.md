@@ -240,7 +240,7 @@ auth guards on every admin route.
 PORT=5000
 DATABASE_URL=postgresql://homely:homely@localhost:5432/homely?schema=public
 JWT_SECRET=change-me-to-a-long-random-string
-CLIENT_URL=http://localhost:5173     # payment callback + verify links, sitemap + share-card URLs
+CLIENT_URL=https://your-app.onrender.com  # payment callback + verify links, sitemap + share-card URLs. Production: set this to your real URL (if unset, the server derives it from each request)
 
 # Paystack (blank = simulated payments)
 PAYSTACK_SECRET_KEY=

@@ -19,7 +19,7 @@ import { buildTemplate, templateFor, templateComponents } from './whatsappTempla
  * Without WHATSAPP_TOKEN + WHATSAPP_PHONE_NUMBER_ID everything is simulated and
  * printed to the console, so the app works end to end during development.
  */
-export async function sendWhatsApp({ phone, message, orderId, type, order }) {
+export async function sendWhatsApp({ phone, message, orderId, type, order, baseUrl }) {
   const to = normalizeGhPhone(phone);
   if (!to) {
     await logNotification(orderId, 'WHATSAPP', type, 'FAILED', 'invalid phone');
@@ -36,7 +36,7 @@ export async function sendWhatsApp({ phone, message, orderId, type, order }) {
   if (useTemplates && tpl && order) {
     try {
       const built = buildTemplate(type, order, {
-        trackUrl: `${config.clientUrl}/track?ref=${order.id}`,
+        trackUrl: `${baseUrl || config.clientUrl}/track?ref=${order.id}`,
         businessPhone: settings.businessPhone,
       });
       payload = {

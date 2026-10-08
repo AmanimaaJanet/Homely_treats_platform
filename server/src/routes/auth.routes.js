@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { publicUrl } from '../services/publicUrl.js';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { prisma } from '../prisma.js';
@@ -85,7 +86,7 @@ router.post('/register', registerLimiter, async (req, res) => {
     }
 
     // Send verification email (real via Resend, or simulated to console)
-    const verifyUrl = `${config.clientUrl}/verify?token=${verificationToken}`;
+    const verifyUrl = `${publicUrl(req)}/verify?token=${verificationToken}`;
     if (needsVerification) await sendEmail({
       to: normalized,
       subject: 'Homely Treats — verify your email',
@@ -142,7 +143,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     const ok = await bcrypt.compare(String(password), user.passwordHash);
     if (!ok) {
-      const state = await recordFailure(user);
+      const state = await recordFailure(user, { baseUrl: publicUrl(req) });
       if (state.locked) {
         await audit(null, {
           action: 'ACCOUNT_LOCKED',
@@ -255,7 +256,7 @@ router.post('/resend-verification', verifyLimiter, optionalAuth, async (req, res
 
     const verificationToken = crypto.randomBytes(24).toString('hex');
     await prisma.user.update({ where: { id: user.id }, data: { verificationToken } });
-    const verifyUrl = `${config.clientUrl}/verify?token=${verificationToken}`;
+    const verifyUrl = `${publicUrl(req)}/verify?token=${verificationToken}`;
     await sendEmail({
       to: user.email,
       subject: 'Homely Treats — verify your email',
@@ -322,7 +323,7 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
       },
     });
 
-    const link = `${config.clientUrl}/reset-password?token=${rawToken}`;
+    const link = `${publicUrl(req)}/reset-password?token=${rawToken}`;
     await sendEmail({
       to: user.email,
       subject: 'Homely Treats — reset your password',
