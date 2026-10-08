@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Cake, BarChart3, ClipboardList, Package, Users, Ticket, TrendingUp, Settings, LogOut, Bike, ScrollText, MessageSquareQuote, Truck, Activity } from 'lucide-react';
+import { Cake, BarChart3, ClipboardList, Package, Users, Ticket, TrendingUp, Settings, LogOut, Store, Bike, ScrollText, MessageSquareQuote, Truck, Activity } from 'lucide-react';
 import { api } from '../../api.js';
 import { useApp } from '../../store.jsx';
 import Seo from '../../components/Seo.jsx';
@@ -65,19 +65,26 @@ export default function AdminLayout() {
               </NavLink>
             </li>
           ))}
-          <li style={{ marginTop: '2rem' }}>
-            <a
-              href="#/"
-              onClick={(e) => {
-                e.preventDefault();
-                logout();
-                navigate('/');
-              }}
-            >
-              <LogOut size={16} /> Sign Out
-            </a>
-          </li>
         </ul>
+        {/* Pinned to the bottom of the sidebar, outside the scrollable menu, so
+            they are visible at any window height — the old Sign Out lived at the
+            bottom of the menu list, which is exactly where a short window cut it
+            off with no way to scroll to it. */}
+        <div className="admin-sidebar-foot">
+          <a className="admin-foot-link" href="/">
+            <Store size={16} /> View Storefront
+          </a>
+          <button
+            type="button"
+            className="admin-foot-link admin-foot-signout"
+            onClick={() => {
+              logout();
+              navigate('/');
+            }}
+          >
+            <LogOut size={16} /> Sign Out
+          </button>
+        </div>
       </div>
       <div className="admin-content">
         <Outlet />
