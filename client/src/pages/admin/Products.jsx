@@ -35,6 +35,9 @@ export default function Products() {
   // they take over the homepage until removed).
   const [sampleActive, setSampleActive] = useState(0);
   const [removingSamples, setRemovingSamples] = useState(false);
+  // Which photo of the current batch is uploading ("Adding 2 of 5…") — one file at a
+  // time, so progress is honest on a slow connection.
+  const [uploadProgress, setUploadProgress] = useState(null);
 
   // Bulk catalogue work: a seasonal price change or a January menu clear touches the
   // whole list, and doing that one product at a time is how mistakes happen.
@@ -168,28 +171,48 @@ export default function Products() {
       return;
     }
     setUploadingPhotos(true);
+    const batch = files.slice(0, room);
+    setUploadProgress({ done: 0, total: batch.length });
+    const added = [];
+    const skipped = [];
     try {
-      const added = [];
-      for (const file of files.slice(0, room)) {
+      for (const file of batch) {
         if (!file.type.startsWith('image/')) {
-          toast(`"${file.name}" is not an image — skipped`, 'error');
-          continue;
+          skipped.push(`${file.name} — not an image`);
+        } else if (file.size > 20 * 1024 * 1024) {
+          // The server accepts up to 20 MB and compresses on arrival (see
+          // server/src/services/storage.js) — this pre-check only catches what the
+          // server would refuse anyway. Phone-camera photos are welcome.
+          skipped.push(`${file.name} — over 20 MB`);
+        } else {
+          try {
+            const { url } = await api.upload(file, { auth: true });
+            added.push(url);
+          } catch {
+            // One failed file must not discard the photos that already made it —
+            // they are kept and the failure is named in the summary below.
+            skipped.push(file.name);
+          }
         }
-        if (file.size > 5 * 1024 * 1024) {
-          toast(`"${file.name}" is larger than 5 MB — skipped`, 'error');
-          continue;
-        }
-        const { url } = await api.upload(file, { auth: true });
-        added.push(url);
+        setUploadProgress((p) => (p ? { ...p, done: p.done + 1 } : p));
       }
       if (added.length) {
         setEditing((prev) => ({ ...prev, images: [...(prev.images || []), ...added] }));
-        toast(`${added.length} photo${added.length > 1 ? 's' : ''} added — remember to Save`, 'success');
       }
-    } catch (err) {
-      toast(err.message, 'error');
+      if (files.length > room) {
+        toast(`Up to ${MAX_PHOTOS} photos per product — ${files.length - room} could not be added.`, 'error');
+      }
+      if (skipped.length === 0 && added.length) {
+        toast(`${added.length} photo${added.length > 1 ? 's' : ''} added — remember to Save`, 'success');
+      } else if (skipped.length) {
+        toast(
+          `${added.length} added, ${skipped.length} skipped: ${skipped.join('; ').slice(0, 140)}`,
+          added.length ? 'error' : 'error',
+        );
+      }
     } finally {
       setUploadingPhotos(false);
+      setUploadProgress(null);
       if (photoInput.current) photoInput.current.value = '';
     }
   };
@@ -493,9 +516,11 @@ export default function Products() {
                   <ImageIcon size={14} /> Product photos ({images.length}/{MAX_PHOTOS})
                 </label>
                 <p className="muted small" style={{ marginBottom: 8 }}>
-                  The first photo is the cover shown on the menu. Photos straight from a
-                  phone camera are fine — anything up to 20 MB is accepted and compressed
-                  automatically. With no photos yet, the product shows a placeholder.
+                  Select one or several photos at once — a whole batch from your camera
+                  roll is fine (up to {MAX_PHOTOS} per product, 20 MB each). The first
+                  photo is the cover shown on the menu; the rest appear as a swipeable
+                  gallery on the product page. Photos are compressed automatically. With
+                  no photos yet, the product shows a placeholder.
                 </p>
 
                 <div className="photo-grid">
@@ -530,7 +555,11 @@ export default function Products() {
                       disabled={uploadingPhotos}
                     >
                       <Upload size={18} />
-                      <span>{uploadingPhotos ? 'Uploading…' : 'Add'}</span>
+                      <span>
+                        {uploadingPhotos
+                          ? `Adding ${Math.min((uploadProgress?.done ?? 0) + 1, uploadProgress?.total ?? 1)} of ${uploadProgress?.total ?? 1}…`
+                          : 'Add photos'}
+                      </span>
                     </button>
                   )}
                 </div>
