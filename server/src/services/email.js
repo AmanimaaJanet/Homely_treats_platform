@@ -10,7 +10,7 @@ import { prisma } from '../prisma.js';
 export async function sendEmail({ to, subject, html, orderId, type }) {
   if (config.resend.enabled) {
     try {
-      const res = await fetch('https://api.resend.com/emails', {
+      const res = await fetch(`${config.resend.baseUrl}/emails`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${config.resend.apiKey}`,

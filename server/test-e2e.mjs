@@ -2142,6 +2142,77 @@ E2E Imported ${rnd},CAKE,175,"Imported, with a comma",New,6,true,2,Vanilla|Choco
     );
   }
 
+  // ---------------------------------------------------------------- undeliverable verification email
+  // A free Resend account with no verified domain refuses every send to a customer
+  // (403, "You can only send testing emails to your own email address"). Prove the
+  // app does the right thing there: nobody gets locked out of a fresh account.
+  {
+    const http = await import('node:http');
+    const { spawn } = await import('node:child_process');
+
+    // A stub that answers exactly like Resend's test-mode rejection.
+    const stub = http.createServer((rq, rs) => {
+      rs.writeHead(403, { 'Content-Type': 'application/json' });
+      rs.end(JSON.stringify({
+        message: 'You can only send testing emails to your own email address (owner@example.com). To send emails to other recipients, please verify a domain at resend.com/domains.',
+      }));
+    });
+    await new Promise((r) => stub.listen(5099, '127.0.0.1', r));
+
+    // A second API instance pointed at the stub.
+    const api2 = spawn('node', ['src/index.js'], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        PORT: '5051',
+        RESEND_API_KEY: 'e2e-dummy-key',
+        RESEND_API_BASE: 'http://127.0.0.1:5099',
+        DISABLE_RATE_LIMITS: 'true',
+        AUTH_MAX_FAILED_ATTEMPTS: '4',
+        AUTH_LOCKOUT_MINUTES: '2',
+      },
+      stdio: 'ignore',
+    });
+    let api2Up = false;
+    for (let i = 0; i < 30 && !api2Up; i++) {
+      await new Promise((r) => setTimeout(r, 400));
+      api2Up = await fetch('http://127.0.0.1:5051/api/health').then((r) => r.ok).catch(() => false);
+    }
+    const local = async (pathname, opts = {}) => {
+      const r = await fetch(`http://127.0.0.1:5051${pathname}`, {
+        method: opts.method || 'GET',
+        headers: { 'Content-Type': 'application/json', ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}) },
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      return { status: r.status, data: await r.json().catch(() => ({})) };
+    };
+
+    try {
+      check('Second API instance started for the email-failure test', api2Up, 'did not come up on :5051');
+      if (api2Up) {
+        const email = `undeliverable-${Date.now()}@e2e.test`;
+        const reg = await local('/api/auth/register', {
+          method: 'POST',
+          body: { fullName: 'Undeliverable Test', email, phone: '0550000199', password: 'Sup3rSecret!9' },
+        });
+        check('Registration succeeds even when the verification email is refused',
+          reg.status === 201, `status ${reg.status}`);
+        check('The account is verified automatically (no lock-out)',
+          reg.data?.user?.emailVerified === true, `emailVerified=${reg.data?.user?.emailVerified}`);
+        check('The response admits the email did not go out',
+          reg.data?.emailDelivered === false && reg.data?.verifyUrl === null,
+          `emailDelivered=${reg.data?.emailDelivered} verifyUrl=${reg.data?.verifyUrl}`);
+        const login = await local('/api/auth/login', { method: 'POST', body: { email, password: 'Sup3rSecret!9' } });
+        check('The customer can sign in straight away',
+          login.status === 200 && login.data?.token, `status ${login.status}`);
+      }
+    } finally {
+      api2.kill('SIGTERM');
+      stub.close();
+      await prisma.user.deleteMany({ where: { email: { contains: '@e2e.test' }, fullName: 'Undeliverable Test' } }).catch(() => {});
+    }
+  }
+
   // ---------------------------------------------------------------- summary
   console.log('\n──────────────────────────────────────────');
   results.forEach((r) => console.log(r));

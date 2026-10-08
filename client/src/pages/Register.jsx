@@ -44,7 +44,9 @@ export default function Register() {
       toast(
         claimedOrders > 0
           ? `Account created — we found ${claimedOrders} earlier order${claimedOrders === 1 ? '' : 's'} and added them here.`
-          : 'Account created! Check your email to verify.',
+          : user.emailVerified
+            ? 'Account created — you are all set!'
+            : 'Account created! Check your email to verify.',
         'success'
       );
       navigate('/account');

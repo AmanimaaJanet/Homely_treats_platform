@@ -68,6 +68,9 @@ export const config = {
     apiKey: process.env.RESEND_API_KEY || '',
     from: process.env.EMAIL_FROM || 'Homely Treats <onboarding@resend.dev>',
     enabled: Boolean(process.env.RESEND_API_KEY),
+    // Overridable so the E2E suite can point the sender at a local stub and prove
+    // how the app behaves when Resend refuses a delivery. Production never sets it.
+    baseUrl: process.env.RESEND_API_BASE || 'https://api.resend.com',
   },
   sms: {
     provider: process.env.SMS_PROVIDER || 'textbelt', // 'textbelt' | 'arkesel'

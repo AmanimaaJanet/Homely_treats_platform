@@ -85,16 +85,43 @@ router.post('/register', registerLimiter, async (req, res) => {
       );
     }
 
-    // Send verification email (real via Resend, or simulated to console)
+    // Send verification email (real via Resend, or simulated to console).
     const verifyUrl = `${publicUrl(req)}/verify?token=${verificationToken}`;
-    if (needsVerification) await sendEmail({
-      to: normalized,
-      subject: 'Homely Treats — verify your email',
-      html: `<h2>Welcome to Homely Treats</h2><p>Hi ${clean(fullName, 80)}, please confirm your email address:</p>
-             <p><a href="${verifyUrl}" style="background:#C4763B;color:#fff;padding:12px 24px;border-radius:24px;text-decoration:none;">Verify my email</a></p>
-             <p>Or open this link: ${verifyUrl}</p>`,
-      type: 'ORDER_CONFIRMED', // reused channel, logged generically
-    });
+    let emailDelivered = true;
+    if (needsVerification) {
+      const sent = await sendEmail({
+        to: normalized,
+        subject: 'Homely Treats — verify your email',
+        html: `<h2>Welcome to Homely Treats</h2><p>Hi ${clean(fullName, 80)}, please confirm your email address:</p>
+               <p><a href="${verifyUrl}" style="background:#C4763B;color:#fff;padding:12px 24px;border-radius:24px;text-decoration:none;">Verify my email</a></p>
+               <p>Or open this link: ${verifyUrl}</p>`,
+        type: 'ORDER_CONFIRMED', // reused channel, logged generically
+      });
+      // The email could not be delivered. The common cause on a free Resend account:
+      // without a verified domain, onboarding@resend.dev only delivers to the Resend
+      // account's own address, and every send to a customer is refused with a 403.
+      // Whatever the reason, the customer must not be locked out of an account whose
+      // verification link can never arrive — so the account is verified now, the
+      // response says so honestly, and the console tells the owner what to fix.
+      if (!sent?.ok) {
+        emailDelivered = false;
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { emailVerified: true, verificationToken: null },
+        });
+        user.emailVerified = true;
+        const testMode = /testing emails|own email address/i.test(String(sent?.error || ''));
+        console.warn(
+          `[auth] Verification email to ${normalized} could not be delivered (${sent?.error}).` +
+            (testMode
+              ? '\n       Your Resend account has no verified domain: the free onboarding@resend.dev sender only' +
+                '\n       delivers to your own Resend account address. The account was verified automatically so' +
+                '\n       the customer is not locked out. To send real emails, verify a domain at' +
+                '\n       resend.com/domains and set EMAIL_FROM to it — until then customers receive no email.'
+              : '')
+        );
+      }
+    }
 
     // Attach any orders this person placed as a guest, so their history is not a dead
     // end (see services/guestOrders.js for the matching rules).
@@ -106,7 +133,14 @@ router.post('/register', registerLimiter, async (req, res) => {
     const token = signToken(user);
     setSessionCookies(res, token);
     // `token` is still returned for API clients (the browser uses the cookie).
-    res.status(201).json({ token, user: publicUser(user), verifyUrl, claimedOrders: claim.claimed });
+    res.status(201).json({
+      token,
+      user: publicUser(user),
+      // Only promise an inbox when the email genuinely went out.
+      verifyUrl: needsVerification && emailDelivered ? verifyUrl : null,
+      emailDelivered,
+      claimedOrders: claim.claimed,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Registration failed' });
@@ -257,7 +291,7 @@ router.post('/resend-verification', verifyLimiter, optionalAuth, async (req, res
     const verificationToken = crypto.randomBytes(24).toString('hex');
     await prisma.user.update({ where: { id: user.id }, data: { verificationToken } });
     const verifyUrl = `${publicUrl(req)}/verify?token=${verificationToken}`;
-    await sendEmail({
+    const sent = await sendEmail({
       to: user.email,
       subject: 'Homely Treats — verify your email',
       html: `<h2>Homely Treats</h2><p>Hi ${user.fullName}, please confirm your email address:</p>
@@ -265,6 +299,17 @@ router.post('/resend-verification', verifyLimiter, optionalAuth, async (req, res
              <p>Or open this link: ${verifyUrl}</p>`,
       type: 'ORDER_CONFIRMED',
     });
+    // Same mercy as registration: if the link cannot be delivered (a free Resend
+    // account with no verified domain refuses customer addresses with a 403), the
+    // customer must not stay locked out of an account whose email can never arrive.
+    // Verified silently — the response stays identical so it never reveals whether
+    // an address has an account; the customer simply finds that sign-in works now.
+    if (!sent?.ok) {
+      await prisma.user.update({ where: { id: user.id }, data: { emailVerified: true, verificationToken: null } });
+      console.warn(
+        `[auth] Verification email to ${user.email} could not be delivered (${sent?.error}) — account verified automatically.`
+      );
+    }
     res.json(generic);
   } catch (err) {
     console.error(err);

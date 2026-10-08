@@ -210,7 +210,39 @@ email attaches their past orders automatically.
 
 ---
 
-## 6. Security notes worth knowing
+## 6. Email — what the free Resend tier actually delivers
+
+**The short version:** with a free Resend account and no verified domain, the default
+sender (`onboarding@resend.dev`) can only deliver to **your own Resend account's email
+address**. Every send to a customer is refused by Resend with a 403. That is Resend's
+policy, not a bug in the app — and it is why customers were not receiving their
+verification emails.
+
+**What the app does about it (as of this change):** if a verification email cannot be
+delivered, the account is **verified automatically** instead of leaving the customer
+locked out, the registration message tells the truth ("you are all set"), and the
+server log says exactly what happened. Customers are never trapped again, whatever
+state your email is in.
+
+**Your options, all free:**
+
+| State | What customers receive | What you receive |
+| --- | --- | --- |
+| `RESEND_API_KEY` set, no verified domain (you are here) | No emails; accounts verify automatically | New-order and lockout alerts **only** if your Settings → business email matches your Resend account address |
+| `RESEND_API_KEY` removed | No emails (simulated in the server console) | Same — alerts are simulated too |
+| A domain you own verified at [resend.com/domains](https://resend.com/domains) (verifying is free; the domain itself costs about GH₵ 150–200/year) | Real verification, order and restock emails — 100/day free | Everything, to any address |
+
+When you verify a domain: add `EMAIL_FROM=Homely Treats <orders@yourdomain.com>` in
+Render's environment, redeploy, and email verification becomes real automatically —
+no code changes. Until then, treat customer email as switched off; **WhatsApp and SMS
+notifications carry the customer-facing side** (see Settings → Notifications).
+
+> **Note:** with only one admin account, the password-reset email is your only way
+> back in if you forget it. In test mode that email only reaches your own Resend
+> address — so either keep your admin password in a password manager, or make sure
+> the business email in Settings matches your Resend account email.
+
+## 7. Security notes worth knowing
 
 - Sessions are **httpOnly cookies** — JavaScript can't read the token, so an XSS bug
   can't steal it. State-changing requests also carry a CSRF token.
