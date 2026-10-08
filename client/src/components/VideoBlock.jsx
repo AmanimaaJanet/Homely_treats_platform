@@ -8,6 +8,10 @@ const prefersReducedMotion = () =>
 /**
  * Ambient background video, built mobile-first.
  *
+ * Playback is deliberately slowed (see PLAYBACK_RATE below): background video at full
+ * speed reads as urgent and busy behind the shop's calm serif headline — the moving
+ * part should feel like ambience, not a countdown.
+ *
  * - Lazy: only starts loading/playing once scrolled near the viewport
  *   (pass `eager` for the hero, which is above the fold).
  * - Data-friendly: serves the smaller `srcSm` file on phones via
@@ -72,6 +76,17 @@ export default function VideoBlock({
     io.observe(el);
     return () => io.disconnect();
   }, [active]);
+
+  // Slow, calm playback — ambience rather than motion. Set once the video element
+  // exists (browsers reset the rate if it is set before the metadata arrives).
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || reduced) return;
+    const apply = () => { try { v.playbackRate = 0.6; } catch { /* unsupported codec/rate */ } };
+    apply();
+    v.addEventListener('loadedmetadata', apply);
+    return () => v.removeEventListener('loadedmetadata', apply);
+  }, [active, settled, reduced]);
 
   // Don't waste battery or data playing video in a hidden tab.
   useEffect(() => {

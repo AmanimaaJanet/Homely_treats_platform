@@ -162,8 +162,22 @@ app.use(seoRoutes);
 
 // Serve the built React app in production
 const clientDist = path.resolve(__dirname, '../../client/dist');
+
+// The app shell must never be served stale. The JavaScript and CSS files are
+// content-hashed (immutable, safe to cache forever), but index.html and sw.js name
+// those files — if a browser keeps an old copy after a deploy, every hashed file it
+// asks for is gone from the server and the site breaks page by page until the cache
+// happens to expire. "no-cache" does not mean "don't cache": it means "check with the
+// server before using it", which costs one cheap 304 round trip per visit.
+app.use((req, res, next) => {
+  if (req.path === '/sw.js' || req.path === '/' || req.path === '/index.html' || req.path === '/manifest.webmanifest') {
+    res.set('Cache-Control', 'no-cache');
+  }
+  next();
+});
 app.use(express.static(clientDist));
 app.get(/^(?!\/api).*/, (req, res) => {
+  res.set('Cache-Control', 'no-cache');
   res.sendFile(path.join(clientDist, 'index.html'), (err) => {
     if (err) res.status(404).send('Frontend not built. Run `npm run build:client` first.');
   });

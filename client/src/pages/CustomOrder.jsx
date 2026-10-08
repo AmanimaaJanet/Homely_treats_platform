@@ -55,6 +55,14 @@ export default function CustomOrder() {
   }, [productId]);
 
   const product = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
+
+  // Preselect the first (smallest) size. Starting on a "— choose size —" placeholder
+  // made the browser's required-check block submission with only a tiny bubble near a
+  // field that is below the fold on a phone — the customer taps "Add to Cart" and
+  // nothing visibly happens, which reads as the site being broken.
+  useEffect(() => {
+    if (product?.sizeOptions?.length && !size) setSize(product.sizeOptions[0].label);
+  }, [product, size]);
   const flavors = product?.flavors?.length ? product.flavors : DEFAULT_FLAVORS;
   const sizeOptions = product?.sizeOptions?.length
     ? product.sizeOptions
@@ -89,10 +97,21 @@ export default function CustomOrder() {
     }
   };
 
+  // Fires for the first field that fails validation, before the browser's own
+  // (easy-to-miss) bubble. Scrolls the field into view, focuses it, and names it.
+  const handleInvalid = (e) => {
+    const el = e.target;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.focus({ preventScroll: true });
+    const label = el.closest('label')?.querySelector('.form-label-text')?.textContent
+      || el.getAttribute('aria-label') || 'a required field';
+    toast(`“${label}” needs your attention before the order can be added.`, 'error');
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!product) return;
-    if (!date) return;
+    if (!date) return toast('Please pick the date you need your order.', 'error');
     addToCart({
       key: `${product.id}-${flavor}-${size}-${icing}-${date}-${inscription}-${Date.now()}`,
       productId: product.id,
@@ -130,7 +149,7 @@ export default function CustomOrder() {
             <strong>Accepted payments:</strong> MTN MoMo · AirtelTigo · Visa/MC · Pay on Delivery
           </div>
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} onInvalidCapture={handleInvalid}>
             <h3 className="form-heading">Configure Your Order</h3>
 
             <div className="form-group">

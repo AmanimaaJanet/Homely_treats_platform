@@ -38,6 +38,14 @@ export default function Track() {
     api.get('/settings/public').then((d) => setPickupAddress(d.settings.businessAddress || pickupAddress)).catch(() => {});
   }, []);
 
+  // After checkout the customer is sent here with ?ref= — they have already typed
+  // enough; asking them to press "Track" again for an order they just placed is a
+  // dead end. Look it up immediately when the reference is in the URL.
+  useEffect(() => {
+    const initial = new URLSearchParams(window.location.search).get('ref');
+    if (initial) loadRef.current(initial);
+  }, []);
+
   const load = (r) => {
     setError('');
     setLoading(true);
