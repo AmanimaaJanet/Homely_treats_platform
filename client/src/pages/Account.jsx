@@ -47,7 +47,7 @@ export default function Account() {
   useEffect(() => {
     if (!user) return;
     setProfile({ fullName: user.fullName, phone: user.phone });
-    api.get('/orders/my', { auth: true }).then((d) => setOrders(d.orders)).catch(() => {});
+    api.get('/orders/my', { auth: true }).then((d) => setOrders(Array.isArray(d.orders) ? d.orders : [])).catch(() => {});
   }, [user]);
 
   if (!user) {

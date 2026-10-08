@@ -107,6 +107,12 @@ app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 // Cap JSON body size to blunt payload-based abuse.
 app.use(express.json({ limit: '100kb' }));
 
+// …except the CSV catalogue import, which legitimately carries the whole menu in one
+// body. A few hundred products is a couple of hundred kilobytes; 2 MB is ample.
+// (Mounted first, so its larger limit wins for this path and the global cap still
+// holds everywhere else.)
+app.use('/api/admin/products/import', express.json({ limit: '2mb' }));
+
 // General API rate limiting.
 app.use('/api', apiLimiter);
 

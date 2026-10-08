@@ -30,7 +30,7 @@ export default function AdminAudit() {
     if (search) params.set('search', search);
     if (action) params.set('action', action);
     api.get(`/admin/audit?${params.toString()}`, { auth: true })
-      .then((d) => setLogs(d.logs))
+      .then((d) => setLogs(Array.isArray(d.logs) ? d.logs : []))
       .catch((err) => toast(err.message, 'error'))
       .finally(() => setLoading(false));
   };

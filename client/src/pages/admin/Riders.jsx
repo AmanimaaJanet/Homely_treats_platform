@@ -16,7 +16,7 @@ export default function AdminRiders() {
 
   const load = () =>
     api.get('/admin/riders', { auth: true })
-      .then((d) => setRiders(d.riders))
+      .then((d) => setRiders(Array.isArray(d.riders) ? d.riders : []))
       .catch((err) => toast(err.message, 'error'))
       .finally(() => setLoading(false));
 

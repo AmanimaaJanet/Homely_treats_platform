@@ -31,7 +31,9 @@ export default function Menu() {
     if (sort !== 'popular') params.set('sort', sort);
     api
       .get(`/products?${params.toString()}`)
-      .then((d) => setProducts(d.products))
+      // A sleeping hosted database (Neon free tier) can fail this request's first
+      // attempt; landing [] shows "our menu is coming soon" instead of a crash.
+      .then((d) => setProducts(Array.isArray(d.products) ? d.products : []))
       .catch(() => setProducts([]))
       .finally(() => setLoading(false));
   }, [category, sort, search]);

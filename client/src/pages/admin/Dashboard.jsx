@@ -61,7 +61,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     api.get('/admin/stats', { auth: true }).then(setStats).catch(() => {});
-    api.get('/admin/orders', { auth: true }).then((d) => setRecent(d.orders.slice(0, 5))).catch(() => {});
+    api.get('/admin/orders', { auth: true }).then((d) => setRecent(Array.isArray(d.orders) ? d.orders.slice(0, 5) : [])).catch(() => {});
   }, []);
 
   if (!stats) return <div className="empty-state"><p>Loading dashboard…</p></div>;

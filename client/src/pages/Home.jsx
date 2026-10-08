@@ -29,8 +29,8 @@ export default function Home() {
   const [structured, setStructured] = useState(null);
 
   useEffect(() => {
-    api.get('/products?featured=true').then((d) => setFeatured(d.products.slice(0, 4))).catch(() => {});
-    api.get('/reviews/recent').then((d) => setReviews(d.reviews)).catch(() => setReviews([]));
+    api.get('/products?featured=true').then((d) => setFeatured(Array.isArray(d.products) ? d.products.slice(0, 4) : [])).catch(() => setFeatured([]));
+    api.get('/reviews/recent').then((d) => setReviews(Array.isArray(d.reviews) ? d.reviews : [])).catch(() => setReviews([]));
     api.get('/settings/public').then((d) => setMinLead(d.settings.minLeadDays || 2)).catch(() => {});
     api.get('/structured-data.json').then(setStructured).catch(() => {});
   }, []);

@@ -26,9 +26,9 @@ describe('geo (live rider distances)', () => {
   });
 
   it('estimates arrival at Accra street speed', () => {
-    expect(etaMinutes(1.8)).toBe(5); // 1.8 km at ~22 km/h
+    expect(etaMinutes(1.8)).toBe(6); // 1.8 km at 18 km/h
     expect(etaMinutes(0.1)).toBe(1); // never "0 minutes" — the rider is not there yet
-    expect(etaMinutes(11)).toBe(30);
+    expect(etaMinutes(11)).toBe(37); // a long haul across town
   });
 
   it('formats distances the way people read them', () => {

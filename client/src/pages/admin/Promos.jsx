@@ -26,7 +26,7 @@ export default function Promos() {
 
   const load = () =>
     api.get('/admin/promos', { auth: true })
-      .then((d) => setPromos(d.promos))
+      .then((d) => setPromos(Array.isArray(d.promos) ? d.promos : []))
       .catch((err) => toast(err.message, 'error'))
       .finally(() => setLoading(false));
 

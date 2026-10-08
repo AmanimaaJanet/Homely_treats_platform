@@ -13,7 +13,7 @@ export default function Customers() {
   const [lockSettings, setLockSettings] = useState(null);
 
   const load = () =>
-    api.get('/admin/customers', { auth: true }).then((d) => setCustomers(d.customers)).catch(() => {});
+    api.get('/admin/customers', { auth: true }).then((d) => setCustomers(Array.isArray(d.customers) ? d.customers : [])).catch(() => {});
   const loadLockouts = () =>
     api
       .get('/admin/security/lockouts', { auth: true })

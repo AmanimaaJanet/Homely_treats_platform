@@ -28,6 +28,14 @@ A full-stack bakery ordering platform built from your HTML mockup: **React** fro
 - 🏬 **Multi-branch ready** — every order records the branch that fulfils it (the counter a pickup customer collects from, or the kitchen baking a delivery); admin can filter the order list by branch and see revenue per branch in Reports; customers see the address of the branch they actually chose
 - 🗣️ **Bilingual UI (English / Twi)** — a language switch in the navbar; the storefront chrome (navigation, home, menu, product cards, footer) carries Asante Twi, and any string without a translation yet falls back to English rather than showing gaps. The dictionary is one file (`client/src/lib/i18n.js`) — extend it and have a native speaker review before launching to Twi speakers
 - 🚚 **Track Order** — live **real-time updates over WebSockets** (auto-falls back to polling), full status timeline, rider info, **the rider's live GPS approach while out for delivery** (with an opt-in distance readout — the customer's own location never leaves their browser), design photos, and the notification log
+
+> **Hosting notes** — on Render (or any host with an ephemeral disk), uploaded photos
+> live on the server's disk and are **wiped by every deploy**. Connect a free
+> Cloudinary account (README → Photos) to make them permanent — the admin Products
+> page now shows a warning banner until you do. And if the database (Neon free tier)
+> sleeps after idle, the first page load after a pause may hiccup once; every page now
+> degrades gracefully instead of erroring. Keep it awake with a free cron ping at
+> `https://<your-site>/api/health` (see DATABASE_SETUP.md §8).
 - 👤 **Accounts** — register, sign in, email verification, profile, password change, order history with **"Order again"**, **loyalty points** balance, and per-account sign-in protection (a brief pause after repeated wrong passwords, with a reset link to get straight back in)
 - ⭐ **Reviews & ratings** — rate delivered orders (earn +5 bonus points); published on the homepage once approved when moderation is on
 - 🛵 **Rider app** at `/rider` — riders accept deliveries, share live GPS with one tap, mark deliveries done (updates the customer's tracker instantly), and see their delivery-fee history

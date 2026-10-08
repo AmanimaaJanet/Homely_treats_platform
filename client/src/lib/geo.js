@@ -15,12 +15,16 @@ export function distanceKm(lat1, lng1, lat2, lng2) {
 }
 
 /**
- * Rough minutes until arrival. Accra traffic averages ~20-25 km/h for a bike or
- * scooter in the delivery zones; 22 is the working assumption, and the UI presents
- * the result as "about", not a promise.
+ * Rough minutes until arrival. Accra traffic averages ~15-20 km/h for a bike or
+ * scooter in the delivery zones, so 18 is the working assumption — chosen on the
+ * cautious side so a rider tends to beat the estimate rather than miss it. The UI
+ * presents the result as "about", not a promise. Change this one number if the
+ * shop's riders consistently run faster or slower.
  */
+export const RIDING_SPEED_KMH = 18;
+
 export function etaMinutes(km) {
-  return Math.max(1, Math.round((km / 22) * 60));
+  return Math.max(1, Math.round((km / RIDING_SPEED_KMH) * 60));
 }
 
 /** "850 m" / "1.8 km" — people don't read "0.85 km" as quickly. */

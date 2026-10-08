@@ -1,6 +1,6 @@
 // Homely Treats — service worker (PWA)
 // Bump this when the precache list or asset strategy changes, so clients pick it up.
-const CACHE = 'homely-treats-v3';
+const CACHE = 'homely-treats-v4';
 const PRECACHE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {

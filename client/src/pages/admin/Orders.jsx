@@ -26,7 +26,7 @@ export default function Orders() {
     if (status !== 'ALL') params.set('status', status);
     if (search) params.set('search', search);
     if (branch !== 'ALL') params.set('branch', branch);
-    api.get(`/admin/orders?${params}`, { auth: true }).then((d) => setOrders(d.orders)).catch(() => {});
+    api.get(`/admin/orders?${params}`, { auth: true }).then((d) => setOrders(Array.isArray(d.orders) ? d.orders : [])).catch(() => {});
   };
 
   // The branch list (pickup locations) drives the filter dropdown.

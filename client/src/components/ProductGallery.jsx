@@ -13,11 +13,15 @@ import ProductMonogram from './ProductMonogram.jsx';
 export default function ProductGallery({ product }) {
   const images = product?.images || [];
   const [index, setIndex] = useState(0);
+  // A photo that fails to load (file lost to a server rebuild, flaky connection) is
+  // skipped rather than shown as a broken-image icon.
+  const [broken, setBroken] = useState(new Set());
+  const good = images.filter((src) => !broken.has(src));
 
   // Reset when the customer switches product.
-  useEffect(() => setIndex(0), [product?.id]);
+  useEffect(() => { setIndex(0); setBroken(new Set()); }, [product?.id]);
 
-  if (images.length === 0) {
+  if (good.length === 0) {
     return (
       <div className="gallery gallery-fallback">
         <ProductMonogram name={product?.name} size={140} />
@@ -25,14 +29,14 @@ export default function ProductGallery({ product }) {
     );
   }
 
-  const alt = (i) => product.imageAlt || `${product.name}${images.length > 1 ? ` — photo ${i + 1}` : ''}`;
-  const go = (next) => setIndex((next + images.length) % images.length);
+  const alt = (i) => product.imageAlt || `${product.name}${good.length > 1 ? ` — photo ${i + 1}` : ''}`;
+  const go = (next) => setIndex((next + good.length) % good.length);
 
   return (
     <div className="gallery">
       <div className="gallery-stage">
-        <img src={images[index]} alt={alt(index)} decoding="async" />
-        {images.length > 1 && (
+        <img src={good[index]} alt={alt(index)} decoding="async" onError={() => setBroken((b) => new Set(b).add(images[index]))} />
+        {good.length > 1 && (
           <>
             <button
               type="button"
@@ -51,15 +55,15 @@ export default function ProductGallery({ product }) {
               <ChevronRight size={20} />
             </button>
             <span className="gallery-counter" aria-hidden="true">
-              {index + 1} / {images.length}
+              {index + 1} / {good.length}
             </span>
           </>
         )}
       </div>
 
-      {images.length > 1 && (
+      {good.length > 1 && (
         <div className="gallery-thumbs" role="tablist" aria-label="Product photos">
-          {images.map((src, i) => (
+          {good.map((src, i) => (
             <button
               key={src}
               type="button"
@@ -68,7 +72,7 @@ export default function ProductGallery({ product }) {
               className={`gallery-thumb ${i === index ? 'active' : ''}`}
               onClick={() => setIndex(i)}
             >
-              <img src={src} alt="" decoding="async" loading="lazy" />
+              <img src={src} alt="" decoding="async" loading="lazy" onError={() => setBroken((b) => new Set(b).add(src))} />
             </button>
           ))}
         </div>

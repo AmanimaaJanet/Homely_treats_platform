@@ -28,6 +28,9 @@ export default function Products() {
 
   const photoInput = useRef(null);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  // Photos on local disk do not survive a redeploy on hosts with ephemeral disks
+  // (Render, Heroku…) — say so before the owner learns it the hard way.
+  const [photosOnDisk, setPhotosOnDisk] = useState(false);
 
   // Bulk catalogue work: a seasonal price change or a January menu clear touches the
   // whole list, and doing that one product at a time is how mistakes happen.
@@ -40,7 +43,11 @@ export default function Products() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
 
-  const load = () => api.get('/admin/products', { auth: true }).then((d) => setProducts(d.products)).catch(() => {});
+  const load = () => api.get('/admin/products', { auth: true }).then((d) => setProducts(Array.isArray(d.products) ? d.products : [])).catch(() => {});
+
+  useEffect(() => {
+    api.get('/health').then((d) => setPhotosOnDisk(d.cloudinaryConfigured === false)).catch(() => {});
+  }, []);
   useEffect(load, []);
 
   // ---- Bulk actions ------------------------------------------------------
@@ -269,6 +276,17 @@ export default function Products() {
     <div>
       <div className="section-head-row">
         <h2 className="admin-title">Product Management</h2>
+
+        {photosOnDisk && (
+          <div className="alert warn" role="alert">
+            <strong>Photos are stored on this server's disk.</strong> On hosting with an
+            ephemeral disk (Render, Heroku) every deploy wipes them — the menu keeps
+            working and shows each product's initial, but photos must be re-uploaded.
+            To make photos permanent, connect a free Cloudinary account (see
+            README → Photos) and set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY and
+            CLOUDINARY_API_SECRET.
+          </div>
+        )}
         <button className="btn btn-primary" onClick={() => setEditing({ ...EMPTY, sizeOptions: [{ label: 'Standard', serves: 1, price: '' }] })}>+ Add Product</button>
       </div>
 
