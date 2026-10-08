@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import SignIn from './pages/SignIn.jsx';
 import Register from './pages/Register.jsx';
 import { AppProvider } from './store.jsx';
+import { LanguageProvider } from './lib/i18n.jsx';
 import Toasts from './components/Toasts.jsx';
 import { onActivate } from './lib/a11y.js';
 
@@ -23,7 +24,9 @@ beforeEach(() => {
 const wrap = (ui) =>
   render(
     <MemoryRouter>
-      <AppProvider>{ui}</AppProvider>
+      <LanguageProvider>
+    <LanguageProvider><AppProvider>{ui}  </AppProvider></LanguageProvider>
+    </LanguageProvider>
     </MemoryRouter>
   );
 
@@ -87,9 +90,9 @@ describe('status messages are announced', () => {
   it('marks the toast area as a polite live region', async () => {
     const { container } = render(
       <MemoryRouter>
-        <AppProvider>
+        <LanguageProvider><AppProvider>
           <Toasts />
-        </AppProvider>
+        </AppProvider></LanguageProvider>
       </MemoryRouter>
     );
     const stack = container.querySelector('.toast-stack');
@@ -103,9 +106,9 @@ describe('page structure', () => {
     const { default: App } = await import('./App.jsx');
     render(
       <MemoryRouter initialEntries={['/signin']}>
-        <AppProvider>
+        <LanguageProvider><AppProvider>
           <App />
-        </AppProvider>
+        </AppProvider></LanguageProvider>
       </MemoryRouter>
     );
     const skip = await screen.findByRole('link', { name: /skip to main content/i });

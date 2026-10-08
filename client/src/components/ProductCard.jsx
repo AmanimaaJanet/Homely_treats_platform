@@ -5,6 +5,7 @@ import { ghs } from '../lib/format.js';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
 import ProductPhoto from './ProductPhoto.jsx';
+import { useLang } from '../lib/i18n.js';
 
 /**
  * Storefront product card.
@@ -14,6 +15,7 @@ import ProductPhoto from './ProductPhoto.jsx';
  * is how a sold-out product keeps its customer.
  */
 export default function ProductCard({ product }) {
+  const { t } = useLang();
   const navigate = useNavigate();
   const { user, toast } = useApp();
   const [saved, setSaved] = useState(false);
@@ -98,10 +100,10 @@ export default function ProductCard({ product }) {
             onClick={() => navigate(`/custom-order?product=${product.id}`)}
             disabled={soldOut}
           >
-            {soldOut ? 'Sold out' : 'Customise & Order'}
+            {soldOut ? t('Sold out') : 'Customise & Order'}
           </button>
           <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/menu/${product.id}`)}>
-            Details
+            {t('Details')}
           </button>
         </div>
 

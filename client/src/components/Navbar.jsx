@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { ShoppingCart, LogOut, Menu, X } from 'lucide-react';
 import { useApp } from '../store.jsx';
+import { useLang, LANGUAGES } from '../lib/i18n.js';
 
 export default function Navbar() {
   const { cartCount, user, logout } = useApp();
+  const { lang, setLang, t } = useLang();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
 
@@ -23,19 +25,33 @@ export default function Navbar() {
         </Link>
 
         <ul className="nav-links" id="primary-navigation">
-          <li><NavLink to="/" end>Home</NavLink></li>
-          <li><NavLink to="/menu">Menu</NavLink></li>
-          <li><NavLink to="/custom-order">Custom Orders</NavLink></li>
-          <li><NavLink to="/track">Track Order</NavLink></li>
+          <li><NavLink to="/" end>{t('Home')}</NavLink></li>
+          <li><NavLink to="/menu">{t('Menu')}</NavLink></li>
+          <li><NavLink to="/custom-order">{t('Custom Orders')}</NavLink></li>
+          <li><NavLink to="/track">{t('Track Order')}</NavLink></li>
           {user ? (
-            <li><NavLink to="/account">My Account</NavLink></li>
+            <li><NavLink to="/account">{t('My Account')}</NavLink></li>
           ) : (
-            <li><NavLink to="/signin">Sign In</NavLink></li>
+            <li><NavLink to="/signin">{t('Sign In')}</NavLink></li>
           )}
           {user?.role === 'ADMIN' && <li><NavLink to="/admin">Admin</NavLink></li>}
         </ul>
 
         <div className="nav-right">
+          {/* English / Twi — one tap, remembered for next time. */}
+          <div className="lang-switch" role="group" aria-label="Language">
+            {LANGUAGES.map((l) => (
+              <button
+                key={l.code}
+                type="button"
+                className={`lang-btn ${lang === l.code ? 'lang-active' : ''}`}
+                onClick={() => setLang(l.code)}
+                aria-pressed={lang === l.code}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
           {user && (
             <button
               className="nav-signout"
@@ -43,8 +59,8 @@ export default function Navbar() {
                 logout();
                 navigate('/');
               }}
-              title="Sign out"
-              aria-label="Sign out"
+              title={t('Sign out')}
+              aria-label={t('Sign out')}
             >
               <LogOut size={18} />
             </button>
