@@ -177,6 +177,12 @@ app.use((req, res, next) => {
 });
 app.use(express.static(clientDist));
 app.get(/^(?!\/api).*/, (req, res) => {
+  // A missing uploaded photo must be a real 404. The SPA catch-all below would
+  // otherwise answer it with the app's HTML — and an <img> that receives HTML looks
+  // broken while caching layers happily store the wrong thing under that URL.
+  if (req.path.startsWith('/uploads/')) {
+    return res.status(404).send('Not found');
+  }
   res.set('Cache-Control', 'no-cache');
   res.sendFile(path.join(clientDist, 'index.html'), (err) => {
     if (err) res.status(404).send('Frontend not built. Run `npm run build:client` first.');

@@ -82,9 +82,12 @@ export default function Orders() {
   // into it so the next Tab goes to the dialog's own controls rather than the page behind.
   const dialogRef = useRef(null);
   useEscape(!!detail, () => setDetail(null));
+  // Once, when the order detail opens (not on every change to `detail`, which would
+  // steal the cursor if anything in the dialog is being typed into).
+  const detailOpen = detail !== null;
   useEffect(() => {
-    if (detail) dialogRef.current?.focus();
-  }, [detail]);
+    if (detailOpen) dialogRef.current?.focus();
+  }, [detailOpen]);
   return (
     <div>
       <h2 className="admin-title">Order Management</h2>

@@ -315,9 +315,14 @@ export default function Products() {
   // into it so the next Tab goes to the dialog's own controls rather than the page behind.
   const dialogRef = useRef(null);
   useEscape(!!editing, () => setEditing(null));
+  // Focus the dialog once, when it opens. Depending on `editing` itself would re-run
+  // this on every keystroke (each letter replaces the object) and steal the cursor
+  // out of the field being typed in — the owner had to click back into the input
+  // after every single letter.
+  const editingOpen = editing !== null;
   useEffect(() => {
-    if (editing) dialogRef.current?.focus();
-  }, [editing]);
+    if (editingOpen) dialogRef.current?.focus();
+  }, [editingOpen]);
   return (
     <div>
       <div className="section-head-row">

@@ -1,6 +1,6 @@
 // Homely Treats — service worker (PWA)
 // Bump this when the precache list or asset strategy changes, so clients pick it up.
-const CACHE = 'homely-treats-v5';
+const CACHE = 'homely-treats-v6';
 const PRECACHE = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -44,8 +44,14 @@ self.addEventListener('fetch', (event) => {
         (cached) =>
           cached ||
           fetch(event.request).then((res) => {
-            const copy = res.clone();
-            caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+            // Only a genuine 2xx is cached. Caching a failure would pin it: the
+            // next visits would serve the broken entry from cache forever, which is
+            // exactly how one device can show broken photos while every other
+            // device is fine.
+            if (res.ok) {
+              const copy = res.clone();
+              caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+            }
             return res;
           })
       )

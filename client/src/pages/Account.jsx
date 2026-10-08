@@ -39,9 +39,12 @@ export default function Account() {
   // moved into it so the next Tab goes to the dialog's own controls, not the page behind.
   const dialogRef = useRef(null);
   useEscape(!!reviewing, () => setReviewing(null));
+  // Once, when the review dialog opens (not on every change to `reviewing`, which
+  // would steal the cursor mid-typing — see the Products form for the war story).
+  const reviewingOpen = reviewing !== null;
   useEffect(() => {
-    if (reviewing) dialogRef.current?.focus();
-  }, [reviewing]);
+    if (reviewingOpen) dialogRef.current?.focus();
+  }, [reviewingOpen]);
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: '' });
 
   useEffect(() => {
