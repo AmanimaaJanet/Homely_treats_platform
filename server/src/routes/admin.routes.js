@@ -4,7 +4,8 @@ import { prisma } from '../prisma.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 import { applyStatus, refundOrder } from '../services/orderEvents.js';
 import { getSettings, saveSettings } from '../services/settings.js';
-import { audit } from '../services/audit.js';
+import { audit } from '../services/audit.js';import { SAMPLE_PRODUCT_NAMES } from '../services/sampleCatalogue.js';
+
 import { lowStockProducts, sendLowStockDigest } from '../services/stockAlerts.js';
 import { describeTemplates } from '../services/whatsappTemplates.js';
 import { notifyBackInStock } from '../services/stockNotifications.js';
@@ -1185,7 +1186,12 @@ const includeSizes = { include: { sizeOptions: { orderBy: { price: 'asc' } } } }
 
 router.get('/products', async (req, res) => {
   const products = await prisma.product.findMany({ orderBy: { createdAt: 'asc' }, ...includeSizes });
-  res.json({ products });
+  // The demo-seed sample products, if still active, take over the homepage (every one
+  // is flagged featured) — the admin screen uses this count to offer a one-click clean.
+  const sampleActive = products.filter(
+    (p) => p.isActive && SAMPLE_PRODUCT_NAMES.includes(p.name),
+  ).length;
+  res.json({ products, sampleActive });
 });
 
 router.post('/products', async (req, res) => {
@@ -1285,6 +1291,32 @@ router.put('/products/:id', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to update product' });
+  }
+});
+
+// DELETE /api/admin/products/sample — de-list the demo-seed catalogue in one click.
+//
+// The sample products are ordinary rows the owner may have outgrown: every one is
+// flagged featured, so they dominate the homepage even after the real menu exists.
+// De-listed rather than deleted — a past order may reference them, and de-listing is
+// reversible (Admin → Products → the product stays findable, just off the menu).
+router.delete('/products/sample', async (req, res) => {
+  try {
+    const removed = await prisma.product.updateMany({
+      where: { name: { in: SAMPLE_PRODUCT_NAMES }, isActive: true },
+      data: { isActive: false, featured: false },
+    });
+    if (removed.count > 0) {
+      await audit(req, {
+        action: 'PRODUCT_BULK_EDIT',
+        entity: 'Product',
+        detail: `Removed ${removed.count} sample product(s) from the menu`,
+      });
+    }
+    res.json({ ok: true, removed: removed.count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to remove sample products' });
   }
 });
 

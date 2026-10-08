@@ -1770,7 +1770,34 @@ async function main() {
     check('The CSV export still works', csv.status === 200 && csvText.includes('Order'), `${csvText.split('\n')[0]?.slice(0, 40)}`);
   }
 
-  // ---------------------------------------------------------------- 34. Bulk catalogue actions and CSV import
+  // ---------------------------------------------------------------- 34. Sample-catalogue clean-up
+  {
+    const anonSample = await req('/api/admin/products/sample', { method: 'DELETE' });
+    check('Sample-catalogue removal is admin-only (401)', anonSample.status === 401, `status ${anonSample.status}`);
+
+    // A product named exactly like a demo-seed sample, plus the report that counts it.
+    const mkSample = await req('/api/admin/products', {
+      method: 'POST', token: adminToken,
+      body: { name: 'Macaron Gift Box', category: 'CONFECTIONERY', basePrice: 10, stock: 5 },
+    });
+    const sampleId = mkSample.data?.product?.id;
+    if (sampleId) created.productIds.push(sampleId);
+    check('A sample-named product can exist on the menu', mkSample.status === 201, mkSample.data?.error);
+
+    const beforeRemove = await req('/api/admin/products', { token: adminToken });
+    check('The products report counts active sample products',
+      (beforeRemove.data?.sampleActive ?? 0) >= 1, `sampleActive=${beforeRemove.data?.sampleActive}`);
+
+    const rm = await req('/api/admin/products/sample', { method: 'DELETE', token: adminToken });
+    check('Sample products are removed in one call', rm.status === 200 && rm.data?.removed >= 1, `removed=${rm.data?.removed}`);
+
+    const afterRemove = await req('/api/admin/products', { token: adminToken });
+    const mineStillActive = (afterRemove.data?.products || []).filter((p) => created.productIds.includes(p.id) && p.isActive);
+    check("The owner's own products are untouched by the sample clean-up",
+      mineStillActive.length >= 1, `${mineStillActive.length} still active`);
+  }
+
+  // ---------------------------------------------------------------- 34b. Bulk catalogue actions and CSV import
   {
     const all = await req('/api/admin/products', { token: adminToken });
     const targets = (all.data?.products || []).filter((p) => created.productIds.includes(p.id)).slice(0, 2);

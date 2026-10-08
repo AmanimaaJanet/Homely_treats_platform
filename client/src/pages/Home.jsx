@@ -20,6 +20,9 @@ function StarRow({ n }) {
 export default function Home() {
   const navigate = useNavigate();
   const [featured, setFeatured] = useState([]);
+  // 'featured' = the owner starred these on the menu; 'menu' = nothing starred, so
+  // the section is showing the menu's first products under an honest heading.
+  const [featuredSource, setFeaturedSource] = useState('featured');
   const [reviews, setReviews] = useState(null);
   const [minLead, setMinLead] = useState(2);
   // The shop's structured data (schema.org Bakery + current menu) is built by the API
@@ -27,7 +30,25 @@ export default function Home() {
   const [structured, setStructured] = useState(null);
 
   useEffect(() => {
-    api.get('/products?featured=true').then((d) => setFeatured(Array.isArray(d.products) ? d.products.slice(0, 4) : [])).catch(() => setFeatured([]));
+    // Featured = whatever the owner has starred on their menu. If nothing is starred
+    // yet, the section draws from the menu itself (first four) rather than sitting
+    // empty — the homepage always shows real products, never a placeholder state.
+    api
+      .get('/products?featured=true')
+      .then((d) => {
+        const starred = Array.isArray(d.products) ? d.products : [];
+        if (starred.length > 0) {
+          setFeatured(starred.slice(0, 4));
+          setFeaturedSource('featured');
+        } else {
+          return api.get('/products').then((all) => {
+            const products = Array.isArray(all.products) ? all.products : [];
+            setFeatured(products.slice(0, 4));
+            setFeaturedSource('menu');
+          });
+        }
+      })
+      .catch(() => setFeatured([]));
     api.get('/reviews/recent').then((d) => setReviews(Array.isArray(d.reviews) ? d.reviews : [])).catch(() => setReviews([]));
     api.get('/settings/public').then((d) => setMinLead(d.settings.minLeadDays || 2)).catch(() => {});
     api.get('/structured-data.json').then(setStructured).catch(() => {});
@@ -81,7 +102,7 @@ export default function Home() {
       <div className="container">
         {/* Featured products */}
         <div className="section">
-          <h2 className="section-title">Featured Products</h2>
+          <h2 className="section-title">{featuredSource === 'featured' ? 'Featured Products' : 'From Our Menu'}</h2>
           {featured.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-icon"><Store size={48} strokeWidth={1.4} /></div>

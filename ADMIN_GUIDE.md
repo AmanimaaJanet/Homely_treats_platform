@@ -98,6 +98,13 @@ so with more than one admin you can always see who did what.
 | **Deliveries** | Your delivery rules in one place: zones with fees, **minimum basket**, **free delivery over**, ETA note, **pickup counters**, **collection windows with daily capacity**, **closed days**, and a 14-day calendar of what each day has promised. |
 | **Riders** | Create rider accounts, suspend them, and see who is carrying what. |
 
+**Sample products** — if the demo catalogue (from `npm run db:seed:demo`) is still on
+your menu, Admin → Products shows an amber notice with a one-click **Remove sample
+products** button. Every sample is flagged featured, so until they are removed they
+take over the homepage's featured section. Nothing is deleted — they are de-listed and
+can be restored individually. To star your own products instead, tick **Featured** in
+the product form.
+
 **Branches** — every order records the branch that fulfils it: the counter a pickup
 customer chose, or (for deliveries) the default kitchen. When you open a second
 location, add it under **Deliveries → Pickup locations** and mark one as the default —

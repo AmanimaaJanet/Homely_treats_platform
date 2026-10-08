@@ -31,6 +31,10 @@ export default function Products() {
   // Photos on local disk do not survive a redeploy on hosts with ephemeral disks
   // (Render, Heroku…) — say so before the owner learns it the hard way.
   const [photosOnDisk, setPhotosOnDisk] = useState(false);
+  // Demo-seed sample products still on the menu (they are all flagged featured, so
+  // they take over the homepage until removed).
+  const [sampleActive, setSampleActive] = useState(0);
+  const [removingSamples, setRemovingSamples] = useState(false);
 
   // Bulk catalogue work: a seasonal price change or a January menu clear touches the
   // whole list, and doing that one product at a time is how mistakes happen.
@@ -43,7 +47,12 @@ export default function Products() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
 
-  const load = () => api.get('/admin/products', { auth: true }).then((d) => setProducts(Array.isArray(d.products) ? d.products : [])).catch(() => {});
+  const load = () => api.get('/admin/products', { auth: true })
+    .then((d) => {
+      setProducts(Array.isArray(d.products) ? d.products : []);
+      setSampleActive(Number(d.sampleActive) || 0);
+    })
+    .catch(() => {});
 
   useEffect(() => {
     api.get('/health').then((d) => setPhotosOnDisk(d.cloudinaryConfigured === false)).catch(() => {});
@@ -255,6 +264,20 @@ export default function Products() {
     }
   };
 
+  const removeSamples = async () => {
+    if (!window.confirm('Remove the sample (demo) products from the menu? Your own products are untouched, and nothing is deleted — they are de-listed and can be restored.')) return;
+    setRemovingSamples(true);
+    try {
+      const res = await api.del('/admin/products/sample', { auth: true });
+      toast(`Removed ${res.removed} sample product${res.removed === 1 ? '' : 's'} from the menu.`, 'success');
+      load();
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setRemovingSamples(false);
+    }
+  };
+
   const remove = async (p) => {
     if (!window.confirm(`Deactivate "${p.name}"?`)) return;
     await api.del(`/admin/products/${p.id}`, { auth: true });
@@ -276,6 +299,20 @@ export default function Products() {
     <div>
       <div className="section-head-row">
         <h2 className="admin-title">Product Management</h2>
+
+        {sampleActive > 0 && (
+          <div className="alert warn" role="alert">
+            <strong>{sampleActive} sample product{sampleActive === 1 ? '' : 's'} from the demo catalogue still on the menu.</strong>{' '}
+            They are flagged as featured, so they take over the homepage's featured
+            section. Remove them here and star your own products instead — nothing is
+            deleted, they are simply de-listed.
+            <div style={{ marginTop: 10 }}>
+              <button className="btn btn-secondary btn-sm" onClick={removeSamples} disabled={removingSamples}>
+                {removingSamples ? 'Removing…' : `Remove ${sampleActive} sample product${sampleActive === 1 ? '' : 's'}`}
+              </button>
+            </div>
+          </div>
+        )}
 
         {photosOnDisk && (
           <div className="alert warn" role="alert">
