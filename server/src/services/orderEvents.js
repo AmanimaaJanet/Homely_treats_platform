@@ -3,6 +3,7 @@ import { sendEmail, orderEmailTemplate } from './email.js';
 import { sendSms } from './sms.js';
 import { sendWhatsApp } from './whatsapp.js';
 import { broadcastOrder } from './realtime.js';
+import { clearRiderLocation } from './riderLocation.js';
 import { getSettings } from './settings.js';
 import { restoreStock } from './stock.js';
 import { sendPushToUser } from './push.js';
@@ -162,6 +163,13 @@ export async function applyStatus(orderId, status, note) {
     include: { user: true, items: true },
   });
   await recordEvent(orderId, status, note);
+
+  // The rider's live position stops the moment the order is no longer out for
+  // delivery — delivered, cancelled, anything else. Where the rider goes next is
+  // not the customer's business.
+  if (before.status === 'OUT_FOR_DELIVERY' && status !== 'OUT_FOR_DELIVERY') {
+    clearRiderLocation(orderId);
+  }
 
   // --- Cancellation side-effects (guarded so they run exactly once) ---------
   const cancelledNow = status === 'CANCELLED' && before.status !== 'CANCELLED';

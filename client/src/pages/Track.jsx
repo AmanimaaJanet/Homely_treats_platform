@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { MessageSquare, Mail, MessageCircle, Bike, Copy, Check, Circle, UserPlus, LogIn } from 'lucide-react';
+import { MessageSquare, Mail, MessageCircle, Bike, Copy, Check, Circle, UserPlus, LogIn, LocateFixed } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
 import StatusBadge from '../components/StatusBadge.jsx';
 import { ghs, fmtDate, fmtDateTime } from '../lib/format.js';
+import { distanceKm, etaMinutes, formatKm } from '../lib/geo.js';
 import Seo from '../components/Seo.jsx';
 
 const CHANNEL_ICON = { SMS: MessageSquare, EMAIL: Mail, WHATSAPP: MessageCircle };
@@ -23,6 +24,15 @@ export default function Track() {
   const refRef = useRef(ref);
   refRef.current = ref;
 
+  // Live rider position (from the rider's GPS, via the server) and — only if the
+  // customer opts in — their own location, used to measure the remaining distance.
+  // The customer's coordinates never leave this browser: the distance is computed
+  // right here.
+  const [riderPos, setRiderPos] = useState(null);
+  const [myLoc, setMyLoc] = useState(null);
+  const [locState, setLocState] = useState('idle'); // idle | asking | have | denied
+  const [now, setNow] = useState(0);
+
   useEffect(() => {
     api.get('/settings/public').then((d) => setPickupAddress(d.settings.businessAddress || pickupAddress)).catch(() => {});
   }, []);
@@ -32,13 +42,47 @@ export default function Track() {
     setLoading(true);
     api
       .get(`/orders/track/${encodeURIComponent(r.trim())}`)
-      .then(setData)
+      .then((d) => {
+        setData(d);
+        // Pick up the rider's last known position (the WebSocket below keeps it live).
+        if (d.order?.status === 'OUT_FOR_DELIVERY') {
+          api.get(`/orders/${encodeURIComponent(r.trim())}/rider-location`)
+            .then((p) => setRiderPos(p.position || null))
+            .catch(() => {});
+        } else {
+          setRiderPos(null);
+        }
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
 
   const loadRef = useRef(load);
   loadRef.current = load;
+
+  // Keep the "updated Ns ago" readout honest while a rider is live.
+  useEffect(() => {
+    if (!riderPos) return undefined;
+    setNow(Date.now()); // immediately, then every few seconds
+    const t = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(t);
+  }, [riderPos]);
+
+  const shareMyLocation = () => {
+    if (!('geolocation' in navigator)) return setLocState('denied');
+    setLocState('asking');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setMyLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocState('have');
+      },
+      () => setLocState('denied'),
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
+
+  const secsAgo = riderPos ? Math.max(0, Math.round((now - riderPos.updatedAt) / 1000)) : 0;
+  const kmAway = riderPos && myLoc ? distanceKm(myLoc.lat, myLoc.lng, riderPos.lat, riderPos.lng) : null;
 
   // Real-time updates: WebSocket first, polling fallback
   useEffect(() => {
@@ -66,6 +110,9 @@ export default function Track() {
           try {
             const m = JSON.parse(e.data);
             if (m.type === 'ORDER_UPDATED' && m.orderId === id) loadRef.current(id);
+            if (m.type === 'RIDER_LOCATION' && m.orderId === id) {
+              setRiderPos({ lat: m.lat, lng: m.lng, accuracy: m.accuracy, updatedAt: m.updatedAt });
+            }
           } catch { /* ignore */ }
         };
         ws.onerror = () => { if (!closed) { ws.close(); startPolling(); } };
@@ -162,6 +209,46 @@ export default function Track() {
                 {order.riderName && ['READY', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(order.status) && (
                   <div className="rider-chip">
                     <Bike size={16} /> <strong>{order.riderName}</strong>{order.riderPhone && <> · {order.riderPhone}</>} is your rider
+                  </div>
+                )}
+
+                {order.status === 'OUT_FOR_DELIVERY' && (
+                  <div className="rider-live">
+                    {riderPos ? (
+                      <>
+                        <div className="rider-live-top">
+                          <span className="rider-live-dot" aria-hidden="true" />
+                          <strong>{order.riderName || 'Your rider'} is on the way</strong>
+                          <span className="muted small">· updated {secsAgo}s ago</span>
+                        </div>
+                        {kmAway !== null ? (
+                          <p className="rider-live-dist">
+                            About {formatKm(kmAway)} away — roughly {etaMinutes(kmAway)} min
+                          </p>
+                        ) : (
+                          <div className="rider-live-share">
+                            <p className="muted small">
+                              {locState === 'denied'
+                                ? 'Location sharing is off — you will still see status updates here.'
+                                : 'See how far away they are:'}
+                            </p>
+                            {locState !== 'denied' && locState !== 'have' && (
+                              <button className="btn btn-secondary btn-sm" onClick={shareMyLocation} disabled={locState === 'asking'}>
+                                <LocateFixed size={14} /> {locState === 'asking' ? 'Asking…' : 'Show their distance'}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        <p className="muted small rider-live-note">
+                          Live while out for delivery. Your own location is used only in this browser to
+                          measure the distance — it is never sent anywhere.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="muted small">
+                        When your rider shares their location, their approach will appear here live.
+                      </p>
+                    )}
                   </div>
                 )}
 

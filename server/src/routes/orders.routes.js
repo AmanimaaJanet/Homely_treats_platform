@@ -9,6 +9,7 @@ import { recordEvent, notifyCustomer, applyStatus } from '../services/orderEvent
 import { earnPoints, maxRedeemablePoints, discountForPoints } from '../services/loyalty.js';
 import { reserveStock, StockError } from '../services/stock.js';
 import { sendEmail } from '../services/email.js';
+import { getRiderLocation } from '../services/riderLocation.js';
 import { config } from '../config.js';
 
 const router = Router();
@@ -469,6 +470,36 @@ router.get('/my', requireAuth, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/orders/:id/rider-location — the live rider position for a tracking page.
+//
+// Same public-by-order-reference trust model as /track/:ref below: knowing the order
+// reference is already the gate for everything on the tracking page (status, items,
+// timeline). Only ever returns a position while the order is OUT_FOR_DELIVERY — see
+// services/riderLocation.js for the privacy rules.
+router.get('/:id/rider-location', async (req, res) => {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: String(req.params.id || '').trim() },
+      select: { id: true, status: true },
+    });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    const position = getRiderLocation(order.id, order.status);
+    if (!position) return res.json({ position: null });
+    res.json({
+      position: {
+        lat: position.lat,
+        lng: position.lng,
+        accuracy: position.accuracy,
+        riderName: position.riderName,
+        updatedAt: position.updatedAt,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load rider location' });
+  }
+});
+
 // GET /api/orders/track/:ref  — public order tracking
 // ---------------------------------------------------------------------------
 router.get('/track/:ref', async (req, res) => {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Bike,
@@ -12,6 +12,7 @@ import {
   Lock,
   Phone,
   TrendingUp,
+  LocateFixed,
 } from 'lucide-react';
 import { api } from '../api.js';
 import { useApp } from '../store.jsx';
@@ -26,7 +27,11 @@ import Seo from '../components/Seo.jsx';
  *   available → unclaimed READY deliveries, with the customer's address and phone
  *               withheld until a rider accepts,
  *   mine      → jobs this rider has claimed (full delivery details),
- *   completed → their recent deliveries.
+ *   completed → their recent deliveries, plus their delivery-fee history
+ *               (what the shop charges customers; actual pay is between rider and shop).
+ *
+ * While riding, the rider can share live GPS so the customer's tracking page shows
+ * the approach. Positions live only while the delivery is out for delivery.
  */
 export default function Rider() {
   const navigate = useNavigate();
@@ -41,11 +46,21 @@ export default function Rider() {
   const [data, setData] = useState({ available: [], mine: [], completed: [] });
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
+  const [earnings, setEarnings] = useState(null);
+
+  // Live location sharing. States: 'idle' (off), 'asking' (browser prompt showing),
+  // 'on', 'denied' (customer said no), 'unsupported' (no GPS on this device).
+  const [locStatus, setLocStatus] = useState('idle');
+  const watchRef = useRef(null);
+  const lastSentRef = useRef(0);
+  const mineRef = useRef([]);
+  mineRef.current = data.mine;
 
   const load = useCallback(() => {
     if (!isRider) return;
     api.get('/rider/orders', { auth: true })
       .then(setData)
+    api.get('/rider/earnings', { auth: true }).then(setEarnings).catch(() => {})
       .catch((err) => {
         if (err.status === 401 || err.status === 403) {
           toast('Your rider session has ended — please sign in again', 'error');
@@ -64,6 +79,61 @@ export default function Rider() {
     const t = setInterval(load, 15000); // keep the job list fresh
     return () => clearInterval(t);
   }, [isRider, load]);
+
+  // Stop watching when the last active delivery ends — no reason to keep the GPS on.
+  useEffect(() => {
+    if (data.mine.length === 0 && locStatus === 'on') stopSharing();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.mine.length]);
+
+  // Always let go of the GPS on unmount.
+  useEffect(() => () => {
+    if (watchRef.current) navigator.geolocation.clearWatch(watchRef.current);
+  }, []);
+
+  const sendPosition = (pos) => {
+    const body = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy };
+    // At most one send per 10 seconds: the customer wants to see the rider moving,
+    // not a per-second trace, and the battery cares.
+    const now = Date.now();
+    if (now - lastSentRef.current < 10000) return;
+    lastSentRef.current = now;
+    mineRef.current.forEach((o) => {
+      api.post(`/rider/${o.id}/location`, body, { auth: true }).catch(() => {});
+    });
+  };
+
+  const startSharing = () => {
+    if (!('geolocation' in navigator)) {
+      setLocStatus('unsupported');
+      toast('This device cannot share location', 'error');
+      return;
+    }
+    setLocStatus('asking');
+    watchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        setLocStatus('on');
+        sendPosition(pos);
+      },
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          setLocStatus('denied');
+          toast('Location permission refused — the customer will not see your approach', 'error');
+        } else {
+          setLocStatus('unsupported');
+          toast('Could not get a GPS fix on this device', 'error');
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
+    );
+  };
+
+  const stopSharing = () => {
+    if (watchRef.current) navigator.geolocation.clearWatch(watchRef.current);
+    watchRef.current = null;
+    setLocStatus('idle');
+    lastSentRef.current = 0;
+  };
 
   const signIn = async (e) => {
     e.preventDefault();
@@ -220,8 +290,8 @@ export default function Rider() {
           <div className="rider-stat">
             <TrendingUp size={18} />
             <div>
-              <strong>{ghs(completed.reduce((s, o) => s + Number(o.total || 0), 0))}</strong>
-              <span>Recent value</span>
+              <strong>{earnings ? ghs(earnings.thisWeek.deliveryFees) : '—'}</strong>
+              <span>Fees this week{earnings ? ` · ${earnings.allTime.deliveries} all-time` : ''}</span>
             </div>
           </div>
         </div>
@@ -230,7 +300,28 @@ export default function Rider() {
           <div className="empty-state"><p>Loading deliveries…</p></div>
         ) : (
           <>
-            <h2 className="section-title">On the road ({mine.length})</h2>
+            <div className="rider-road-head">
+              <h2 className="section-title">On the road ({mine.length})</h2>
+              {mine.length > 0 && (
+                <button
+                  className={`btn btn-sm ${locStatus === 'on' ? 'btn-secondary' : 'btn-primary'}`}
+                  onClick={locStatus === 'on' ? stopSharing : startSharing}
+                  disabled={locStatus === 'asking'}
+                >
+                  <LocateFixed size={14} />
+                  {locStatus === 'on' ? 'Stop sharing' : locStatus === 'asking' ? 'Asking…' : 'Share live location'}
+                </button>
+              )}
+            </div>
+            {mine.length > 0 && locStatus !== 'on' && (
+              <p className="muted small rider-share-hint">
+                {locStatus === 'denied'
+                  ? 'Location is off for this site — the customer sees your status but not your approach. Allow it in the browser to share.'
+                  : locStatus === 'unsupported'
+                    ? 'This device cannot share GPS — the customer sees your status but not your approach.'
+                    : 'Share your location while riding so the customer can see you approaching (uses GPS; nothing is kept after delivery).'}
+              </p>
+            )}
             <div className="rider-list">
               {mine.map((o) => (
                 <div className="rider-card rider-card-active" key={o.id}>
@@ -310,7 +401,7 @@ export default function Rider() {
                   {completed.map((o) => (
                     <div className="rider-completed-row" key={o.id}>
                       <span><ShieldCheck size={15} /> {o.id}</span>
-                      <span className="muted small">{o.deliveryZone} · {ghs(o.total)}</span>
+                      <span className="muted small">{o.deliveryZone} · fee {ghs(o.deliveryFee)}</span>
                       <span className="muted small">{fmtDateTime(o.updatedAt)}</span>
                     </div>
                   ))}

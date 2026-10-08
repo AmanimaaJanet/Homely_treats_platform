@@ -62,6 +62,13 @@ anywhere, which is why it works offline in development).
 
 ### Adding more staff
 
+While riding, the rider app has a **Share live location** toggle: their GPS position
+appears on the customer's tracking page as an approaching-rider card, and is deleted
+the moment the delivery is marked done (nothing is stored after — positions live in
+server memory only, and only while a delivery is out for delivery). The rider app also
+shows each rider their own delivery history and the delivery fees attached to those
+orders — what you actually pay them is between you and them.
+
 Riders are ordinary accounts the admin creates — **Admin → Riders → Add rider** — and
 they can be suspended instantly (suspension cuts an active session's access
 immediately; two riders can't claim the same job). There is currently no screen for

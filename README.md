@@ -25,10 +25,10 @@ A full-stack bakery ordering platform built from your HTML mockup: **React** fro
 - 📖 **Menu** — search, category filters, price & name sorting
 - 🧁 **Custom Order** — product, quantity, flavour, icing, inscription, required date + **size-based pricing** + **design-photo upload** (show our decorators a cake you love)
 - 🛒 **Cart & Checkout** — quantity controls, **delivery zones with per-neighbourhood fees**, promo codes, **loyalty-point redemption**, guest or signed-in checkout
-- 🚚 **Track Order** — live **real-time updates over WebSockets** (auto-falls back to polling), full status timeline, rider info, design photos, and the notification log
+- 🚚 **Track Order** — live **real-time updates over WebSockets** (auto-falls back to polling), full status timeline, rider info, **the rider's live GPS approach while out for delivery** (with an opt-in distance readout — the customer's own location never leaves their browser), design photos, and the notification log
 - 👤 **Accounts** — register, sign in, email verification, profile, password change, order history with **"Order again"**, **loyalty points** balance, and per-account sign-in protection (a brief pause after repeated wrong passwords, with a reset link to get straight back in)
 - ⭐ **Reviews & ratings** — rate delivered orders (earn +5 bonus points); published on the homepage once approved when moderation is on
-- 🛵 **Rider app** at `/rider` — riders accept deliveries and mark them delivered (updates the customer's tracker instantly)
+- 🛵 **Rider app** at `/rider` — riders accept deliveries, share live GPS with one tap, mark deliveries done (updates the customer's tracker instantly), and see their delivery-fee history
 - 📱 **PWA** — installable to the home screen, with free **web push alerts** ("your cake is ready") alongside SMS, WhatsApp and email
 - ❤️ **Saved items & restock alerts** — heart any product; if it's sold out we email you the moment it's back
 - ⭐ **Product pages** — photos, size prices, real ratings and verified-purchase reviews per product

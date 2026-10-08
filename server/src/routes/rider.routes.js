@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../prisma.js';
 import { applyStatus } from '../services/orderEvents.js';
 import { broadcastOrder } from '../services/realtime.js';
+import { updateRiderLocation } from '../services/riderLocation.js';
 import { requireRider } from '../middleware/auth.js';
 
 const router = Router();
@@ -74,13 +75,90 @@ router.get('/orders', requireRider, async (req, res) => {
         where: { riderId: req.user.id, status: 'DELIVERED' },
         orderBy: { updatedAt: 'desc' },
         take: 10,
-        select: { id: true, deliveryZone: true, total: true, updatedAt: true },
+        select: { id: true, deliveryZone: true, deliveryFee: true, total: true, updatedAt: true },
       }),
     ]);
     res.json({ available, mine, completed });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load deliveries' });
+  }
+});
+
+// POST /api/rider/:id/location — the rider app's live position while running a delivery
+//
+// The rider page sends this every ~10s while it has an OUT_FOR_DELIVERY job. It is
+// stored in memory only (see services/riderLocation.js) and broadcast to the
+// customer's tracking page. Accepted only from the rider who owns the delivery,
+// only while the delivery is actually out for delivery.
+router.post('/:id/location', requireRider, async (req, res) => {
+  try {
+    const { lat, lng, accuracy } = req.body || {};
+    if (typeof lat !== 'number' || typeof lng !== 'number'
+      || !Number.isFinite(lat) || !Number.isFinite(lng)
+      || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({ error: 'lat and lng must be valid coordinates' });
+    }
+    const order = await prisma.order.findUnique({ where: { id: req.params.id } });
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    if (order.riderId !== req.user.id) {
+      return res.status(403).json({ error: 'This delivery is assigned to another rider' });
+    }
+    if (order.status !== 'OUT_FOR_DELIVERY') {
+      // Not an error worth alarming the rider over (they may just have marked it
+      // delivered) — but nothing is stored or broadcast.
+      return res.status(409).json({ error: 'Order is not out for delivery' });
+    }
+    const position = updateRiderLocation(order.id, {
+      lat,
+      lng,
+      accuracy: Number.isFinite(accuracy) ? Math.max(0, accuracy) : undefined,
+      riderName: order.riderName || req.user.fullName,
+    });
+    res.json({ ok: true, updatedAt: position.updatedAt });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update location' });
+  }
+});
+
+// GET /api/rider/earnings — this rider's delivery history, with the delivery fees
+// attached to the orders they completed. What a rider is actually paid is between
+// them and the bakery; the numbers here are the honest underlying facts.
+router.get('/earnings', requireRider, async (req, res) => {
+  try {
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [allTime, week, recent] = await Promise.all([
+      prisma.order.aggregate({
+        where: { riderId: req.user.id, status: 'DELIVERED' },
+        _count: { id: true },
+        _sum: { deliveryFee: true },
+      }),
+      prisma.order.aggregate({
+        where: { riderId: req.user.id, status: 'DELIVERED', updatedAt: { gte: weekAgo } },
+        _count: { id: true },
+        _sum: { deliveryFee: true },
+      }),
+      prisma.order.findMany({
+        where: { riderId: req.user.id, status: 'DELIVERED' },
+        orderBy: { updatedAt: 'desc' },
+        take: 20,
+        select: { id: true, deliveryZone: true, deliveryFee: true, total: true, updatedAt: true },
+      }),
+    ]);
+    const deliveries = allTime._count.id;
+    const fees = allTime._sum.deliveryFee || 0;
+    res.json({
+      allTime: { deliveries, deliveryFees: fees, averageFee: deliveries ? fees / deliveries : 0 },
+      thisWeek: {
+        deliveries: week._count.id,
+        deliveryFees: week._sum.deliveryFee || 0,
+      },
+      recent,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to load earnings' });
   }
 });
 

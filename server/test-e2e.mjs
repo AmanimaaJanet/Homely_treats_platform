@@ -452,8 +452,55 @@ async function main() {
     const wrongDeliver = await req(`/api/rider/${riderOrderId}/deliver`, { method: 'POST', token: rider2Login.data?.token });
     check('Only the assigned rider can mark delivered', wrongDeliver.status === 403, `status ${wrongDeliver.status}`);
 
+    // --- Live rider GPS: position while out for delivery, gone after -----------
+    const badLoc = await req(`/api/rider/${riderOrderId}/location`, { method: 'POST', token: riderToken, body: { lat: 999, lng: 0 } });
+    check('Invalid coordinates rejected', badLoc.status === 400, `status ${badLoc.status}`);
+    const otherRiderLoc = await req(`/api/rider/${riderOrderId}/location`, { method: 'POST', token: rider2Login.data?.token, body: { lat: 5.6052, lng: -0.1719 } });
+    check("Another rider cannot post this order's location", otherRiderLoc.status === 403, `status ${otherRiderLoc.status}`);
+
+    // The customer's tracking page should receive the position over WebSocket the
+    // moment the rider's app posts it.
+    const locMsg = await new Promise((resolve) => {
+      const ws = new WebSocket(`${WS_URL}/ws?order=${riderOrderId}`);
+      const timer = setTimeout(() => { try { ws.close(); } catch {} resolve(null); }, 4000);
+      ws.on('open', () => {
+        setTimeout(() => {
+          req(`/api/rider/${riderOrderId}/location`, { method: 'POST', token: riderToken, body: { lat: 5.6052, lng: -0.1719, accuracy: 12 } }).catch(() => {});
+        }, 300);
+      });
+      ws.on('message', (m) => {
+        try {
+          const msg = JSON.parse(m.toString());
+          if (msg.type === 'RIDER_LOCATION') {
+            clearTimeout(timer);
+            try { ws.close(); } catch {}
+            resolve(msg);
+          }
+        } catch {}
+      });
+      ws.on('error', () => { clearTimeout(timer); resolve(null); });
+    });
+    check('Rider position broadcast to the tracking page in real time',
+      !!locMsg && locMsg.lat === 5.6052 && locMsg.lng === -0.1719,
+      locMsg ? `lat=${locMsg.lat}` : 'no message');
+
+    const pubLoc = await req(`/api/orders/${riderOrderId}/rider-location`);
+    check('Tracking page can fetch the live position',
+      pubLoc.data?.position?.lat === 5.6052 && typeof pubLoc.data.position.updatedAt === 'number',
+      JSON.stringify(pubLoc.data?.position || null).slice(0, 80));
+
     const deliver = await req(`/api/rider/${riderOrderId}/deliver`, { method: 'POST', token: riderToken });
     check('Rider marks delivered', deliver.data?.order?.status === 'DELIVERED');
+
+    // Privacy: the position stops existing the moment the order leaves the street.
+    const locAfterDeliver = await req(`/api/orders/${riderOrderId}/rider-location`);
+    check('Rider position is gone after delivery', locAfterDeliver.data?.position === null, JSON.stringify(locAfterDeliver.data?.position || null).slice(0, 60));
+
+    // Rider earnings: this rider has now completed one delivery.
+    const riderEarnings = await req('/api/rider/earnings', { token: riderToken });
+    check('Rider earnings reflect the completed delivery',
+      riderEarnings.data?.allTime?.deliveries >= 1 && riderEarnings.data?.recent?.some((r) => r.id === riderOrderId),
+      `allTime=${riderEarnings.data?.allTime?.deliveries}`);
 
     // Suspending a rider must cut access immediately, even with a live token.
     if (mkRider.data?.rider?.id) {
