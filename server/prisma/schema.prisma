@@ -187,7 +187,7 @@ model Order {
   riderAcceptedAt DateTime?
   readyDate       DateTime?
   timeSlot        String? // collection/delivery window label, e.g. "9:00 – 11:00"
-  pickupLocation  String? // which counter, when the bakery has more than one
+  pickupLocation  String? // the branch fulfilling this order: the counter a pickup customer collects from, or the kitchen baking a delivery
   notes           String?
   promoCode       String?
   createdAt       DateTime       @default(now())

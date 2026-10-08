@@ -15,6 +15,8 @@ export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState('ALL');
   const [search, setSearch] = useState('');
+  const [branches, setBranches] = useState([]); // pickup locations = branches
+  const [branch, setBranch] = useState('ALL');
   const [detail, setDetail] = useState(null);
   const [refunding, setRefunding] = useState(false);
   const [refundReason, setRefundReason] = useState('');
@@ -23,10 +25,16 @@ export default function Orders() {
     const params = new URLSearchParams();
     if (status !== 'ALL') params.set('status', status);
     if (search) params.set('search', search);
+    if (branch !== 'ALL') params.set('branch', branch);
     api.get(`/admin/orders?${params}`, { auth: true }).then((d) => setOrders(d.orders)).catch(() => {});
   };
 
-  useEffect(load, [status]);
+  // The branch list (pickup locations) drives the filter dropdown.
+  useEffect(() => {
+    api.get('/delivery/options').then((d) => setBranches(d.pickupLocations || [])).catch(() => {});
+  }, []);
+
+  useEffect(load, [status, branch]);
 
   const updateStatus = async (id, newStatus) => {
     try {
@@ -86,6 +94,12 @@ export default function Orders() {
           <option value="ALL">All Statuses</option>
           {STATUSES.map((s) => <option key={s}>{s.replace(/_/g, ' ')}</option>)}
         </select>
+        {branches.length > 1 && (
+          <select aria-label="Filter by branch" className="form-select" value={branch} onChange={(e) => setBranch(e.target.value)}>
+            <option value="ALL">All Branches</option>
+            {branches.map((b) => <option key={b.id} value={b.name}>{b.name}</option>)}
+          </select>
+        )}
         <input aria-label="Search orders"
           className="form-input"
           placeholder="Search order / customer…"
@@ -100,7 +114,7 @@ export default function Orders() {
         <thead>
           <tr>
             <th scope="col">Order ID</th><th scope="col">Customer</th><th scope="col">Items</th><th scope="col">Amount</th>
-            <th scope="col">Payment</th><th scope="col">Status</th><th scope="col">Date</th><th scope="col">Action</th>
+            <th scope="col">Payment</th><th scope="col">Status</th><th scope="col">Branch</th><th scope="col">Date</th><th scope="col">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -118,6 +132,7 @@ export default function Orders() {
               </td>
               <td>{ghs(o.total)}</td>
               <td><StatusBadge status={o.paymentStatus} /></td>
+              <td className="muted small">{o.pickupLocation || '—'}</td>
               <td>
                 <select aria-label="Change order status"
                   className="form-select status-select"

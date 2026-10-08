@@ -160,9 +160,11 @@ router.get('/stats', async (req, res) => {
 // ---------------------------------------------------------------------------
 router.get('/orders', async (req, res) => {
   try {
-    const { status, search } = req.query;
+    const { status, search, branch } = req.query;
     const where = {};
     if (status && status !== 'ALL') where.status = status;
+    // Which kitchen/counter should this list show? (Orders record the branch by name.)
+    if (branch && branch !== 'ALL') where.pickupLocation = branch;
     if (search) {
       where.OR = [
         { id: { contains: search, mode: 'insensitive' } },

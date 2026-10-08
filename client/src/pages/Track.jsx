@@ -18,6 +18,7 @@ export default function Track() {
   const [loading, setLoading] = useState(false);
   const [live, setLive] = useState(false);
   const [pickupAddress, setPickupAddress] = useState('Airport Residential, Accra');
+  const [branchHours, setBranchHours] = useState('');
   const { user } = useApp();
   const navigate = useNavigate();
   const wsRef = useRef(null);
@@ -44,6 +45,12 @@ export default function Track() {
       .get(`/orders/track/${encodeURIComponent(r.trim())}`)
       .then((d) => {
         setData(d);
+        // With more than one branch, the customer must see the address of the branch
+        // they actually chose, not the shop-wide one.
+        if (d.pickupBranch?.address) {
+          setPickupAddress(d.pickupBranch.address);
+          setBranchHours(d.pickupBranch.hours || '');
+        }
         // Pick up the rider's last known position (the WebSocket below keeps it live).
         if (d.order?.status === 'OUT_FOR_DELIVERY') {
           api.get(`/orders/${encodeURIComponent(r.trim())}/rider-location`)
@@ -272,7 +279,7 @@ export default function Track() {
                   <h3 className="form-heading">Order Details</h3>
                   <div className="info-card">
                     <p><strong>Order ID:</strong> {order.id}</p>
-                    <p><strong>Delivery:</strong> {order.deliveryMethod === 'DELIVERY' ? `Home Delivery — ${order.deliveryZone || ''}${order.deliveryAddress ? ', ' + order.deliveryAddress : ''}` : `Pickup (${pickupAddress})`}</p>
+                    <p><strong>Delivery:</strong> {order.deliveryMethod === 'DELIVERY' ? `Home Delivery — ${order.deliveryZone || ''}${order.deliveryAddress ? ', ' + order.deliveryAddress : ''}` : `Pickup from ${order.pickupLocation || 'our shop'} — ${pickupAddress}${branchHours ? ` (${branchHours})` : ''}`}</p>
                     <p><strong>Ready Date:</strong> {fmtDate(order.readyDate)}</p>
                     <p><strong>Subtotal:</strong> {ghs(order.subtotal)}</p>
                     {order.discount > 0 && <p><strong>Discount:</strong> −{ghs(order.discount)}</p>}

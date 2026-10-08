@@ -1378,6 +1378,35 @@ async function main() {
       pickupOrder.data?.order?.pickupLocation === COUNTER,
       pickupOrder.data?.order?.pickupLocation);
 
+    // --- multi-branch: deliveries record the kitchen that bakes them, and the
+    // customer's tracker shows the branch they must actually visit ----------------
+    const branchDelivery = await mk({
+      deliveryMethod: 'DELIVERY', deliveryZone: zoneId, readyDate: NEAR_DATE,
+      items: [{ productId: created.productIds[0], quantity: qtyForMin }],
+    });
+    if (branchDelivery.data?.order?.id) created.orderIds.push(branchDelivery.data.order.id);
+    check('A delivery records the branch that fulfils it (the default kitchen)',
+      branchDelivery.data?.order?.pickupLocation === COUNTER,
+      branchDelivery.data?.order?.pickupLocation);
+
+    const branchTrack = await req(`/api/orders/track/${pickupOrder.data?.order?.id}`);
+    check("The tracker shows the chosen branch's address, not the shop-wide one",
+      branchTrack.data?.pickupBranch?.address === '2 Test Lane, Osu' && branchTrack.data?.pickupBranch?.name === COUNTER,
+      JSON.stringify(branchTrack.data?.pickupBranch || null).slice(0, 60));
+
+    const byBranchFilter = await req(`/api/admin/orders?branch=${encodeURIComponent(COUNTER)}`, { token: adminToken });
+    check('Admin can filter the order list to one branch',
+      byBranchFilter.status === 200
+        && byBranchFilter.data?.orders?.length > 0
+        && byBranchFilter.data.orders.every((o) => o.pickupLocation === COUNTER),
+      `${byBranchFilter.data?.orders?.length} orders`);
+
+    const branchReport = await req('/api/admin/reports', { token: adminToken });
+    const branchRow = branchReport.data?.analytics?.byBranch?.find((b) => b.branch === COUNTER);
+    check('Reports break revenue down by branch',
+      !!branchRow && branchRow.orders > 0,
+      branchRow ? `${branchRow.orders} orders` : 'no row');
+
     // --- time slots with capacity --------------------------------------------
     const slotA = await req('/api/admin/time-slots', {
       method: 'POST', token: adminToken, body: { label: SLOT_OK, capacity: 1, sortOrder: 1 },

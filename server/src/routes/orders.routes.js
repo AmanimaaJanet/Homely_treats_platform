@@ -257,23 +257,20 @@ router.post('/', optionalAuth, async (req, res) => {
     // ---- Collection / delivery window ----
     const slotProblem = await validateSlot({ readyDate, timeSlot });
     if (slotProblem) return res.status(400).json({ error: slotProblem.error });
-    // Which counter matters when the bakery has more than one. Named location ids are
-    // resolved to the counter's name (what the ticket and receipt print), and when the
-    // customer didn't choose, the default counter is assumed.
+    // Which branch fulfils this order — the counter a pickup customer collects from,
+    // or the kitchen that bakes a delivery. Location ids resolve to the branch's name
+    // (what the ticket and receipt print); when the customer didn't choose, the
+    // default branch is assumed. A shop with one location never notices any of this.
     let resolvedPickup = pickupLocation ? String(pickupLocation) : null;
-    if (deliveryMethod === 'PICKUP') {
-      const locations = await prisma.pickupLocation.findMany({
-        where: { active: true },
-        orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
-      });
-      if (resolvedPickup) {
-        const match = locations.find((l) => l.id === resolvedPickup || l.name === resolvedPickup);
-        resolvedPickup = match ? match.name : resolvedPickup.slice(0, 120);
-      } else {
-        resolvedPickup = locations[0]?.name || null;
-      }
+    const locations = await prisma.pickupLocation.findMany({
+      where: { active: true },
+      orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+    });
+    if (resolvedPickup) {
+      const match = locations.find((l) => l.id === resolvedPickup || l.name === resolvedPickup);
+      resolvedPickup = match ? match.name : resolvedPickup.slice(0, 120);
     } else {
-      resolvedPickup = null;
+      resolvedPickup = locations[0]?.name || null;
     }
 
     // ---- Promo ---- (with abuse controls: min spend, per-customer cap, first order)
@@ -516,8 +513,15 @@ router.get('/track/:ref', async (req, res) => {
       },
     });
     if (!order) return res.status(404).json({ error: 'Order not found. Check the reference and try again.' });
+    // For a pickup, the customer needs the address of the branch they chose — with
+    // more than one counter, the shop-wide address would send them to the wrong door.
+    let pickupBranch = null;
+    if (order.deliveryMethod === 'PICKUP' && order.pickupLocation) {
+      const branch = await prisma.pickupLocation.findUnique({ where: { name: order.pickupLocation } });
+      if (branch) pickupBranch = { name: branch.name, address: branch.address, hours: branch.hours, phone: branch.phone };
+    }
     const timeline = buildTimeline(order, order.events);
-    res.json({ order, timeline });
+    res.json({ order, timeline, pickupBranch });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to load order' });

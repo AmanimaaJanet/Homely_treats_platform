@@ -56,15 +56,15 @@ export async function notifyCustomer(order, type, { note = '' } = {}) {
     READY: {
       pushBody: order.deliveryMethod === 'DELIVERY'
         ? `Order ${order.id} is ready — our rider is on the way.`
-        : `Order ${order.id} is ready. Please collect it from our shop.`,
-      sms: `Homely Treats: Great news! Order ${order.id} is ready for ${order.deliveryMethod === 'DELIVERY' ? 'delivery' : 'pickup'}. ${trackUrl}`,
+        : `Order ${order.id} is ready. Please collect it${order.pickupLocation ? ` from ${order.pickupLocation}` : ''}.`,
+      sms: `Homely Treats: Great news! Order ${order.id} is ready for ${order.deliveryMethod === 'DELIVERY' ? 'delivery' : 'pickup'}${order.deliveryMethod === 'PICKUP' && order.pickupLocation ? ` from ${order.pickupLocation}` : ''}. ${trackUrl}`,
       email: {
         headline: 'Your order is ready!',
         bodyLines: [
           `Hi ${name}, order <strong>${order.id}</strong> is ready.`,
           order.deliveryMethod === 'DELIVERY'
             ? `Our rider is on the way to: ${order.deliveryAddress || 'your address'}.`
-            : `Please collect it from our Airport Residential shop.`,
+            : `Please collect it from <strong>${order.pickupLocation || 'our shop'}</strong>.`,
         ],
       },
     },

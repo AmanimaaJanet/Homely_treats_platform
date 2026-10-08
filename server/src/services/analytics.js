@@ -88,6 +88,18 @@ export function buildAnalytics({ orders, itemRows, months = 12 }) {
   }
   const bySlot = [...slotMap.values()].sort((a, b) => b.orders - a.orders);
 
+  // ---- which branch carries the shop? (orders record the fulfilling branch by name;
+  // orders from before branches existed show as the unlabelled row) ----
+  const branchMap = new Map();
+  for (const o of orders) {
+    const label = o.pickupLocation || 'Not recorded';
+    const row = branchMap.get(label) || { branch: label, orders: 0, revenue: 0 };
+    row.orders += 1;
+    if (['PAID', 'SIMULATED'].includes(o.paymentStatus)) row.revenue += o.total;
+    branchMap.set(label, row);
+  }
+  const byBranch = [...branchMap.values()].sort((a, b) => b.revenue - a.revenue);
+
   // ---- do customers come back? One order is a customer; two is a business.
   const customerOrders = new Map();
   for (const o of orders) {
@@ -149,6 +161,7 @@ export function buildAnalytics({ orders, itemRows, months = 12 }) {
     byPayment: [...payMap.values()].sort((a, b) => b.orders - a.orders),
     byWeekday: weekday,
     bySlot,
+    byBranch,
     byStatus,
     repeat,
     products,

@@ -97,6 +97,13 @@ so with more than one admin you can always see who did what.
 | **Reports** | Revenue over any date range: by day, **by zone**, by payment method, busiest weekdays and windows, repeat-customer rate, average order value, 12-month trend, top products with share of sales, refunds, and **CSV export** for your accountant. |
 | **Deliveries** | Your delivery rules in one place: zones with fees, **minimum basket**, **free delivery over**, ETA note, **pickup counters**, **collection windows with daily capacity**, **closed days**, and a 14-day calendar of what each day has promised. |
 | **Riders** | Create rider accounts, suspend them, and see who is carrying what. |
+
+**Branches** — every order records the branch that fulfils it: the counter a pickup
+customer chose, or (for deliveries) the default kitchen. When you open a second
+location, add it under **Deliveries → Pickup locations** and mark one as the default —
+orders then carry the right branch automatically, the Orders screen gains a
+**branch filter**, Reports gains a per-branch revenue table, and pickup customers see
+the address of the branch they chose on their tracker.
 | **Activity log** | Who changed what, when, from which IP — order changes, price edits, refunds, moderation, settings. |
 | **Diagnostics** | Is everything switched on (Paystack, email, WhatsApp, push, SMS), did any notification fail this week, and what errors has the server hit — each with the reference to quote. |
 | **Settings** | Business details, lead time, low-stock threshold, payment methods, loyalty/review toggles, notification toggles, **WhatsApp templates**, and **your admin account & password**. (Delivery zones now live under **Deliveries**.) |

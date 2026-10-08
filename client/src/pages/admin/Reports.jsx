@@ -237,6 +237,26 @@ export default function Reports() {
             </div>
           </div>
 
+          {(data.analytics?.byBranch || []).length > 0 && (
+            <div className="section">
+              <h3 className="form-heading">Branches</h3>
+              <table className="table">
+                <thead>
+                  <tr><th scope="col">Branch</th><th scope="col">Orders</th><th scope="col">Paid revenue</th></tr>
+                </thead>
+                <tbody>
+                  {data.analytics.byBranch.map((b) => (
+                    <tr key={b.branch}>
+                      <td>{b.branch}</td>
+                      <td>{b.orders}</td>
+                      <td>{ghs(b.revenue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {(data.analytics?.bySlot || []).length > 0 && (
             <div className="section">
               <h3 className="form-heading">Windows people choose</h3>
