@@ -6,7 +6,6 @@ import ProductCard from '../components/ProductCard.jsx';
 import VideoBlock from '../components/VideoBlock.jsx';
 import { fmtDate } from '../lib/format.js';
 import Seo from '../components/Seo.jsx';
-import { useLang } from '../lib/i18n.js';
 
 function StarRow({ n }) {
   return (
@@ -19,7 +18,6 @@ function StarRow({ n }) {
 }
 
 export default function Home() {
-  const { t } = useLang();
   const navigate = useNavigate();
   const [featured, setFeatured] = useState([]);
   const [reviews, setReviews] = useState(null);
@@ -55,9 +53,9 @@ export default function Home() {
           <div className="hero-text">
             <span className="hero-chip">Baked fresh · Handcrafted in Accra</span>
             <h1>
-              {t('Every Bite Made')}
+              Every Bite Made
               <br />
-              {t('Just for')} <span className="accent">{t('You')}</span>
+              Just for <span className="accent">You</span>
             </h1>
             <p className="hero-sub">
               Custom cakes, pastries, and confectioneries baked to order. Tell us the occasion,
@@ -83,7 +81,7 @@ export default function Home() {
       <div className="container">
         {/* Featured products */}
         <div className="section">
-          <h2 className="section-title">{t('Featured Products')}</h2>
+          <h2 className="section-title">Featured Products</h2>
           {featured.length === 0 ? (
             <div className="empty-state">
               <div className="empty-state-icon"><Store size={48} strokeWidth={1.4} /></div>
@@ -154,7 +152,7 @@ export default function Home() {
 
         {/* How it works */}
         <div className="section band-dark">
-          <h2 className="section-title">{t('How It Works')}</h2>
+          <h2 className="section-title">How It Works</h2>
           <div className="steps">
             <div className="step"><div className="step-number">1</div><h3>Choose Your Product</h3><p>Browse cakes, cupcakes, pastries & more</p></div>
             <div className="step"><div className="step-number">2</div><h3>Configure Your Order</h3><p>Size, flavour, icing, inscription & date</p></div>
@@ -171,7 +169,7 @@ export default function Home() {
         {/* Reviews — real data only */}
         {reviews && reviews.length > 0 && (
           <div className="section band-light">
-            <h2 className="section-title">{t('What Our Customers Say')}</h2>
+            <h2 className="section-title">What Our Customers Say</h2>
             <div className="testimonials">
               {reviews.slice(0, 3).map((r) => (
                 <div className="testimonial" key={r.id}>

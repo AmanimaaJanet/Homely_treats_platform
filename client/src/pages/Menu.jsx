@@ -5,7 +5,6 @@ import ProductCard from '../components/ProductCard.jsx';
 import { ProductIcon } from '../components/ProductIcon.jsx';
 import VideoBlock from '../components/VideoBlock.jsx';
 import Seo from '../components/Seo.jsx';
-import { useLang } from '../lib/i18n.js';
 
 const CATEGORIES = [
   { id: 'ALL', label: 'All Items', icon: null },
@@ -16,7 +15,6 @@ const CATEGORIES = [
 ];
 
 export default function Menu() {
-  const { t } = useLang();
   const [products, setProducts] = useState([]);
   const [category, setCategory] = useState('ALL');
   const [sort, setSort] = useState('popular');
@@ -60,15 +58,15 @@ export default function Menu() {
           <div className="menu-controls">
             <div className="search-box">
               <Search size={18} className="search-icon" />
-              <input aria-label={t('Search treats…')}
+              <input aria-label="Search treats"
                 className="form-input"
-                placeholder={t('Search treats…')}
+                placeholder="Search treats…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             <select aria-label="Sort treats by" className="form-select" value={sort} onChange={(e) => setSort(e.target.value)}>
-              <option value="popular">{t('Sort: Popular')}</option>
+              <option value="popular">Sort: Popular</option>
               <option value="price-asc">Price: Low → High</option>
               <option value="price-desc">Price: High → Low</option>
               <option value="name">Name: A–Z</option>

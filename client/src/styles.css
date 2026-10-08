@@ -507,12 +507,6 @@ a:hover { color: var(--pd); }
 .timeline-list { display: flex; flex-direction: column; gap: 6px; }
 .timeline-row { display: flex; gap: 10px; align-items: baseline; font-size: 13px; padding: 6px 0; border-bottom: 1px dashed var(--border); flex-wrap: wrap; }
 
-/* Language switch (EN | Twi) — two small taps in the navbar. */
-.lang-switch { display: inline-flex; border: 1.5px solid var(--border); border-radius: 100px; overflow: hidden; flex: none; }
-.lang-btn { background: transparent; border: none; padding: 5px 10px; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; font-family: inherit; }
-.lang-btn:hover { color: var(--pd, #A9622F); }
-.lang-active { background: var(--primary-ink); color: #fff; }
-
 /* ------------------------------------------------ Live rider ------------ */
 /* The tracking page's live rider card. The dot pulses while the rider's GPS is
    live; the whole point is "something is moving towards me", so the motion is the

@@ -3,7 +3,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import App from './App.jsx';
 import { AppProvider } from './store.jsx';
-import { LanguageProvider } from './lib/i18n.jsx';
 
 /**
  * Routing guards.
@@ -37,11 +36,9 @@ function mockApi({ user, extra = {} } = {}) {
 function renderAt(path) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <LanguageProvider>
-    <AppProvider>
+      <AppProvider>
         <App />
-        </AppProvider>
-    </LanguageProvider>
+      </AppProvider>
     </MemoryRouter>
   );
 }

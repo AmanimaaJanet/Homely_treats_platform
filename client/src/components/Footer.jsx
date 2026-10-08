@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Cake, Mail, Phone, MapPin } from 'lucide-react';
 import { api } from '../api.js';
-import { useLang } from '../lib/i18n.js';
 
 const DEFAULTS = {
   businessName: 'Homely Treats',
@@ -12,7 +11,6 @@ const DEFAULTS = {
 };
 
 export default function Footer() {
-  const { t } = useLang();
   const [info, setInfo] = useState(DEFAULTS);
 
   useEffect(() => {
@@ -29,7 +27,7 @@ export default function Footer() {
           <p>Ghana's handcrafted bakery. Every order made fresh, just for you.</p>
         </div>
         <div className="footer-section">
-          <h3>{t('Shop')}</h3>
+          <h3>Shop</h3>
           <ul>
             <li><Link to="/menu">Custom Cakes</Link></li>
             <li><Link to="/menu">Cupcakes</Link></li>
@@ -37,7 +35,7 @@ export default function Footer() {
           </ul>
         </div>
         <div className="footer-section">
-          <h3>{t('Account')}</h3>
+          <h3>Account</h3>
           <ul>
             <li><Link to="/account">My Orders</Link></li>
             <li><Link to="/track">Track Order</Link></li>
@@ -51,7 +49,7 @@ export default function Footer() {
           </ul>
         </div>
         <div className="footer-section">
-          <h3>{t('Contact')}</h3>
+          <h3>Contact</h3>
           <ul className="contact-list">
             <li><Mail size={14} /> {info.businessEmail}</li>
             <li><Phone size={14} /> {info.businessPhone}</li>

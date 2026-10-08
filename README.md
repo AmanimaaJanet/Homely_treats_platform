@@ -26,7 +26,6 @@ A full-stack bakery ordering platform built from your HTML mockup: **React** fro
 - 🧁 **Custom Order** — product, quantity, flavour, icing, inscription, required date + **size-based pricing** + **design-photo upload** (show our decorators a cake you love)
 - 🛒 **Cart & Checkout** — quantity controls, **delivery zones with per-neighbourhood fees**, promo codes, **loyalty-point redemption**, guest or signed-in checkout
 - 🏬 **Multi-branch ready** — every order records the branch that fulfils it (the counter a pickup customer collects from, or the kitchen baking a delivery); admin can filter the order list by branch and see revenue per branch in Reports; customers see the address of the branch they actually chose
-- 🗣️ **Bilingual UI (English / Twi)** — a language switch in the navbar; the storefront chrome (navigation, home, menu, product cards, footer) carries Asante Twi, and any string without a translation yet falls back to English rather than showing gaps. The dictionary is one file (`client/src/lib/i18n.js`) — extend it and have a native speaker review before launching to Twi speakers
 - 🚚 **Track Order** — live **real-time updates over WebSockets** (auto-falls back to polling), full status timeline, rider info, **the rider's live GPS approach while out for delivery** (with an opt-in distance readout — the customer's own location never leaves their browser), design photos, and the notification log
 
 > **Hosting notes** — on Render (or any host with an ephemeral disk), uploaded photos
