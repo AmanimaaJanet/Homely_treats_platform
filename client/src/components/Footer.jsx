@@ -39,6 +39,7 @@ export default function Footer() {
           <ul>
             <li><Link to="/account">My Orders</Link></li>
             <li><Link to="/track">Track Order</Link></li>
+            <li><Link to="/feedback">Share your feedback</Link></li>
             <li><Link to="/signin">Sign In</Link></li>
           </ul>
 

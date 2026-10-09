@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Star, Store, ArrowRight, MapPin, CreditCard, Truck } from 'lucide-react';
 import { api } from '../api.js';
 import ProductCard from '../components/ProductCard.jsx';
@@ -24,6 +24,9 @@ export default function Home() {
   // the section is showing the menu's first products under an honest heading.
   const [featuredSource, setFeaturedSource] = useState('featured');
   const [reviews, setReviews] = useState(null);
+  // Site feedback the bakery chose to publish. Shown in preference to product
+  // reviews — the owner picked these words for the homepage themselves.
+  const [feedback, setFeedback] = useState(null);
   const [minLead, setMinLead] = useState(2);
   // The shop's structured data (schema.org Bakery + current menu) is built by the API
   // from the live database, so what search engines read is what is actually for sale.
@@ -50,6 +53,7 @@ export default function Home() {
       })
       .catch(() => setFeatured([]));
     api.get('/reviews/recent').then((d) => setReviews(Array.isArray(d.reviews) ? d.reviews : [])).catch(() => setReviews([]));
+    api.get('/feedback/public').then((d) => setFeedback(Array.isArray(d.feedback) ? d.feedback : [])).catch(() => setFeedback([]));
     api.get('/settings/public').then((d) => setMinLead(d.settings.minLeadDays || 2)).catch(() => {});
     api.get('/structured-data.json').then(setStructured).catch(() => {});
   }, []);
@@ -187,20 +191,26 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Reviews — real data only */}
-        {reviews && reviews.length > 0 && (
+        {/* Customer words — real data only: published site feedback first, then
+            product reviews as the fallback. Hidden entirely when there is neither. */}
+        {(feedback?.length > 0 || (reviews && reviews.length > 0)) && (
           <div className="section band-light">
             <h2 className="section-title">What Our Customers Say</h2>
             <div className="testimonials">
-              {reviews.slice(0, 3).map((r) => (
+              {(feedback?.length ? feedback : reviews).slice(0, 3).map((r) => (
                 <div className="testimonial" key={r.id}>
-                  <StarRow n={r.rating} />
-                  <p className="testimonial-text">&ldquo;{r.comment}&rdquo;</p>
-                  <p className="testimonial-author">
-                    {r.user?.fullName || 'Customer'}{r.createdAt ? ` · ${fmtDate(r.createdAt)}` : ''}
-                  </p>
-                </div>
+                <StarRow n={r.rating} />
+                <p className="testimonial-text">&ldquo;{r.comment || r.message}&rdquo;</p>
+                <p className="testimonial-author">
+                  {r.user?.fullName || r.name || 'Customer'}{r.createdAt ? ` · ${fmtDate(r.createdAt)}` : ''}
+                </p>
+              </div>
               ))}
+            </div>
+            <div className="centered" style={{ marginTop: '1.5rem' }}>
+              <Link to="/feedback" className="btn btn-outline">
+                Share your own experience
+              </Link>
             </div>
           </div>
         )}

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Star, Check, EyeOff, RotateCcw, Search, MessageSquareQuote, Printer } from 'lucide-react';
+import { Star, Check, EyeOff, RotateCcw, Search, MessageSquareQuote, Printer, Trash2, MessageSquareHeart } from 'lucide-react';
 import { api } from '../../api.js';
 import { useApp } from '../../store.jsx';
 import { fmtDate } from '../../lib/format.js';
@@ -10,6 +10,9 @@ const TABS = [
   { key: 'APPROVED', label: 'Published' },
   { key: 'HIDDEN', label: 'Hidden' },
   { key: 'ALL', label: 'All' },
+  // Site feedback is its own thing: no order, no product — the bakery decides which
+  // of these notes appear on the homepage's "What Our Customers Say" section.
+  { key: 'FEEDBACK', label: 'Site feedback' },
 ];
 
 function Stars({ n }) {
@@ -31,9 +34,15 @@ export default function Reviews() {
   const [busy, setBusy] = useState(null);
 
   const load = async (which = tab, term = search) => {
-    const params = new URLSearchParams({ status: which });
-    if (term) params.set('search', term);
     try {
+      if (which === 'FEEDBACK') {
+        const data = await api.get('/admin/feedback?status=ALL', { auth: true });
+        const summary = { ...(data.summary || {}), FEEDBACK: data.summary?.PENDING || 0 };
+        setState({ reviews: data.items || [], summary });
+        return;
+      }
+      const params = new URLSearchParams({ status: which });
+      if (term) params.set('search', term);
       const data = await api.get(`/admin/reviews?${params}`, { auth: true });
       setState({ reviews: data.reviews, summary: data.summary });
     } catch (err) {
@@ -53,6 +62,24 @@ export default function Reviews() {
       await api.patch(`/admin/reviews/${review.id}`, { status }, { auth: true });
       const verb = status === 'APPROVED' ? 'published' : status === 'HIDDEN' ? 'hidden' : 'moved back to the queue';
       toast(`Review ${verb}.`, 'success');
+      await load();
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const feedbackAct = async (item, action) => {
+    setBusy(item.id);
+    try {
+      if (action === 'DELETE') {
+        await api.del(`/admin/feedback/${item.id}`, { auth: true });
+        toast('Feedback deleted.', 'success');
+      } else {
+        await api.put(`/admin/feedback/${item.id}`, { status: action }, { auth: true });
+        toast(action === 'APPROVED' ? 'Published on the homepage.' : 'Removed from the homepage.', 'success');
+      }
       await load();
     } catch (err) {
       toast(err.message, 'error');
@@ -102,6 +129,52 @@ export default function Reviews() {
         </div>
       )}
 
+      {tab === 'FEEDBACK' && (
+        <div className="review-queue">
+          {state.reviews.length === 0 && (
+            <div className="section empty-state">
+              <MessageSquareHeart size={30} />
+              <p>No site feedback yet.</p>
+              <p className="muted small">
+                Customers can leave feedback from the “Share your feedback” link in the footer —
+                it lands here, and you choose which notes appear on the homepage.
+              </p>
+            </div>
+          )}
+          {state.reviews.map((f) => (
+            <div className={`review-card status-${f.status.toLowerCase()}`} key={f.id}>
+              <div className="review-main">
+                <div className="review-head">
+                  <Stars n={f.rating} />
+                  <strong>{f.name}</strong>
+                  <span className={`status-pill ${f.status.toLowerCase()}`}>
+                    {f.status === 'PENDING' ? 'Awaiting approval' : f.status === 'APPROVED' ? 'On the homepage' : 'Removed'}
+                  </span>
+                </div>
+                <p className="review-comment">“{f.message}”</p>
+                <p className="muted small">{fmtDate(f.createdAt)}</p>
+              </div>
+              <div className="review-actions">
+                {f.status !== 'APPROVED' && (
+                  <button className="btn btn-primary btn-sm" disabled={busy === f.id} onClick={() => feedbackAct(f, 'APPROVED')}>
+                    <Check size={15} /> Publish
+                  </button>
+                )}
+                {f.status === 'APPROVED' && (
+                  <button className="btn btn-secondary btn-sm" disabled={busy === f.id} onClick={() => feedbackAct(f, 'REJECTED')}>
+                    <EyeOff size={15} /> Remove from homepage
+                  </button>
+                )}
+                <button className="btn btn-ghost btn-sm" disabled={busy === f.id} onClick={() => feedbackAct(f, 'DELETE')}>
+                  <Trash2 size={15} /> Delete
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab !== 'FEEDBACK' && (
       <div className="review-queue">
         {state.reviews.map((r) => (
           <div className={`review-card status-${r.status.toLowerCase()}`} key={r.id}>
@@ -170,6 +243,7 @@ export default function Reviews() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

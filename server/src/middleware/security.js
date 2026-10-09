@@ -44,6 +44,16 @@ const apiLimiterRaw = rateLimit({
   message: { error: 'Too many requests. Please slow down.' },
 });
 
+// Public feedback form: open to anyone, so generous enough for real customers but
+// not for a flood.
+const feedbackLimiterRaw = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 8,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: 'Thank you — that is a lot of feedback at once. Please try again a little later.' },
+});
+
 // Extra-strict limiter for email verification resends (spam protection).
 const verifyLimiterRaw = rateLimit({
   windowMs: 30 * 60 * 1000,
@@ -97,6 +107,7 @@ export const loginLimiter = guard(loginLimiterRaw);
 export const registerLimiter = guard(registerLimiterRaw);
 export const apiLimiter = guard(apiLimiterRaw);
 export const verifyLimiter = guard(verifyLimiterRaw);
+export const feedbackLimiter = guard(feedbackLimiterRaw);
 export const uploadLimiter = guard(uploadLimiterRaw);
 export const forgotLimiter = guard(forgotLimiterRaw);
 export const resetLimiter = guard(resetLimiterRaw);

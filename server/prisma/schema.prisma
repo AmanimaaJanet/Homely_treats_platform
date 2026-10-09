@@ -242,6 +242,20 @@ model Notification {
   createdAt DateTime @default(now())
 }
 
+// General site feedback — no order needed. Anyone can leave a note about the shop;
+// the bakery decides which ones are published on the homepage ("What Our Customers
+// Say"). Separate from Review on purpose: reviews are earned by a delivered order and
+// attach to products, feedback is a open channel about the shop as a whole.
+model Feedback {
+  id        String   @id @default(cuid())
+  name      String // the name the customer wants shown if published
+  rating    Int // 1-5
+  message   String
+  // PENDING (awaiting the bakery) | APPROVED (published on the homepage) | REJECTED (kept for reference, never shown)
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+}
+
 model Review {
   id          String    @id @default(cuid())
   orderId     String    @unique

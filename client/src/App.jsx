@@ -29,6 +29,7 @@ const PayCallback = lazy(() => import('./pages/PayCallback.jsx'));
 // Legal.jsx exports two named pages that share one file, so both routes point at the same
 // chunk rather than downloading it twice.
 const Privacy = lazy(() => import('./pages/Legal.jsx').then((m) => ({ default: m.Privacy })));
+const Feedback = React.lazy(() => import('./pages/Feedback.jsx'));
 const Terms = lazy(() => import('./pages/Legal.jsx').then((m) => ({ default: m.Terms })));
 
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout.jsx'));
@@ -95,6 +96,7 @@ export default function App() {
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/privacy" element={<Privacy />} />
+              <Route path="/feedback" element={<Feedback />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/verify" element={<Verify />} />
               <Route path="/account" element={<Account />} />

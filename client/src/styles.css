@@ -448,6 +448,14 @@ a:hover { color: var(--pd); }
 .rider-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .rider-card p { font-size: 13.5px; margin-bottom: 6px; }
 
+/* Feedback page star picker */
+.feedback-stars { display: flex; gap: 6px; }
+.feedback-star-btn { background: none; border: none; padding: 4px; cursor: pointer; border-radius: 8px; display: flex; }
+.feedback-star-btn:hover { background: var(--cream, #F5EDE3); }
+.feedback-star-btn .star-fill { fill: var(--gold, #E8B86D); color: var(--gold, #E8B86D); }
+.feedback-star-btn .star-empty { fill: none; color: var(--border, #E4D3C0); }
+.feedback-star-btn:focus-visible { outline: 2px solid var(--gold, #E8B86D); outline-offset: 2px; }
+
 /* ------------------------------------------------ Admin ------------------ */
 .admin-layout { display: flex; flex-direction: column; min-height: 100vh; }
 .admin-sidebar { width: 100%; background: var(--sidebar); display: flex; flex-direction: column; }

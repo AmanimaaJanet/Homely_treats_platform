@@ -1295,6 +1295,62 @@ router.put('/products/:id', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------- Feedback
+// Site feedback moderation: the bakery decides which customer notes are published
+// on the homepage. Same shape as review moderation, minus the order context.
+router.get('/feedback', async (req, res) => {
+  const status = req.query.status && req.query.status !== 'ALL' ? req.query.status : undefined;
+  const where = status ? { status } : {};
+  const [items, pending, approved, rejected] = await Promise.all([
+    prisma.feedback.findMany({ where, orderBy: { createdAt: 'desc' }, take: 200 }),
+    prisma.feedback.count({ where: { status: 'PENDING' } }),
+    prisma.feedback.count({ where: { status: 'APPROVED' } }),
+    prisma.feedback.count({ where: { status: 'REJECTED' } }),
+  ]);
+  res.json({ items, summary: { PENDING: pending, APPROVED: approved, REJECTED: rejected, ALL: pending + approved + rejected } });
+});
+
+// PUT /api/admin/feedback/:id  { status: 'APPROVED' | 'REJECTED' }
+router.put('/feedback/:id', async (req, res) => {
+  try {
+    const status = req.body?.status;
+    if (!['APPROVED', 'REJECTED'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be APPROVED or REJECTED' });
+    }
+    const item = await prisma.feedback.update({
+      where: { id: req.params.id },
+      data: { status },
+    });
+    await audit(req, {
+      action: 'FEEDBACK_MODERATE',
+      entity: 'Feedback',
+      entityId: item.id,
+      detail: `${status === 'APPROVED' ? 'Published' : 'Removed from the homepage'}: feedback from "${item.name}"`,
+    });
+    res.json({ ok: true, feedback: item });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update feedback' });
+  }
+});
+
+// DELETE /api/admin/feedback/:id — spam and abuse, gone for good.
+router.delete('/feedback/:id', async (req, res) => {
+  try {
+    const item = await prisma.feedback.delete({ where: { id: req.params.id } });
+    await audit(req, {
+      action: 'FEEDBACK_DELETE',
+      entity: 'Feedback',
+      entityId: item.id,
+      detail: `Deleted feedback from "${item.name}"`,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete feedback' });
+  }
+});
+
 // DELETE /api/admin/products/sample — de-list the demo-seed catalogue in one click.
 //
 // The sample products are ordinary rows the owner may have outgrown: every one is

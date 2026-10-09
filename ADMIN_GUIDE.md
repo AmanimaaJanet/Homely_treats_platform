@@ -85,6 +85,19 @@ so with more than one admin you can always see who did what.
 
 ---
 
+**Payment methods** — Admin → Settings → **Payment Methods** has a toggle per
+method (MTN MoMo, AirtelTigo, cards, cash on delivery/pickup). Switching one off
+hides it at checkout *and* the server refuses orders that try to use it — a customer
+cannot bypass the toggle. If every method were switched off, the checkout falls back
+to showing all of them rather than bricking the page.
+
+**Site feedback (what gets published on the homepage)** — customers can leave
+feedback at **/feedback** (the "Share your feedback" footer link, or "Share your own
+experience" under the homepage testimonials) — no account or order needed. Every note
+lands in **Admin → Reviews → Site feedback**, where you **Publish** the ones worth
+showing (they appear in the homepage's "What Our Customers Say" section), remove them
+from the homepage, or delete spam. Nothing is published until you say so.
+
 ## 2. What each screen is for
 
 | Screen | Use it to |

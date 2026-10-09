@@ -152,6 +152,13 @@ async function main() {
   adminToken = admin.data?.token;
   check('Admin login', admin.status === 200 && !!adminToken);
 
+  // The suite exercises every payment method, so start from all of them on — a
+  // browser test or a manual experiment may have left one switched off.
+  await req('/api/admin/settings', {
+    method: 'PUT', token: adminToken,
+    body: { enableMomo: true, enableAtl: true, enableCard: true, enableCod: true },
+  });
+
   const custLogin = await req('/api/auth/login', { method: 'POST', body: { email: CUST_EMAIL, password: CUST_PASS } });
   janetToken = custLogin.data?.token;
   check('Customer login', custLogin.status === 200 && !!janetToken);
@@ -2283,6 +2290,81 @@ E2E Imported ${rnd},CAKE,175,"Imported, with a comma",New,6,true,2,Vanilla|Choco
     } finally {
       api3.kill('SIGTERM');
       await prisma.user.deleteMany({ where: { email: { contains: '@e2e.test' } } }).catch(() => {});
+    }
+  }
+
+  // ---------------------------------------------------------------- payment methods & site feedback
+  {
+    // A disabled payment method must be refused by the server itself, not merely
+    // hidden in the UI.
+    const before = await req('/api/settings/public');
+    check('All payment methods on by default',
+      before.data?.settings?.enableCod !== false, JSON.stringify(before.data?.settings?.enableCod));
+
+    await req('/api/admin/settings', {
+      method: 'PUT', token: adminToken, body: { enableCod: false },
+    });
+    const refused = await req('/api/orders', {
+      method: 'POST',
+      body: {
+        items: [{ productId: 'whatever', quantity: 1 }],
+        deliveryMethod: 'PICKUP',
+        paymentMethod: 'COD',
+        guest: { name: 'E2E Guest', email: 'cod-off@e2e.test', phone: '0550000144' },
+      },
+    });
+    check('A disabled payment method is refused at order time',
+      refused.status === 400 && /unavailable/i.test(refused.data?.error || ''), `status ${refused.status}`);
+
+    const pub = await req('/api/settings/public');
+    check('The storefront sees the method as off', pub.data?.settings?.enableCod === false);
+
+    await req('/api/admin/settings', {
+      method: 'PUT', token: adminToken, body: { enableCod: true },
+    });
+    const pub2 = await req('/api/settings/public');
+    check('And back on again', pub2.data?.settings?.enableCod !== false);
+
+    // Feedback: public submit → moderation → homepage visibility.
+    const bad = await req('/api/feedback', { method: 'POST', body: { name: 'X', rating: 9, message: 'too many stars' } });
+    check('Feedback with an invalid rating is refused', bad.status === 400, `status ${bad.status}`);
+
+    const fb = await req('/api/feedback', {
+      method: 'POST',
+      body: { name: 'E2E Feedbacker', rating: 5, message: 'The E2E suite says this bakery is excellent.' },
+    });
+    check('Feedback is accepted from the public', fb.status === 201, fb.data?.error);
+
+    const anonList = await req('/api/admin/feedback', { method: 'GET' });
+    check('The admin feedback list is admin-only (401)', anonList.status === 401, `status ${anonList.status}`);
+
+    const list = await req('/api/admin/feedback?status=PENDING', { token: adminToken });
+    const mine = (list.data?.items || []).find((i) => i.name === 'E2E Feedbacker');
+    check('New feedback lands in the moderation queue', Boolean(mine));
+
+    const pubBefore = await req('/api/feedback/public');
+    check('Pending feedback is not public yet',
+      !(pubBefore.data?.feedback || []).some((i) => i.name === 'E2E Feedbacker'));
+
+    if (mine) {
+      const approved = await req(`/api/admin/feedback/${mine.id}`, {
+        method: 'PUT', token: adminToken, body: { status: 'APPROVED' },
+      });
+      check('The bakery can publish feedback', approved.status === 200, approved.data?.error);
+      const pubAfter = await req('/api/feedback/public');
+      check('Published feedback is on the public homepage feed',
+        (pubAfter.data?.feedback || []).some((i) => i.name === 'E2E Feedbacker'));
+
+      const rejected = await req(`/api/admin/feedback/${mine.id}`, {
+        method: 'PUT', token: adminToken, body: { status: 'REJECTED' },
+      });
+      check('The bakery can take it back off the homepage', rejected.status === 200);
+      const pubFinal = await req('/api/feedback/public');
+      check('Rejected feedback disappears from the public feed',
+        !(pubFinal.data?.feedback || []).some((i) => i.name === 'E2E Feedbacker'));
+
+      const del = await req(`/api/admin/feedback/${mine.id}`, { method: 'DELETE', token: adminToken });
+      check('And delete it outright', del.status === 200);
     }
   }
 
