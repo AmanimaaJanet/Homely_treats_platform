@@ -2166,6 +2166,7 @@ E2E Imported ${rnd},CAKE,175,"Imported, with a comma",New,6,true,2,Vanilla|Choco
         ...process.env,
         PORT: '5051',
         RESEND_API_KEY: 'e2e-dummy-key',
+        EMAIL_FROM: 'Homely Treats <orders@e2e-shop.example>',
         RESEND_API_BASE: 'http://127.0.0.1:5099',
         DISABLE_RATE_LIMITS: 'true',
         AUTH_MAX_FAILED_ATTEMPTS: '4',
@@ -2210,6 +2211,78 @@ E2E Imported ${rnd},CAKE,175,"Imported, with a comma",New,6,true,2,Vanilla|Choco
       api2.kill('SIGTERM');
       stub.close();
       await prisma.user.deleteMany({ where: { email: { contains: '@e2e.test' }, fullName: 'Undeliverable Test' } }).catch(() => {});
+    }
+  }
+
+  // ---------------------------------------------------------------- test-sender mode: no verification lock-out at all
+  // The live-site report: with RESEND_API_KEY set but EMAIL_FROM left as the default
+  // onboarding@resend.dev (Resend's test sender, which refuses every customer
+  // address), sign-in still demanded verification — and accounts created before the
+  // mercy fix sat permanently locked out. In this state verification must be off
+  // entirely, and existing unverified accounts must sign straight in.
+  {
+    const { spawn } = await import('node:child_process');
+    const bcrypt = (await import('bcryptjs')).default;
+
+    const api3 = spawn('node', ['src/index.js'], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        PORT: '5052',
+        RESEND_API_KEY: 'e2e-dummy-key',
+        // EMAIL_FROM deliberately unset — the resend.dev default, like the live site.
+        DISABLE_RATE_LIMITS: 'true',
+        AUTH_MAX_FAILED_ATTEMPTS: '4',
+        AUTH_LOCKOUT_MINUTES: '2',
+      },
+      stdio: 'ignore',
+    });
+    let api3Up = false;
+    for (let i = 0; i < 30 && !api3Up; i++) {
+      await new Promise((r) => setTimeout(r, 400));
+      api3Up = await fetch('http://127.0.0.1:5052/api/health').then((r) => r.ok).catch(() => false);
+    }
+    const local = async (pathname, opts = {}) => {
+      const r = await fetch(`http://127.0.0.1:5052${pathname}`, {
+        method: opts.method || 'GET',
+        headers: { 'Content-Type': 'application/json', ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}) },
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      });
+      return { status: r.status, data: await r.json().catch(() => ({})) };
+    };
+
+    try {
+      check('Third API instance started for the test-sender test', api3Up, 'did not come up on :5052');
+      if (api3Up) {
+        // An account left unverified from before the fix — the exact live-site case.
+        const staleEmail = `stale-unverified-${Date.now()}@e2e.test`;
+        await prisma.user.create({
+          data: {
+            fullName: 'Stale Unverified',
+            email: staleEmail,
+            phone: '0550000177',
+            passwordHash: await bcrypt.hash('Sup3rSecret!9', 4),
+            emailVerified: false,
+          },
+        });
+        const login = await local('/api/auth/login', { method: 'POST', body: { email: staleEmail, password: 'Sup3rSecret!9' } });
+        check('A pre-existing unverified account signs in under the test sender',
+          login.status === 200 && login.data?.token, `status ${login.status}`);
+        const healed = await prisma.user.findUnique({ where: { email: staleEmail } });
+        check('The stale account is marked verified by signing in', healed?.emailVerified === true, `emailVerified=${healed?.emailVerified}`);
+
+        // And a fresh registration never waits on an email at all.
+        const freshEmail = `fresh-testsender-${Date.now()}@e2e.test`;
+        const reg = await local('/api/auth/register', {
+          method: 'POST',
+          body: { fullName: 'Fresh TestSender', email: freshEmail, phone: '0550000166', password: 'Sup3rSecret!9' },
+        });
+        check('A fresh registration is verified immediately (test sender)',
+          reg.status === 201 && reg.data?.user?.emailVerified === true, `status ${reg.status} verified=${reg.data?.user?.emailVerified}`);
+      }
+    } finally {
+      api3.kill('SIGTERM');
+      await prisma.user.deleteMany({ where: { email: { contains: '@e2e.test' } } }).catch(() => {});
     }
   }
 

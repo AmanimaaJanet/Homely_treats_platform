@@ -80,8 +80,11 @@ router.post('/register', registerLimiter, async (req, res) => {
 
     if (!needsVerification) {
       console.warn(
-        '[auth] RESEND_API_KEY is not set, so new accounts are marked verified automatically.\n' +
-          '       Set RESEND_API_KEY (and optionally REQUIRE_EMAIL_VERIFICATION=true) to require email verification.'
+        '[auth] Email verification is switched off: ' +
+          (config.resend.enabled
+            ? 'EMAIL_FROM is still the Resend test sender (onboarding@resend.dev), which can only deliver to your own Resend account address — customers can never receive the link. Verify a domain at resend.com/domains and set EMAIL_FROM to it to switch verification on for real.'
+            : 'RESEND_API_KEY is not set, so new accounts are marked verified automatically.') +
+          '\n       Accounts work either way — nobody is locked out.'
       );
     }
 
@@ -213,6 +216,16 @@ router.post('/login', loginLimiter, async (req, res) => {
         code: 'EMAIL_NOT_VERIFIED',
         email: user.email,
       });
+    }
+
+    // Self-heal: an account left unverified from before — created while email
+    // delivery was broken, or while the sender was Resend's test address — is
+    // allowed through by the check above (the requirement is off whenever email
+    // cannot reach customers). Clear the stale flag so the account stops carrying
+    // it, and so the shop's records match reality.
+    if (!user.emailVerified) {
+      await prisma.user.update({ where: { id: user.id }, data: { emailVerified: true } }).catch(() => {});
+      user.emailVerified = true;
     }
 
     // Right password for the right account: the counter goes back to zero and we record

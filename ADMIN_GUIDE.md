@@ -218,11 +218,13 @@ address**. Every send to a customer is refused by Resend with a 403. That is Res
 policy, not a bug in the app — and it is why customers were not receiving their
 verification emails.
 
-**What the app does about it (as of this change):** if a verification email cannot be
-delivered, the account is **verified automatically** instead of leaving the customer
-locked out, the registration message tells the truth ("you are all set"), and the
-server log says exactly what happened. Customers are never trapped again, whatever
-state your email is in.
+**What the app does about it (as of this change):** email verification is **switched
+off entirely** while the sender is the resend.dev test address — accounts are verified
+the moment they are created, existing unverified accounts are let in and marked
+verified the next time they sign in, and the registration screen says "you are all
+set". Customers are never trapped again, whatever state your email is in. Verification
+also switches itself back on automatically if you ever set `EMAIL_FROM` to a domain
+you have verified at [resend.com/domains](https://resend.com/domains).
 
 **Your options, all free:**
 

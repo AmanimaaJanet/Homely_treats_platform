@@ -26,11 +26,19 @@ export const config = {
     // Escape hatch for automated API testing. Ignored in production.
     csrfEnabled: !(process.env.NODE_ENV !== 'production' && process.env.DISABLE_CSRF === 'true'),
   },
-  // When email delivery is not configured we cannot verify anyone's address, so
-  // accounts are auto-verified rather than locking every new customer out.
-  // Set REQUIRE_EMAIL_VERIFICATION=true to force it once Resend is configured.
+  // Email verification is only meaningful when customer email can actually be
+  // delivered. Resend's test sender — the default onboarding@resend.dev used when
+  // EMAIL_FROM is not set — can only deliver to the Resend account's own address;
+  // every send to a customer is refused with a 403. Demanding verification in that
+  // state locks customers out of accounts whose link can never arrive (the exact
+  // trap reported on the live site). So the requirement switches itself off until
+  // EMAIL_FROM points at a real, verified sending domain.
+  senderCanReachCustomers: !/@resend\.dev/i.test(
+    process.env.EMAIL_FROM || 'Homely Treats <onboarding@resend.dev>',
+  ),
   requireEmailVerification:
-    process.env.REQUIRE_EMAIL_VERIFICATION === 'true' || Boolean(process.env.RESEND_API_KEY),
+    (process.env.REQUIRE_EMAIL_VERIFICATION === 'true' || Boolean(process.env.RESEND_API_KEY)) &&
+    !/@resend\.dev/i.test(process.env.EMAIL_FROM || 'Homely Treats <onboarding@resend.dev>'),
   monitoring: {
     // Optional Sentry DSN — the server posts events to it directly (no SDK). Blank =
     // errors are logged and kept in the admin-visible buffer only.
